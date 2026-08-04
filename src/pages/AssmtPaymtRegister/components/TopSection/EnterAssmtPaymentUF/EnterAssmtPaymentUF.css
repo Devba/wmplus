@@ -1,0 +1,376 @@
+
+
+
+
+
+.apr-enter-react-uf {
+  position: relative;
+  width: 1160px;
+  height: 425px;
+  background: #efefef;
+  color: #000000;
+  font-family: Arial, Helvetica, sans-serif;
+  overflow: hidden;
+}
+
+.apr-enter-react-uf * {
+  box-sizing: border-box;
+}
+
+.apr-enter-blue-title {
+  position: absolute;
+  left: 20px;
+  top: 6px;
+  color: #0070c0;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.apr-enter-label,
+.apr-enter-search-label {
+  position: absolute;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.apr-enter-search-label {
+  color: #0070c0;
+}
+
+.apr-enter-input,
+.apr-enter-search-input {
+  position: absolute;
+  height: 28px;
+  border: 2px inset #e5e5e5;
+  background: #ffffff;
+  padding: 2px 6px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+}
+
+.apr-enter-acct-label {
+  left: 20px;
+  top: 40px;
+}
+
+.apr-enter-acct {
+  left: 20px;
+  top: 60px;
+  width: 120px;
+}
+
+.apr-enter-first-label {
+  left: 190px;
+  top: 40px;
+}
+
+.apr-enter-first {
+  left: 190px;
+  top: 60px;
+  width: 220px;
+}
+
+.apr-enter-last-label {
+  left: 430px;
+  top: 40px;
+}
+
+.apr-enter-last {
+  left: 430px;
+  top: 60px;
+  width: 290px;
+}
+
+.apr-enter-address-label {
+  left: 20px;
+  top: 100px;
+}
+
+.apr-enter-address {
+  left: 20px;
+  top: 125px;
+  width: 390px;
+}
+
+.apr-enter-email-label {
+  left: 430px;
+  top: 100px;
+}
+
+.apr-enter-email {
+  left: 430px;
+  top: 125px;
+  width: 340px;
+}
+
+.apr-enter-add-first-label {
+  left: 800px;
+  top: 0;
+}
+
+.apr-enter-add-first {
+  left: 800px;
+  top: 24px;
+  width: 290px;
+}
+
+.apr-enter-add-last-label {
+  left: 800px;
+  top: 55px;
+}
+
+.apr-enter-add-last {
+  left: 800px;
+  top: 76px;
+  width: 290px;
+}
+
+.apr-enter-add-email-label {
+  left: 800px;
+  top: 107px;
+}
+
+.apr-enter-add-email {
+  left: 800px;
+  top: 127px;
+  width: 350px;
+}
+
+.apr-enter-paid-label {
+  left: 20px;
+  top: 182px;
+}
+
+.apr-enter-paid {
+  left: 20px;
+  top: 200px;
+  width: 130px;
+}
+
+.apr-enter-due-label {
+  left: 170px;
+  top: 182px;
+}
+
+.apr-enter-due {
+  left: 170px;
+  top: 200px;
+  width: 130px;
+}
+
+.apr-enter-special-paid-label {
+  left: 340px;
+  top: 158px;
+  line-height: 18px;
+}
+
+.apr-enter-special-paid {
+  left: 340px;
+  top: 202px;
+  width: 130px;
+}
+
+.apr-enter-special-due-label {
+  left: 510px;
+  top: 158px;
+  line-height: 18px;
+}
+
+.apr-enter-special-due {
+  left: 510px;
+  top: 202px;
+  width: 130px;
+}
+
+.apr-enter-annual-rate-label {
+  left: 680px;
+  top: 182px;
+}
+
+.apr-enter-annual-rate {
+  left: 680px;
+  top: 200px;
+  width: 110px;
+}
+
+.apr-enter-special-rate-label {
+  left: 840px;
+  top: 182px;
+}
+
+.apr-enter-special-rate {
+  left: 840px;
+  top: 200px;
+  width: 110px;
+}
+
+.apr-enter-fines-label {
+  left: 1000px;
+  top: 166px;
+  font-size: 12px;
+}
+
+.apr-enter-fines {
+  left: 1000px;
+  top: 200px;
+  width: 130px;
+}
+
+.apr-enter-section-title {
+  position: absolute;
+  left: 20px;
+  top: 240px;
+  color: red;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.apr-enter-payment-label {
+  left: 20px;
+  top: 265px;
+}
+
+.apr-enter-payment {
+  left: 20px;
+  top: 288px;
+  width: 130px;
+}
+
+.apr-enter-date-label {
+  left: 190px;
+  top: 265px;
+}
+
+.apr-enter-date {
+  left: 190px;
+  top: 288px;
+  width: 130px;
+}
+
+.apr-enter-date-note {
+  position: absolute;
+  left: 206px;
+  top: 313px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.apr-enter-check-label {
+  left: 360px;
+  top: 265px;
+}
+
+.apr-enter-check {
+  left: 360px;
+  top: 288px;
+  width: 120px;
+}
+
+.apr-enter-special-payment-label {
+  left: 525px;
+  top: 246px;
+  line-height: 18px;
+}
+
+.apr-enter-special-payment {
+  left: 525px;
+  top: 290px;
+  width: 120px;
+}
+
+.apr-enter-red-star {
+  position: absolute;
+  color: red;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.apr-enter-star-one {
+  left: 645px;
+  top: 241px;
+}
+
+.apr-enter-star-two {
+  left: 890px;
+  top: 245px;
+}
+
+.apr-enter-payment-note {
+  position: absolute;
+  left: 900px;
+  top: 250px;
+  width: 250px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.apr-enter-submit,
+.apr-enter-multiple {
+  position: absolute;
+  top: 330px;
+  height: 30px;
+  border: 2px outset #d0d0d0;
+  background: #efefef;
+  color: #00a000;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.apr-enter-submit {
+  left: 575px;
+  width: 70px;
+}
+
+.apr-enter-multiple {
+  left: 700px;
+  width: 400px;
+}
+
+.apr-enter-search-title {
+  position: absolute;
+  left: 30px;
+  top: 340px;
+  color: #0070c0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.apr-enter-name-search-label {
+  left: 30px;
+  top: 370px;
+}
+
+.apr-enter-name-search {
+  left: 30px;
+  top: 390px;
+  width: 350px;
+}
+
+.apr-enter-address-search-label {
+  left: 405px;
+  top: 370px;
+}
+
+.apr-enter-address-search {
+  left: 405px;
+  top: 390px;
+  width: 480px;
+}
+
+.apr-enter-account-result-label {
+  left: 910px;
+  top: 370px;
+}
+
+.apr-enter-account-result {
+  left: 910px;
+  top: 390px;
+  width: 100px;
+}
+
+.apr-enter-react-uf .apr-enter-label {
+  font-size: 14px;
+  line-height: 18px;
+}

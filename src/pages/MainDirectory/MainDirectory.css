@@ -1,0 +1,335 @@
+/* ===========================================================
+   MAIN DIRECTORY - PAGE SHELL
+   =========================================================== */
+
+.md-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.md-page * {
+  box-sizing: border-box;
+}
+
+.md-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #cfcfcf;
+}
+
+.md-fixed {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+}
+
+.md-topsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ===========================================================
+   APR - TITLE ROW
+   =========================================================== */
+
+
+.md-title-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+
+    height: 32px;
+    padding-left: 18px;
+
+    font-size: 18px;
+    font-weight: 700;
+    color: #003b73;
+}
+
+
+.apr-title-row {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+
+  background: #ffffff;
+  color: #000000;
+
+  font-size: 16px;
+  font-weight: 700;
+}
+
+
+
+
+/* ===========================================================
+   MAIN DIRECTORY - BUTTON ROW
+   R&R FROM APR
+   =========================================================== */
+
+.md-button-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #ffffff;
+}
+
+.md-button-row button {
+  height: 38px;
+  min-width: 150px;
+  padding: 0 12px;
+
+  background: #e9e9e9;
+  border: 1px solid #666666;
+
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.md-button-row .btn-green {
+  color: #008000;
+}
+
+.md-button-row .btn-blue {
+  color: #003cff;
+}
+
+
+
+/* ===========================================================
+   MAIN DIRECTORY - FILTER ROW
+   =========================================================== */
+
+.md-filter-row {
+  height: 58px;
+  display: flex;
+  align-items: flex-end;
+  gap: 28px;
+  padding: 0 12px 4px 12px;
+  background: #ffffff;
+}
+
+.md-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.md-filter-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #003b73;
+}
+
+.md-filter-select {
+  height: 24px;
+  border: 1px solid #777777;
+  background: #ffffff;
+  font-size: 13px;
+  padding-left: 6px;
+}
+
+.md-name-filter {
+  width: 340px;
+}
+
+.md-address-filter {
+  width: 360px;
+}
+
+.md-status {
+  margin-left: 40px;
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+
+
+
+/* ===========================================================
+   MAIN DIRECTORY - BODY BOX AND TABLE SCROLLER
+   R&R FROM APR
+   =========================================================== */
+
+.md-bodybox {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.md-table-wrap {
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+
+  background: #e9f0fa;
+  border: 1px solid #b5c7e6;
+  box-sizing: border-box;
+}
+
+.md-table {
+  width: 4880px;
+  min-width: 4880px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.md-table th,
+.md-table td {
+  border: 1px solid #c8c8c8;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.md-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+
+  height: 42px;
+  padding: 6px;
+
+  background: #003b6f;
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+}
+
+.md-table tbody td {
+  height: 24px;
+  padding: 3px 6px;
+  line-height: 1.1;
+  vertical-align: middle;
+
+  background: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.md-table tbody tr:nth-child(even) td {
+  background: #f7f9fc;
+}
+
+
+/* ======================================================================
+   FUTURE ENHANCEMENT - DYNAMIC DUES COLUMN WIDTH
+   ----------------------------------------------------------------------
+   CURRENT DESIGN:
+     Annual Dues, Special Assessment, Credits, etc. use fixed column
+     widths copied from the Legacy Manage+ application.
+
+   FUTURE DESIGN (After Settings + Database are Complete):
+     The Ledger ID / Dues Programming page will allow up to 12 different
+     programmed dues amounts.
+
+     When those settings are saved, the server business rules should:
+
+       1. Format all programmed dues amounts as currency.
+       2. Determine the widest formatted value.
+       3. Calculate the minimum display width required.
+       4. Store the recommended column width (or longest formatted string)
+          in the database.
+
+     APR, Resident Assessment Summary, Monthly/Qtrly/Yrly Assessment
+     Registers, Reports, and any page displaying dues should obtain this
+     value from the server so all pages use identical column widths.
+
+     NOTE:
+       This calculation belongs in the server/business rules (Node + DB),
+       NOT in individual React pages, to preserve the Rinse & Repeat
+       architecture and maintain a single Source of Truth.
+
+   Status:
+     Deferred until Dues Programming and Server Business Rules are
+     implemented.
+
+   ====================================================================== */
+
+
+
+/* ===========================================================
+   MAIN DIRECTORY - LEGACY COLUMN WIDTHS
+   Individual PX control for all 29 columns
+   =========================================================== */
+
+.md-table col.md-c1  { width: 90px; }
+.md-table col.md-c2  { width: 140px; }
+.md-table col.md-c3  { width: 130px; }
+.md-table col.md-c4  { width: 130px; }
+.md-table col.md-c5  { width: 130px; }
+.md-table col.md-c6  { width: 230px; }
+.md-table col.md-c7  { width: 260px; }
+.md-table col.md-c8  { width: 140px; }
+.md-table col.md-c9  { width: 60px; }
+.md-table col.md-c10 { width: 90px; }
+.md-table col.md-c11 { width: 130px; }
+.md-table col.md-c12 { width: 250px; }
+.md-table col.md-c13 { width: 120px; }
+.md-table col.md-c14 { width: 80px; }
+.md-table col.md-c15 { width: 70px; }
+.md-table col.md-c16 { width: 210px; }
+.md-table col.md-c17 { width: 220px; }
+.md-table col.md-c18 { width: 210px; }
+.md-table col.md-c19 { width: 160px; }
+.md-table col.md-c20 { width: 140px; }
+.md-table col.md-c21 { width: 150px; }
+.md-table col.md-c22 { width: 250px; }
+.md-table col.md-c23 { width: 320px; }
+.md-table col.md-c24 { width: 150px; }
+.md-table col.md-c25 { width: 130px; }
+.md-table col.md-c26 { width: 190px; }
+.md-table col.md-c27 { width: 150px; }
+.md-table col.md-c28 { width: 220px; }
+.md-table col.md-c29 { width: 250px; }
+
+/* ===========================================================
+   MAIN DIRECTORY - SELECTED RESIDENT ROW
+   =========================================================== */
+
+.md-table tbody tr {
+  cursor: pointer;
+}
+
+.md-table tbody tr.is-selected td {
+  background: #dbeafe !important;
+  border-top: 1px solid #60a5fa;
+  border-bottom: 1px solid #60a5fa;
+}
+
+.md-table tbody tr.is-selected td:first-child {
+  border-left: 1px solid #60a5fa;
+}
+
+.md-table tbody tr.is-selected td:last-child {
+  border-right: 1px solid #60a5fa;
+}

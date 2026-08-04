@@ -1,0 +1,66 @@
+
+
+
+
+/* ===========================================================
+   CHECK REGISTER MONTHLY SUMMARY — TOP SECTION
+   =========================================================== */
+
+.crms-summary-head {
+  height: 128px;
+  margin: 0 10px;
+  padding: 20px 20px 10px 20px;
+
+  background: #f3f3f3;
+  border: 1px solid #c7c7c7;
+}
+
+.crms-summary-title {
+  margin-bottom: 16px;
+
+  font-size: 20px;
+  font-weight: 700;
+  color: #000;
+  text-align: left;
+}
+
+.crms-asof-line {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.crms-asof-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: #000;
+}
+
+.crms-asof-value {
+  font-size: 16px;
+  color: #000;
+}
+
+.crms-total-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.crms-total-label,
+.crms-total-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #000;
+}
+
+.crms-summary-head + .checkreg-actions {
+  padding: 7px 10px 6px 10px;
+}
+
+.crms-summary-head + .checkreg-actions .checkreg-btn {
+  width: 248px;
+  min-width: 248px;
+  height: 34px;
+}

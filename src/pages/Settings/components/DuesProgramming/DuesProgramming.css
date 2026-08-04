@@ -1,0 +1,225 @@
+/* ===========================================================
+   SETTINGS — ANNUAL / SPECIAL DUES PROGRAMMING
+   =========================================================== */
+
+.settings-dues-wrap {
+  position: relative;
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  display: grid;
+  grid-template-columns: 34% 66%;
+
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.settings-dues-left {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+  border-right: 1px solid #8f8f8f;
+}
+
+.dues-header-row {
+  margin-bottom: 10px;
+}
+
+.dues-title,
+.dues-details-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.dues-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  overflow: auto;
+  border: 1px solid #999999;
+}
+
+.dues-grid-head,
+.dues-grid-row {
+  display: grid;
+  grid-template-columns: 34% 66%;
+}
+
+.dues-grid-head div {
+  padding: 6px 5px;
+
+  background: #dbeafe;
+  border-right: 1px solid #aaaaaa;
+  border-bottom: 1px solid #aaaaaa;
+
+  font-weight: 700;
+}
+
+.dues-grid-row {
+  cursor: pointer;
+}
+
+.dues-grid-row div {
+  min-height: 26px;
+  padding: 5px;
+
+  border-right: 1px solid #cccccc;
+  border-bottom: 1px solid #cccccc;
+}
+
+.dues-grid-row.selected div {
+  background: #dbeafe;
+}
+
+.settings-dues-right {
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 18px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.dues-instructions {
+  max-width: 900px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+
+  line-height: 1.35;
+}
+
+.dues-control-row {
+  margin-bottom: 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.dues-control-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dues-control-left label {
+  font-weight: 700;
+}
+
+.dues-control-right {
+  margin-left: auto;
+
+  display: flex;
+  align-items: center;
+}
+
+.dues-payment-frequency {
+  width: 150px;
+  height: 26px;
+}
+
+.dues-date-box {
+  width: 95px;
+  height: 26px;
+  padding: 2px 6px;
+
+  border: 1px solid #888888;
+  font-size: 13px;
+}
+
+.dues-table-scroll {
+  width: 100%;
+
+  overflow-x: auto;
+  border: 1px solid #999999;
+}
+
+.dues-rate-table {
+  width: 1160px;
+  min-width: 1160px;
+
+  border-collapse: collapse;
+}
+
+.dues-rate-table th {
+  padding: 5px;
+
+  background: #ffff66;
+  border: 1px solid #777777;
+
+  text-align: left;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dues-rate-table td {
+  min-width: 92px;
+  padding: 3px 5px;
+
+  border: 1px solid #999999;
+  white-space: nowrap;
+}
+
+.dues-rate-table td:first-child {
+  min-width: 110px;
+  font-weight: 700;
+}
+
+.dues-rate-table input {
+  width: 100px;
+  height: 24px;
+  padding: 2px 5px;
+
+  border: 1px solid #888888;
+  font-size: 13px;
+}
+
+.dues-calculated {
+  background: #f4f4f4;
+  text-align: right;
+}
+
+.dues-save-button {
+  height: 28px;
+  padding: 0 14px;
+
+  color: #003cff;
+  background: #efefef;
+  border: 1px solid #666666;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dues-save-button-saved {
+  color: #008000;
+}
+
+.dues-save-button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.dues-unsaved-message {
+  margin-left: 12px;
+
+  color: #b00000;
+  font-weight: 700;
+}
+
+.dues-error-message {
+  max-width: 300px;
+  margin-left: 12px;
+
+  color: #b00000;
+  font-weight: 700;
+}

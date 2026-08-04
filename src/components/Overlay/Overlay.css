@@ -1,0 +1,67 @@
+
+
+
+.overlay-host {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.overlay-host .overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.overlay-host .overlay-dialog {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+
+  width: min(760px, calc(100% - 40px));
+  max-height: calc(100% - 40px);
+
+  background: #ffffff;
+  border: 1px solid #9a9a9a;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.overlay-host .overlay-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  padding: 10px 12px;
+  background: #f0f0f0;
+  border-bottom: 1px solid #d0d0d0;
+
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.overlay-host .overlay-close {
+  border: 1px solid #b0b0b0;
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.overlay-host .overlay-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px 14px 18px;
+  overflow: auto;
+}

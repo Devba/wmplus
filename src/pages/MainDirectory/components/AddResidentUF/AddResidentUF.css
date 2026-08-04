@@ -1,0 +1,467 @@
+
+
+
+/* ===========================================================
+   MAIN DIRECTORY - ADD RESIDENT USER FORM
+   Legacy Manage+ layout
+   =========================================================== */
+
+.md-add-uf {
+   position: relative;
+  width: 1360px;
+  height: 420px;
+  background: #efefef;
+  font-family: Arial, Helvetica, sans-serif;
+  overflow: hidden;
+}
+
+.md-add-uf * {
+  box-sizing: border-box;
+}
+
+.md-add-title {
+  position: absolute;
+  left: 10px;
+  top: 0;
+  font-size: 15px;
+  font-weight: bold;
+  color: #0070c0;
+}
+
+.md-add-video-label {
+  position: absolute;
+  left: 1040px;
+  top: 5px;
+  font-size: 15px;
+  font-weight: bold;
+  color: red;
+}
+
+.md-add-info-btn {
+  position: absolute;
+  left: 1250px;
+  top: 5px;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: bold;
+  font-style: italic;
+  color: red;
+  border: 2px outset #dddddd;
+  background: #eeeeee;
+  cursor: pointer;
+}
+
+.md-add-section {
+  position: absolute;
+  font-size: 18px;
+  font-weight: bold;
+  color: #000000;
+}
+
+.md-add-primary-title {
+  left: 10px;
+  top: 22px;
+}
+
+.md-add-addl-title {
+  left: 10px;
+  top: 210px;
+}
+
+.md-add-notes-title {
+  left: 10px;
+  top: 300px;
+}
+
+.md-add-label {
+  position: absolute;
+  font-size: 16px;
+  font-weight: bold;
+  color: #000000;
+  white-space: nowrap;
+}
+
+.req-blue {
+  color: #0070c0;
+  font-weight: bold;
+}
+
+.req-red {
+  color: red;
+  font-weight: bold;
+}
+
+.md-add-input {
+  position: absolute;
+  height: 28px;
+  border: 2px inset #e0e0e0;
+  background: #ffffff;
+  font-size: 16px;
+  padding: 2px 4px;
+}
+
+.lbl-first {
+  left: 10px;
+  top: 45px;
+}
+
+.inp-first {
+  left: 10px;
+  top: 71px;
+  width: 130px;
+}
+
+.lbl-middle {
+  left: 155px;
+  top: 45px;
+}
+
+.inp-middle {
+  left: 155px;
+  top: 71px;
+  width: 130px;
+}
+
+.lbl-last {
+  left: 315px;
+  top: 45px;
+}
+
+.inp-last {
+  left: 315px;
+  top: 71px;
+  width: 200px;
+}
+
+.lbl-prefix {
+  left: 530px;
+  top: 45px;
+}
+
+.inp-prefix {
+  left: 530px;
+  top: 71px;
+  width: 130px;
+}
+
+.lbl-acct {
+  left: 680px;
+  top: 45px;
+}
+
+.inp-acct {
+  left: 680px;
+  top: 71px;
+  width: 70px;
+}
+
+.lbl-streetnum {
+  left: 10px;
+  top: 100px;
+}
+
+.inp-streetnum {
+  left: 10px;
+  top: 126px;
+  width: 130px;
+}
+
+.lbl-street {
+  left: 155px;
+  top: 100px;
+}
+
+.inp-street {
+  left: 155px;
+  top: 126px;
+  width: 330px;
+}
+
+.lbl-billing {
+  left: 505px;
+  top: 100px;
+}
+
+.inp-billing {
+  left: 505px;
+  top: 126px;
+  width: 330px;
+}
+
+.lbl-bcity {
+  left: 850px;
+  top: 100px;
+}
+
+.inp-bcity {
+  left: 850px;
+  top: 126px;
+  width: 230px;
+}
+
+.lbl-bstate {
+  left: 1105px;
+  top: 100px;
+}
+
+.inp-bstate {
+  left: 1105px;
+  top: 126px;
+  width: 40px;
+}
+
+.lbl-bzip {
+  left: 1215px;
+  top: 100px;
+}
+
+.inp-bzip {
+  left: 1215px;
+  top: 126px;
+  width: 120px;
+}
+
+.lbl-homephone {
+  left: 10px;
+  top: 153px;
+}
+
+.inp-homephone {
+  left: 10px;
+  top: 179px;
+  width: 130px;
+}
+
+.lbl-email {
+  left: 155px;
+  top: 153px;
+}
+
+.inp-email {
+  left: 155px;
+  top: 179px;
+  width: 330px;
+}
+
+.lbl-cell {
+  left: 505px;
+  top: 153px;
+}
+
+.inp-cell {
+  left: 505px;
+  top: 179px;
+  width: 125px;
+}
+
+.lbl-movein {
+  left: 665px;
+  top: 153px;
+}
+
+.inp-movein {
+  left: 665px;
+  top: 179px;
+  width: 110px;
+}
+
+.lbl-proptype {
+  left: 795px;
+  top: 153px;
+}
+
+.inp-proptype {
+  left: 795px;
+  top: 179px;
+  width: 105px;
+}
+
+.md-add-prop-help {
+  position: absolute;
+  left: 915px;
+  top: 160px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #0070c0;
+}
+
+.lbl-annualrate {
+  left: 1015px;
+  top: 153px;
+}
+
+.inp-annualrate {
+  left: 1015px;
+  top: 179px;
+  width: 150px;
+}
+
+.lbl-annualdues {
+  left: 1215px;
+  top: 153px;
+}
+
+.inp-annualdues {
+  left: 1215px;
+  top: 179px;
+  width: 110px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.lbl-specialrate {
+  left: 1015px;
+  top: 210px;
+}
+
+.inp-specialrate {
+  left: 1015px;
+  top: 236px;
+  width: 150px;
+}
+
+.lbl-specialdues {
+  left: 1215px;
+  top: 210px;
+}
+
+.inp-specialdues {
+  left: 1215px;
+  top: 236px;
+  width: 110px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.lbl-addfirst {
+  left: 10px;
+  top: 233px;
+}
+
+.inp-addfirst {
+  left: 10px;
+  top: 259px;
+  width: 130px;
+}
+
+.lbl-addmiddle {
+  left: 155px;
+  top: 233px;
+}
+
+.inp-addmiddle {
+  left: 155px;
+  top: 259px;
+  width: 110px;
+}
+
+.lbl-addlast {
+  left: 282px;
+  top: 233px;
+}
+
+.inp-addlast {
+  left: 282px;
+  top: 259px;
+  width: 200px;
+}
+
+.lbl-addemail {
+  left: 502px;
+  top: 233px;
+}
+
+.inp-addemail {
+  left: 502px;
+  top: 259px;
+  width: 300px;
+}
+
+.lbl-addcell {
+  left: 820px;
+  top: 233px;
+}
+
+.inp-addcell {
+  left: 820px;
+  top: 259px;
+  width: 165px;
+}
+
+.lbl-ach {
+  left: 1030px;
+  top: 265px;
+}
+
+.inp-ach {
+  left: 1030px;
+  top: 291px;
+  width: 110px;
+}
+
+.md-add-ach-note {
+  position: absolute;
+  left: 1050px;
+  top: 318px;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.lbl-prorata {
+  left: 1215px;
+  top: 265px;
+}
+
+.inp-prorata {
+  left: 1215px;
+  top: 291px;
+  width: 115px;
+}
+
+.md-add-notes {
+  position: absolute;
+  left: 10px;
+  top: 330px;
+  width: 625px;
+  height: 68px;
+  border: 2px inset #e0e0e0;
+  background: #ffffff;
+  font-size: 15px;
+  padding: 4px;
+  resize: none;
+}
+
+.md-add-corp-note {
+  position: absolute;
+  left: 1145px;
+  top: 340px;
+  font-size: 15px;
+  line-height: 16px;
+  font-weight: bold;
+  color: #0070c0;
+}
+
+.md-add-required-note {
+  position: absolute;
+  left: 915px;
+  top: 355px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #0070c0;
+}
+
+.md-add-enter-btn {
+  position: absolute;
+  left: 675px;
+  top: 320px;
+  width: 160px;
+  height: 40px;
+  border: 2px outset #dddddd;
+  background: #efefef;
+  color: #00b000;
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+}

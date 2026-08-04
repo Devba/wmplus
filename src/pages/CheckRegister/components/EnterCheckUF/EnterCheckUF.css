@@ -1,0 +1,239 @@
+
+
+
+
+.enter-check-uf {
+  width: 100%;
+  padding: 10px 12px 12px 12px;
+  box-sizing: border-box;
+  background: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #111111;
+}
+
+.enter-check-panel {
+  width: 100%;
+  padding: 10px 12px 10px 12px;
+  box-sizing: border-box;
+  background: #d9d9d9;
+  border: 1px solid #bdbdbd;
+  border-radius: 10px;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.1);
+}
+
+.enter-check-title {
+  margin-bottom: 7px;
+  color: #0a63c9;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.enter-check-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+}
+
+.enter-check-field > span {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.enter-check-field input,
+.enter-check-field select,
+.enter-check-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #a6a6a6;
+  background: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+}
+
+.enter-check-field input,
+.enter-check-field select {
+  height: 28px;
+  padding: 2px 7px;
+}
+
+.enter-check-field textarea {
+  height: 30px;
+  padding: 3px 7px;
+  resize: none;
+}
+
+.enter-check-field input[readonly] {
+  background: #ffffff;
+}
+
+.enter-check-top-grid {
+  display: grid;
+  grid-template-columns: 292px 136px 156px 405px 136px;
+  gap: 6px 12px;
+  align-items: end;
+}
+
+.enter-check-name-row {
+  display: grid;
+  grid-template-columns: 485px 632px;
+  gap: 26px;
+  margin-top: 6px;
+  align-items: end;
+}
+
+.enter-check-invoice-grid {
+  display: grid;
+  grid-template-columns: 186px 164px 164px 170px 284px 280px;
+  gap: 8px 14px;
+  margin-top: 10px;
+  align-items: end;
+}
+
+.enter-check-money-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.enter-check-money-prefix {
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: red;
+  font-size: 16px;
+  font-weight: 700;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.enter-check-money-wrap input {
+  padding-left: 18px;
+}
+
+
+ .enter-check-balance-note-row {
+  display: grid;
+  grid-template-columns: 1fr 250px;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.enter-check-balance-note-row div {
+  grid-column: 2;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.enter-check-notation-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.enter-check-notation-row label {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.enter-check-notation-row input {
+  flex: 1;
+  height: 26px;
+}
+
+.enter-check-action-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 10px;
+  padding-left: 305px;
+}
+
+.enter-check-submit {
+  width: 338px;
+  height: 30px;
+  border: 1px solid #aaaaaa;
+  background: #cfcfcf;
+  color: #666666;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: not-allowed;
+}
+
+.enter-check-submit:not(:disabled) {
+  border-color: #777777;
+  background: #efefef;
+  color: #111111;
+  cursor: pointer;
+}
+
+.enter-check-auto-wrap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.enter-check-auto-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: red;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.enter-check-auto-label input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.enter-check-auto-note {
+  color: #0a4fa3;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.enter-check-search-section {
+  margin-top: 10px;
+  padding-top: 0;
+}
+
+.enter-check-search-title {
+  margin-bottom: 7px;
+  color: #0a63c9;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.enter-check-search-top {
+  display: grid;
+  grid-template-columns: 598px 500px 168px;
+  gap: 10px 14px;
+  align-items: end;
+}
+
+.enter-check-search-bottom {
+  display: grid;
+  grid-template-columns: 585px 202px;
+  gap: 12px 16px;
+  margin-top: 5px;
+  align-items: end;
+}
+
+
+
+
+
+
+.enter-check-helper-id {
+  margin-left: 0;
+}

@@ -1,0 +1,65 @@
+
+
+
+/* ===========================================================
+   DEPOSIT REGISTER MONTHLY SUMMARY
+   =========================================================== */
+
+.dpms-summary-head {
+  height: 128px;
+  margin: 0 10px;
+  padding: 20px 20px 10px 20px;
+
+  background: #f3f3f3;
+  border: 1px solid #c7c7c7;
+}
+
+.dpms-summary-title {
+  margin-bottom: 16px;
+
+  font-size: 20px;
+  font-weight: 700;
+  color: #000;
+  text-align: left;
+}
+
+.dpms-asof-line {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.dpms-asof-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: #000;
+}
+
+.dpms-asof-value {
+  font-size: 16px;
+  color: #000;
+}
+
+.dpms-total-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dpms-total-label,
+.dpms-total-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #000;
+}
+
+.dpms-summary-head + .depreg-button-row {
+  padding: 7px 10px 6px 10px;
+}
+
+.dpms-summary-head + .depreg-button-row .depreg-btn-back {
+  width: 265px;
+  min-width: 265px;
+  height: 34px;
+}

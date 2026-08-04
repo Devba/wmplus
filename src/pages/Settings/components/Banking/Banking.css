@@ -1,0 +1,208 @@
+/* ===========================================================
+   SETTINGS — BANKING / FISCAL YEAR SETUP
+   =========================================================== */
+
+.settings-bank-wrap {
+  position: relative;
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  display: grid;
+  grid-template-columns: 42% 58%;
+
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.settings-bank-left {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+  border-right: 1px solid #8f8f8f;
+}
+
+.bank-header-row {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-bottom: 10px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bank-title,
+.bank-details-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.bank-title {
+  white-space: nowrap;
+}
+
+.bank-actions {
+  flex: 0 0 auto;
+
+  display: flex;
+  gap: 8px;
+}
+
+.bank-actions button {
+  height: 28px;
+  padding: 0 12px;
+
+  border: 1px solid #666666;
+  background: #efefef;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bank-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.bank-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  overflow: auto;
+  border: 1px solid #999999;
+}
+
+.bank-grid-head,
+.bank-grid-row {
+  min-width: 720px;
+
+  display: grid;
+  grid-template-columns:
+    24% 48% 15% 13%;
+}
+
+.bank-grid-head div {
+  padding: 6px 5px;
+
+  background: #dbeafe;
+  border-right: 1px solid #aaaaaa;
+  border-bottom: 1px solid #aaaaaa;
+
+  font-weight: 700;
+}
+
+.bank-grid-row {
+  cursor: pointer;
+}
+
+.bank-grid-row div {
+  min-height: 26px;
+  padding: 5px;
+
+  border-right: 1px solid #cccccc;
+  border-bottom: 1px solid #cccccc;
+}
+
+.bank-grid-row.selected div {
+  background: #dbeafe;
+}
+
+.settings-bank-right {
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 18px;
+
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.bank-details-grid {
+  min-width: 620px;
+  margin-top: 18px;
+
+  display: grid;
+  grid-template-columns: 190px auto;
+  gap: 9px 10px;
+  align-items: center;
+}
+
+.bank-details-grid label {
+  font-weight: 700;
+}
+
+.bank-details-grid input,
+.bank-details-grid select,
+.bank-details-grid textarea {
+  padding: 2px 6px;
+
+  border: 1px solid #888888;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+}
+
+.bank-details-grid input,
+.bank-details-grid select {
+  height: 26px;
+}
+
+.bank-details-grid input[readonly] {
+  background: #f3f3f3;
+}
+
+.bank-details-grid select:disabled {
+  background: #f3f3f3;
+  opacity: 0.75;
+}
+
+.bank-details-actions {
+  margin-top: 18px;
+}
+
+.bank-save-button {
+  height: 28px;
+  padding: 0 14px;
+
+  color: #003cff;
+  background: #efefef;
+  border: 1px solid #666666;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bank-save-button-saved {
+  color: #008000;
+}
+
+.bank-save-button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.bank-unsaved-message {
+  margin-left: 12px;
+
+  color: #b00000;
+  font-weight: 700;
+}
+
+.bank-error-message {
+  margin-left: 12px;
+
+  color: #b00000;
+  font-weight: 700;
+}
+
+
+.bank-details-grid input:invalid {
+  border-color: #b00000;
+}

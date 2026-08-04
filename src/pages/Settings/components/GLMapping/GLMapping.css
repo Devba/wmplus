@@ -1,0 +1,282 @@
+/* 2026-05-15 15:45:00 */
+
+html,
+body {
+  overflow: hidden;
+}
+
+.settings-glmap-page {
+  display: grid;
+  grid-template-columns: 155px minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 4px 8px 4px 8px;
+  font-family: Arial, sans-serif;
+}
+
+.glmap-left {
+  border: 1px solid #8fa8bd;
+  background: #eef5fb;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.glmap-left-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.glmap-section-btn {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 6px 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.glmap-section-btn.active {
+  font-weight: 700;
+  background: #cfe2f3;
+}
+
+.glmap-section-btn.disabled {
+  color: #777;
+  cursor: default;
+}
+
+.glmap-main {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #8fa8bd;
+  background: #ffffff;
+}
+
+.glmap-content {
+  height: 100%;
+  overflow: hidden;
+}
+
+
+.glmap-ts {
+  flex: 0 0 104px;
+  padding: 2px 8px 2px 8px;
+  border-bottom: 2px solid #5b9bd5;
+  background: #f7fbff;
+  box-sizing: border-box;
+}
+
+.glmap-title {
+  font-weight: 700;
+  color: #003b66;
+  font-size: 15px;
+  margin-bottom: 5px;
+}
+
+.glmap-note {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-bottom: 10px;
+}
+
+.glmap-actions button {
+  margin-right: 6px;
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+#btnGLMapEdit {
+  background: #d9d9d9;
+  color: #000000;
+  border: 1px solid #666;
+  margin-left: 0px;
+  font-weight: 700;
+}
+
+#btnGLMapAddRow {
+  background: #d9d9d9;
+  color: #000000;
+  border: 1px solid #666;
+  margin-left: 8px;
+  font-weight: 700;
+}
+
+#btnGLMapSave {
+  background: #d9d9d9;
+  color: #38761d;   /* dark green */
+  border: 1px solid #666;
+  font-weight: 700;
+  margin-left: 18px;
+}
+
+#btnGLMapMoveUp {
+  background: #d9d9d9;
+  color: #000000;
+  border: 1px solid #666;
+  margin-left: 30px;
+  font-weight: 700;
+}
+
+#btnGLMapMoveDown {
+  background: #d9d9d9;
+  color: #000000;
+  border: 1px solid #666;
+  margin-left: 6px;
+  font-weight: 700;
+}
+
+#btnGLMapMoveToParent {
+  background: #d9d9d9;
+  color: #000000;
+  border: 1px solid #666;
+  margin-left: 18px;
+  font-weight: 700;
+}
+
+.glmap-save-message {
+  display: none;
+  color: #b00000;
+  font-weight: 700;
+  margin-left: 500px;
+}
+
+#btnGLMapVideo {
+  background: #d9d9d9;
+  color: #003b99;
+  border: 1px solid #666;
+  margin-left: 900px;
+  font-weight: 700;
+}
+
+
+
+.glmap-grid-wrap {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: auto;
+  padding-bottom: 0px;
+}
+
+.glmap-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 2570px;
+  width: 2570px;
+  font-size: 12px;
+}
+
+.glmap-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #1f4e79;
+  color: #ffffff;
+  border: 1px solid #7f9db9;
+  padding: 5px 4px;
+  text-align: center;
+  white-space: normal;
+}
+
+.glmap-table td {
+  border: 1px solid #b7c9d6;
+  padding: 2px;
+  background: #ffffff;
+}
+
+.glmap-table tr.selected td {
+  background: #dfeaff;
+  border-color: #3f6fd9;
+}
+
+.glmap-table tr.selected input,
+.glmap-table tr.selected select {
+  background: #dfeaff;
+  border-color: #3f6fd9;
+}
+
+.glmap-table input,
+.glmap-table select {
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  border: 1px solid #a6a6a6;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.glmap-table input[readonly],
+.glmap-table select:disabled {
+  background: #f1f1f1;
+  color: #333;
+}
+
+.glmap-row-parent td:first-child input,
+.glmap-row-parent td:nth-child(2) input {
+  font-weight: 700;
+}
+
+.glmap-row-child td:first-child input {
+  color: #555;
+}
+
+.glmap-row-child td:nth-child(2) input {
+  color: #444;
+}
+
+
+.settings-glmap-page {
+  position: relative;
+  flex: 1 1 auto;
+}
+
+.glmap-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.glmap-actions button {
+  height: 28px;
+}
+
+#btnGLMapDeleteRow,
+.glmap-cancel-edit {
+  background: #d9d9d9;
+  color: #000000;
+  border: 1px solid #666666;
+  font-weight: 700;
+}
+
+.glmap-save-message-visible {
+  margin-left: 12px;
+  color: #b00000;
+  font-weight: 700;
+}
+
+.glmap-error-message {
+  margin-left: 12px;
+  color: #b00000;
+  font-weight: 700;
+}
+
+#btnGLMapVideo {
+  margin-left: auto;
+}
+
+#btnGLMapSave:disabled {
+  opacity: 0.65;
+  cursor: default;
+}

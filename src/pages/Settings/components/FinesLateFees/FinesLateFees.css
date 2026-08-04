@@ -1,0 +1,286 @@
+/* ===========================================================
+   SETTINGS — FINES / LATE FEES
+   =========================================================== */
+
+.settings-fines-wrap {
+  position: relative;
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  display: grid;
+  grid-template-columns: 34% 66%;
+
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.settings-fines-left {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+  border-right: 1px solid #8f8f8f;
+}
+
+.fines-header-row {
+  margin-bottom: 10px;
+}
+
+.fines-title,
+.fines-details-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.fines-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  overflow: auto;
+  border: 1px solid #999999;
+}
+
+.fines-grid-head,
+.fines-grid-row {
+  display: grid;
+  grid-template-columns: 38% 62%;
+  min-width: 100%;
+}
+
+.fines-grid-head div {
+  padding: 6px 5px;
+
+  background: #dbeafe;
+  border-right: 1px solid #aaaaaa;
+  border-bottom: 1px solid #aaaaaa;
+
+  font-weight: 700;
+}
+
+.fines-grid-row {
+  cursor: pointer;
+}
+
+.fines-grid-row div {
+  min-height: 26px;
+  padding: 5px;
+
+  border-right: 1px solid #cccccc;
+  border-bottom: 1px solid #cccccc;
+}
+
+.fines-grid-row.selected div {
+  background: #dbeafe;
+}
+
+.settings-fines-right {
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 18px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.fines-instructions {
+  max-width: 900px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+
+  line-height: 1.35;
+}
+
+.fines-form-grid {
+  min-width: 620px;
+  margin-top: 18px;
+
+  display: grid;
+  grid-template-columns: 280px auto;
+  gap: 9px 10px;
+  align-items: center;
+}
+
+.fines-form-grid label {
+  font-weight: 700;
+}
+
+.fines-form-grid input,
+.fines-form-grid select {
+  width: 150px;
+  height: 26px;
+  padding: 2px 6px;
+
+  border: 1px solid #888888;
+  font-size: 13px;
+}
+
+.fines-top-action-row {
+  margin-top: 12px;
+  margin-bottom: 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fines-sub-selector,
+.fines-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fines-action-buttons {
+  margin-left: auto;
+}
+
+.fines-sub-selector button,
+.fines-action-buttons > button {
+  height: 28px;
+  padding: 0 14px;
+
+  border: 1px solid #666666;
+  background: #efefef;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fines-sub-btn.active {
+  color: #000000;
+  background: #dbeafe;
+}
+
+.fines-table-scroll {
+  width: 100%;
+  max-height: 390px;
+
+  overflow-x: auto;
+  overflow-y: auto;
+  border: 1px solid #999999;
+}
+
+.fines-rate-table {
+  width: 820px;
+  min-width: 820px;
+
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.fines-letter-rules-table,
+.fines-timing-table {
+  width: 760px;
+  min-width: 760px;
+
+  border-collapse: collapse;
+}
+
+.fines-rate-table th,
+.fines-letter-rules-table th,
+.fines-timing-table th {
+  padding: 5px;
+
+  background: #ffff66;
+  border: 1px solid #777777;
+
+  text-align: left;
+  font-weight: 700;
+}
+
+.fines-rate-table td,
+.fines-letter-rules-table td,
+.fines-timing-table td {
+  height: 26px;
+  padding: 3px 5px;
+
+  border: 1px solid #999999;
+}
+
+.fines-rate-table input,
+.fines-rate-table select,
+.fines-letter-rules-table input,
+.fines-letter-rules-table select,
+.fines-timing-table input {
+  width: 100%;
+  height: 22px;
+  padding: 2px 5px;
+
+  border: 1px solid #888888;
+  font-size: 13px;
+}
+
+.fines-rate-table tr.selected td {
+  background: #dbeafe;
+}
+
+.fines-letter-code-column {
+  width: 90px;
+}
+
+.fines-gl-column,
+.fines-amount-column {
+  width: 120px;
+}
+
+.fines-active-column {
+  width: 90px;
+}
+
+.fines-letter-rules-table input[readonly] {
+  background: #f3f3f3;
+}
+
+.fines-details-actions {
+  margin-top: 18px;
+}
+
+.fines-action-buttons .fines-details-actions {
+  margin-top: 0;
+
+  display: flex;
+  align-items: center;
+}
+
+.fines-save-button {
+  height: 28px;
+  padding: 0 14px;
+
+  color: #003cff;
+  background: #efefef;
+  border: 1px solid #666666;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fines-save-button-saved {
+  color: #008000;
+}
+
+.fines-save-button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.fines-unsaved-message {
+  margin-left: 12px;
+
+  color: #b00000;
+  font-weight: 700;
+}
+
+.fines-error-message {
+  margin-left: 12px;
+
+  color: #b00000;
+  font-weight: 700;
+}

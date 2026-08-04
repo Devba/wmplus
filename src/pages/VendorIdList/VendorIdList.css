@@ -1,0 +1,326 @@
+
+
+
+/* ===========================================================
+   MAIN DIRECTORY - PAGE SHELL
+   =========================================================== */
+
+.vid-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.vid-page * {
+  box-sizing: border-box;
+}
+
+.vid-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #cfcfcf;
+}
+
+.vid-fixed {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+}
+
+.vid-topsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ===========================================================
+   VID List - TITLE ROW
+   =========================================================== */
+
+
+.vid-title-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+
+    height: 32px;
+    padding-left: 18px;
+
+    font-size: 18px;
+    font-weight: 700;
+    color: #003b73;
+}
+
+
+/* .apr-title-row {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+
+  background: #ffffff;
+  color: #000000;
+
+  font-size: 16px;
+  font-weight: 700;
+} */
+
+
+
+
+/* ===========================================================
+   VID - BUTTON ROW
+   R&R FROM MD
+   =========================================================== */
+
+.vid-button-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #ffffff;
+}
+
+/* .vid-btn-yellow {
+    background: #ffff00;
+    color: #000;
+    font-weight: bold;
+} */
+
+
+
+
+
+.vid-button-row button {
+    height: 38px;
+    min-width: 150px;
+    padding: 0 12px;
+
+    background: #b8d98a;
+    border: 1px solid #6f8f55;
+    box-shadow: 1px 1px 0 #8c8c8c;
+
+    font-size: 14px;
+    font-weight: 700;
+    color: #000000;
+
+    white-space: nowrap;
+}
+
+.vid-button-row .btn-green {
+  color: #008000;
+}
+
+.vid-button-row button.vid-btn-yellow {
+  background: #ffff00;
+  color: #000000;
+  font-weight: 700;
+}
+
+.vid-button-row .btn-blue {
+  color: #003cff;
+}
+
+
+
+/* /* ===========================================================
+   MAIN DIRECTORY - FILTER ROW
+   =========================================================== */
+
+/* .md-filter-row {
+  height: 58px;
+  display: flex;
+  align-items: flex-end;
+  gap: 28px;
+  padding: 0 12px 4px 12px;
+  background: #ffffff;
+}
+
+.md-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.md-filter-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #003b73;
+}
+
+.md-filter-select {
+  height: 24px;
+  border: 1px solid #777777;
+  background: #ffffff;
+  font-size: 13px;
+  padding-left: 6px;
+}
+
+.md-name-filter {
+  width: 340px;
+}
+
+.md-address-filter {
+  width: 360px;
+} */ */
+
+.md-status {
+  margin-left: 40px;
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+
+
+
+/* ===========================================================
+   MAIN DIRECTORY - BODY BOX AND TABLE SCROLLER
+   R&R FROM APR
+   =========================================================== */
+
+.vid-bodybox {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vid-table-wrap {
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+
+  background: #e9f0fa;
+  border: 1px solid #b5c7e6;
+  box-sizing: border-box;
+}
+
+.vid-table {
+  width: 2990px;
+  min-width: 2990px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.vid-table th,
+.vid-table td {
+  border: 1px solid #c8c8c8;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.vid-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+
+  height: 42px;
+  padding: 6px;
+
+  background: #003b6f;
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+}
+
+.vid-table tbody td {
+  height: 24px;
+  padding: 3px 6px;
+  line-height: 1.1;
+  vertical-align: middle;
+
+  background: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vid-table tbody tr:nth-child(even) td {
+  background: #f7f9fc;
+}
+
+
+/* ======================================================================
+   FUTURE ENHANCEMENT - DYNAMIC DUES COLUMN WIDTH
+   ----------------------------------------------------------------------
+   CURRENT DESIGN:
+     Annual Dues, Special Assessment, Credits, etc. use fixed column
+     widths copied from the Legacy Manage+ application.
+
+   FUTURE DESIGN (After Settings + Database are Complete):
+     The Ledger ID / Dues Programming page will allow up to 12 different
+     programmed dues amounts.
+
+     When those settings are saved, the server business rules should:
+
+       1. Format all programmed dues amounts as currency.
+       2. Determine the widest formatted value.
+       3. Calculate the minimum display width required.
+       4. Store the recommended column width (or longest formatted string)
+          in the database.
+
+     APR, Resident Assessment Summary, Monthly/Qtrly/Yrly Assessment
+     Registers, Reports, and any page displaying dues should obtain this
+     value from the server so all pages use identical column widths.
+
+     NOTE:
+       This calculation belongs in the server/business rules (Node + DB),
+       NOT in individual React pages, to preserve the Rinse & Repeat
+       architecture and maintain a single Source of Truth.
+
+   Status:
+     Deferred until Dues Programming and Server Business Rules are
+     implemented.
+
+   ====================================================================== */
+
+
+
+/* ===========================================================
+   VENDOR ID LIST - LEGACY COLUMN WIDTHS
+   Individual PX control for all 20 columns
+   =========================================================== */
+
+.vid-table col.vc1  { width: 270px; }
+.vid-table col.vc2  { width: 70px; }
+.vid-table col.vc3  { width: 160px; }
+.vid-table col.vc4  { width: 210px; }
+.vid-table col.vc5  { width: 150px; }
+.vid-table col.vc6  { width: 70px; }
+.vid-table col.vc7  { width: 95px; }
+.vid-table col.vc8  { width: 170px; }
+.vid-table col.vc9  { width: 125px; }
+.vid-table col.vc10 { width: 135px; }
+.vid-table col.vc11 { width: 150px; }
+.vid-table col.vc12 { width: 110px; }
+.vid-table col.vc13 { width: 100px; }
+.vid-table col.vc14 { width: 210px; }
+.vid-table col.vc15 { width: 220px; }
+.vid-table col.vc16 { width: 80px; }
+.vid-table col.vc17 { width: 230px; }
+.vid-table col.vc18 { width: 190px; }
+.vid-table col.vc19 { width: 125px; }
+.vid-table col.vc20 { width: 120px; }

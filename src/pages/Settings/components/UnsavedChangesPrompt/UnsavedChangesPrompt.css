@@ -1,0 +1,66 @@
+
+
+
+.settings-prompt-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.settings-prompt-box {
+  width: 430px;
+  padding: 18px 20px;
+
+  background: #ffffff;
+  border: 2px solid #555555;
+  box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.settings-prompt-title {
+  margin-bottom: 18px;
+
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.settings-prompt-message {
+  margin-bottom: 22px;
+
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.settings-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.settings-prompt-actions button {
+  width: 82px;
+  height: 30px;
+
+  border: 1px solid #666666;
+  background: #efefef;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-prompt-actions button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.settings-prompt-error {
+  margin-top: 14px;
+
+  color: #b00000;
+  font-weight: 700;
+}

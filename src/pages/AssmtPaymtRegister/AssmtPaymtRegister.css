@@ -1,0 +1,309 @@
+/* ===========================================================
+   ASSESSMENT PAYMENT REGISTER - PAGE SHELL
+   =========================================================== */
+
+.apr-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.apr-page * {
+  box-sizing: border-box;
+}
+
+.apr-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #cfcfcf;
+}
+
+.apr-fixed {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+}
+
+.apr-topsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ===========================================================
+   APR - TITLE ROW
+   =========================================================== */
+
+.apr-title-row {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+
+  background: #ffffff;
+  color: #000000;
+
+  font-size: 16px;
+  font-weight: 700;
+}
+
+
+
+
+/* ===========================================================
+   APR - BUTTON ROW
+   R&R FROM CP / DP
+   =========================================================== */
+
+.apr-button-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #ffffff;
+}
+
+.apr-button-row button {
+  height: 38px;
+  min-width: 150px;
+  padding: 0 12px;
+
+  background: #e9e9e9;
+  border: 1px solid #666666;
+
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.apr-btn-filter,
+.apr-btn-reset,
+.apr-btn-back,
+.apr-btn-ach,
+.apr-btn-batch {
+  color: #003cff;
+}
+
+.apr-btn-enter {
+  color: #008000;
+}
+
+.apr-btn-void {
+  color: #d40000;
+}
+
+
+
+
+/* ===========================================================
+   APR - TOTALS ROW
+   =========================================================== */
+
+.apr-totals-row {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 16px;
+  background: #ffffff;
+}
+
+.apr-total-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.apr-total-label {
+  font-size: 13px;
+  color: #000000;
+}
+
+.apr-total-input {
+  width: 125px;
+  height: 22px;
+  padding-right: 6px;
+  border: 1px solid #888888;
+  background: #ffffff;
+  font-size: 13px;
+  text-align: right;
+}
+
+.apr-dues-paid-input {
+  width: 150px;
+  text-align: center;
+}
+
+/* ===========================================================
+   APR - BODY BOX AND TABLE SCROLLER
+   R&R FROM CP / DP
+   =========================================================== */
+
+.apr-bodybox {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.apr-table-wrap {
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+
+  background: #e9f0fa;
+  border: 1px solid #b5c7e6;
+  box-sizing: border-box;
+}
+
+.apr-table {
+  width: 3900px;
+  min-width: 3900px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.apr-table th,
+.apr-table td {
+  border: 1px solid #c8c8c8;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.apr-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+
+  height: 50px;
+  padding: 6px;
+
+  background: #003b6f;
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+}
+
+.apr-table tbody td {
+  height: 22px;
+  padding: 2px 6px;
+  line-height: 1.1;
+  vertical-align: top;
+
+  background: #ffffff;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.apr-table tbody tr:nth-child(even) td {
+  background: #f7f9fc;
+}
+
+
+/* ======================================================================
+   FUTURE ENHANCEMENT - DYNAMIC DUES COLUMN WIDTH
+   ----------------------------------------------------------------------
+   CURRENT DESIGN:
+     Annual Dues, Special Assessment, Credits, etc. use fixed column
+     widths copied from the Legacy Manage+ application.
+
+   FUTURE DESIGN (After Settings + Database are Complete):
+     The Ledger ID / Dues Programming page will allow up to 12 different
+     programmed dues amounts.
+
+     When those settings are saved, the server business rules should:
+
+       1. Format all programmed dues amounts as currency.
+       2. Determine the widest formatted value.
+       3. Calculate the minimum display width required.
+       4. Store the recommended column width (or longest formatted string)
+          in the database.
+
+     APR, Resident Assessment Summary, Monthly/Qtrly/Yrly Assessment
+     Registers, Reports, and any page displaying dues should obtain this
+     value from the server so all pages use identical column widths.
+
+     NOTE:
+       This calculation belongs in the server/business rules (Node + DB),
+       NOT in individual React pages, to preserve the Rinse & Repeat
+       architecture and maintain a single Source of Truth.
+
+   Status:
+     Deferred until Dues Programming and Server Business Rules are
+     implemented.
+
+   ====================================================================== */
+
+
+
+/* ===========================================================
+   APR - LEGACY COLUMN WIDTHS
+   =========================================================== */
+
+.apr-table col.c1  { width: 100px; }
+.apr-table col.c2  { width: 220px; }
+.apr-table col.c3  { width: 200px; }
+.apr-table col.c4  { width: 100px; }
+.apr-table col.c5  { width: 180px; }
+.apr-table col.c6  { width: 180px; }
+.apr-table col.c7  { width: 140px; }
+.apr-table col.c8  { width: 160px; }
+.apr-table col.c9  { width: 160px; }
+.apr-table col.c10 { width: 140px; }
+.apr-table col.c11 { width: 140px; }
+.apr-table col.c12 { width: 180px; }
+.apr-table col.c13 { width: 180px; }
+.apr-table col.c14 { width: 180px; }
+.apr-table col.c15 { width: 200px; }
+.apr-table col.c16 { width: 150px; }
+.apr-table col.c17 { width: 180px; }
+.apr-table col.c18 { width: 180px; }
+.apr-table col.c19 { width: 150px; }
+.apr-table col.c20 { width: 150px; }
+.apr-table col.c21 { width: 180px; }
+.apr-table col.c22 { width: 180px; }
+.apr-table col.c23 { width: 180px; }
+.apr-table col.c24 { width: 180px; }
+.apr-table col.c25 { width: 150px; }
+
+/* STANDARD W M+ ROW SELECTION */
+
+.apr-table tbody tr {
+  cursor: pointer;
+}
+
+.apr-table tbody tr.is-selected td {
+  background: #dbeafe !important;
+}
+
+.apr-table tbody tr.is-selected {
+  outline: 2px solid #60a5fa;
+  outline-offset: -2px;
+}
+
+.apr-table tbody tr:hover td {
+  background: #f3f8ff;
+}

@@ -1,0 +1,139 @@
+
+
+
+/* =====================================================
+   VOID CHECK USER FORM
+   Copied from Legacy Check Register UF template
+   ===================================================== */
+
+.uf-voidchecks{
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  color: #111;
+}
+
+.uf-voidchecks .uf-window{
+  background: #eaf3ff;
+  border: 2px solid #5aa7d6;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.uf-voidchecks .uf-body{
+  padding: 16px 18px 18px;
+}
+
+.uf-voidchecks .uf-header{
+  font-size: 26px;
+  font-weight: 900;
+  margin: 0 0 6px;
+  color: #0a66c2;
+}
+
+.uf-voidchecks .uf-sub,
+.uf-voidchecks .uf-instr{
+  margin: 0 0 8px;
+  font-weight: 900;
+  letter-spacing: .2px;
+}
+
+.uf-voidchecks .uf-instr{
+  margin-bottom: 16px;
+}
+
+.uf-voidchecks .uf-grid{
+  display: grid;
+  grid-template-columns: 160px 1fr 220px;
+  gap: 14px 18px;
+  align-items: end;
+}
+
+.uf-voidchecks .uf-row2{
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1.7fr 120px 120px 2.2fr 160px;
+  gap: 10px 10px;
+  align-items: end;
+}
+
+.uf-voidchecks .uf-field{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.uf-voidchecks .uf-label{
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: .2px;
+}
+
+.uf-voidchecks .uf-input{
+  height: 28px;
+  border: 1px solid #7a7a7a;
+  background: #fff;
+  padding: 3px 8px;
+  border-radius: 2px;
+  outline: none;
+  font-size: 13px;
+}
+
+.uf-voidchecks .uf-input[readonly]{
+  background: #f7f7f7;
+}
+
+.uf-voidchecks .uf-btncol{
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 8px;
+}
+
+.uf-voidchecks .uf-btn{
+  min-width: 170px;
+  height: 42px;
+
+  border: 1px solid #2d6a2d;
+  border-radius: 3px;
+
+  background: #1f8a2f;
+  color: #ffffff;
+
+  font-size: 16px;
+  font-weight: 500;
+
+  cursor: pointer;
+
+  box-shadow: 0 2px 0 rgba(0,0,0,.15);
+}
+
+.uf-voidchecks .uf-btn:active{
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 rgba(0,0,0,.15);
+}
+
+.uf-voidchecks .uf-msg{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #b7cbe2;
+  background: #f8fbff;
+  border-radius: 6px;
+  font-size: 13px;
+  display: none;
+}
+
+.uf-voidchecks .uf-msg.is-error{
+  border-color: #d3a2a2;
+  background: #fff6f6;
+}
+
+.uf-voidchecks .uf-msg.is-success{
+  border-color: #9ad39a;
+  background: #f6fff6;
+}
+
+.uf-voidchecks .uf-note{
+  margin-top: 12px;
+  font-size: 12px;
+  color: #444;
+}

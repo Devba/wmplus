@@ -1,0 +1,61 @@
+
+
+
+/* CR Monthly Summary UF — converted from Legacy VS */
+
+.dp-ms-body {
+  padding: 12px 24px 26px 24px;
+  text-align: center;
+}
+
+.dp-ms-title {
+  margin: 8px 0 24px 0;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #0b67d1;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.dp-ms-field {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+#dpMsMonth {
+  width: 160px;
+  height: 38px;
+  border: 1px solid #888;
+  background: #fff;
+  font-size: 16px;
+  padding: 4px 8px;
+  box-shadow: inset 0 0 0 2px #d8d8d8;
+}
+
+.dp-ms-action {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+#dpMsCreateBtn {
+  min-width: 170px;
+  height: 44px;
+  border: 2px solid #8d8d8d;
+  background: #f8f8f8;
+  color: #111;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: Georgia, "Times New Roman", serif;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 #8d8d8d;
+}
+
+#dpMsCreateBtn:disabled {
+  color: #8c8c8c;
+  border-color: #bcbcbc;
+  box-shadow: none;
+  cursor: not-allowed;
+  background: #efefef;
+}

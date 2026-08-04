@@ -1,0 +1,556 @@
+/* JULY 9 2026 FIRST PASS AT CREATING TOP SECTION  */
+
+.checkreg-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.checkreg-page * {
+  box-sizing: border-box;
+}
+
+.checkreg-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #cfcfcf;
+}
+
+.checkreg-fixed {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+}
+
+.cr-ts {
+  height: 74px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #b8c8e8;
+  background: #f3f6fb;
+}
+
+.cr-ts label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.cr-bank-box,
+.cr-balance-box,
+.cr-period-box,
+.cr-txn-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.cr-bank-box select,
+.cr-period-box select,
+.cr-balance-box input,
+.cr-txn-box input {
+  height: 26px;
+  width: 150px;
+}
+
+.cr-balance-box input {
+  text-align: right;
+}
+
+.cr-ts-btn {
+  height: 30px;
+  padding: 0 12px;
+}
+
+.cr-placeholder {
+  padding: 30px;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+
+/* Bank row section */
+.cr-bank-row {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 2px 16px;
+  background: #ffffff;
+  
+}
+
+.cr-bank-label,
+.cr-bank-acct-label,
+.cr-balance-label {
+  font-weight: 700;
+  font-size: 14px;
+  color: #000;
+}
+
+.cr-bank-select {
+  width: 290px;
+  height: 24px;
+  font-size: 14px;
+  padding-left: 10px;
+  border: 1px solid #888;
+}
+
+.cr-balance-input {
+  width: 140px;
+  height: 20px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+  padding-right: 10px;
+  border: 1px solid #888;
+}
+
+
+
+/* Filer section */
+.cr-filter-row {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0px 16px;
+  background: #ffffff;
+}
+
+.cr-filter-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #000;
+}
+
+.cr-period-select {
+    width: 110px;
+    height: 28px;
+    font-size: 14px;
+}
+
+.cr-status-select {
+    width: 80px;
+    height: 28px;
+    font-size: 14px;
+}
+
+.cr-txn-input {
+  width: 180px;
+  height: 24px;
+  font-size: 14px;
+  padding-left: 10px;
+}
+
+
+.cr-wild-label {
+    width: 72px;
+    height: 22px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+
+
+.cr-wild-input {
+  width: 220px;
+  height: 28px;
+  font-size: 14px;
+  padding-left: 10px;
+}
+
+.cr-small-btn {
+    height: 30px;
+    min-width: 90px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    padding: 0 8px;
+}
+
+.cr-blue-btn {
+  height: 32px;
+  min-width: 220px;
+  background: #0b4778;
+  color: white;
+  font-weight: 800;
+  border: none;
+}
+
+.cr-go-btn {
+    width: 72px;
+    height: 30px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #d8d8d8;
+    border: 1px solid #7a7a7a;
+    color: #000;
+}
+
+.cr-reset-filter-btn {
+    width: 130px;
+    height: 30px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #d8d8d8;
+    border: 1px solid #7a7a7a;
+    color: #000;
+}
+
+.cr-vendor-filter-btn {
+  width: 220px;
+  height: 30px;
+  font-size: 13px;
+  font-weight: 800;
+  background: #0b4778;
+  border: none;
+  color: #fff;
+}
+
+.cr-reset-vendor-btn {
+  width: 180px;
+  height: 30px;
+  font-size: 13px;
+  font-weight: 800;
+  background: #0b4778;
+  border: none;
+  color: #fff;
+}
+
+
+
+
+
+/* ===========================================================
+   CHECK REGISTER - BUTTON ROW
+   =========================================================== */
+
+.checkreg-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+}
+
+.checkreg-btn {
+    height: 38px;
+    min-width: 150px;
+
+    font-size: 14px;
+    font-weight: 700;
+
+    background: #e9e9e9;
+    border: 1px solid #666;
+    cursor: pointer;
+}
+
+.checkreg-yellowbar {
+    display: flex;
+    gap: 10px;
+    margin-left: 8px;
+}
+
+.checkreg-yellowbtn {
+    height: 38px;
+    min-width: 190px;
+
+    font-size: 14px;
+    font-weight: 700;
+
+    background: #ffe600;
+    border: 1px solid #666;
+    cursor: pointer;
+}
+
+.blueText {
+    color: #003cff;
+}
+
+.greenText {
+    color: #008000;
+}
+
+.redText {
+    color: #d40000;
+}
+
+
+
+
+
+
+
+
+/* ===========================================================
+   CHECK REGISTER - LEGACY GRID AND HEADER
+   Source: Legacy Check Register payload
+   =========================================================== */
+
+.checkreg-grid-band {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 18px 18px 18px;
+  box-sizing: border-box;
+}
+
+.checkreg-table-scroll {
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #e9f0fa;
+  border: 1px solid #b5c7e6;
+  box-sizing: border-box;
+}
+
+.checkreg-table {
+  width: 100%;
+  min-width: 2320px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.checkreg-table th,
+.checkreg-table td {
+  border: 1px solid #c8c8c8;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.checkreg-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+
+  padding: 10px 8px;
+
+  background: #003b6f;
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+
+  white-space: normal;
+}
+
+.checkreg-table tbody td {
+  padding: 2px 6px;
+  line-height: 1;
+  vertical-align: top;
+
+  background: #ffffff;
+
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Header and body text alignment */
+
+.checkreg-table .col-check {
+  text-align: center;
+}
+
+.checkreg-table .col-amt {
+  text-align: center;
+}
+
+.checkreg-table .col-date {
+  text-align: center;
+}
+
+.checkreg-table .col-date2 {
+  text-align: center;
+}
+
+.checkreg-table .col-month {
+  text-align: center;
+}
+
+.checkreg-table .col-acct {
+  text-align: center;
+}
+
+.checkreg-table .col-inv {
+  text-align: center;
+}
+
+.checkreg-table .col-invdt {
+  text-align: center;
+}
+
+.checkreg-table .col-invamt {
+  text-align: center;
+}
+
+.checkreg-table .col-bank {
+  text-align: center;
+}
+
+.checkreg-table .col-allowed {
+  text-align: center;
+}
+
+.checkreg-table .col-gl2 {
+  text-align: center;
+}
+
+.checkreg-table .col-txn {
+  text-align: center;
+}
+
+.checkreg-table .col-esc {
+  text-align: center;
+}
+
+.checkreg-table .col-banknm {
+  text-align: center;
+}
+
+/* Legacy Check Register column widths */
+
+.checkreg-table col.c-check {
+  width: 75px;
+}
+
+.checkreg-table col.c-name {
+  width: 300px;
+}
+
+.checkreg-table col.c-amt {
+  width: 120px;
+}
+
+.checkreg-table col.c-issued {
+  width: 90px;
+}
+
+.checkreg-table col.c-cleared {
+  width: 90px;
+}
+
+.checkreg-table col.c-month {
+  width: 70px;
+}
+
+.checkreg-table col.c-gl {
+  width: 250px;
+}
+
+.checkreg-table col.c-vendoracct {
+  width: 115px;
+}
+
+.checkreg-table col.c-invno {
+  width: 100px;
+}
+
+.checkreg-table col.c-invdate {
+  width: 90px;
+}
+
+.checkreg-table col.c-invamt {
+  width: 120px;
+}
+
+.checkreg-table col.c-note {
+  width: 360px;
+}
+
+.checkreg-table col.c-bank {
+  width: 60px;
+}
+
+.checkreg-table col.c-allowed {
+  width: 90px;
+}
+
+.checkreg-table col.c-gl2 {
+  width: 70px;
+}
+
+.checkreg-table col.c-txn {
+  width: 190px;
+}
+
+.checkreg-table col.c-esc {
+  width: 50px;
+}
+
+.checkreg-table col.c-banknm {
+  width: 180px;
+}
+
+.checkreg-table td.col-name,
+.checkreg-table td.col-gl,
+.checkreg-table td.col-note,
+.checkreg-table td.col-txn,
+.checkreg-table td.col-banknm {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+
+/* ===========================================================
+   CHECK REGISTER - BODY BOX CONTAINER
+   Preserves Legacy flex and scroll behavior
+   =========================================================== */
+
+.checkreg-bodybox {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+
+
+
+/* ==========================================================
+   STANDARD W M+ ROW SELECTION
+   Used by all grid pages
+   ========================================================== */
+
+.checkreg-table tbody tr {
+    cursor: pointer;
+}
+
+.checkreg-table tbody tr.is-selected td {
+    background: #dbeafe !important;
+}
+
+.checkreg-table tbody tr.is-selected {
+    outline: 2px solid #60a5fa;
+    outline-offset: -2px;
+}
+
+.checkreg-table tbody tr:hover td {
+    background: #f3f8ff;
+}
+

@@ -1,0 +1,528 @@
+
+
+
+/* =========================================================
+   SHARED FILTER UF
+   ========================================================= */
+
+.shared-filter-uf {
+  position: relative;
+  width: 1220px;
+  height: 370px;
+  background: #efefef;
+  font-family: Arial, Helvetica, sans-serif;
+  overflow: visible;
+}
+
+.shared-filter-uf * {
+  box-sizing: border-box;
+}
+
+.shared-filter-instructions {
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  width: 1185px;
+  height: 58px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow: hidden;
+}
+
+.shared-filter-heading {
+  position: absolute;
+  left: 82px;
+  top: 68px;
+  width: 540px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0563c1;
+}
+
+.shared-filter-label {
+  position: absolute;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0563c1;
+  white-space: nowrap;
+}
+
+.shared-filter-output {
+  position: absolute;
+  height: 26px;
+  border: 1px solid #8f8f8f;
+  background: #ffffff;
+  padding: 1px 6px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.shared-filter-output-label {
+  position: absolute;
+  font-size: 12px;
+  font-weight: 700;
+  color: #000000;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   PAGED LOOKUP
+   ========================================================= */
+
+.paged-lookup {
+  position: absolute;
+  height: 26px;
+  z-index: 20;
+}
+
+.paged-lookup-control {
+  position: relative;
+  width: 100%;
+  height: 26px;
+  border: 1px solid #8f8f8f;
+  background: #ffffff;
+  padding: 1px 28px 1px 6px;
+  text-align: left;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.paged-lookup-value {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.paged-lookup-arrow {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 22px;
+  height: 24px;
+  border-left: 1px solid #8f8f8f;
+  background: linear-gradient(
+    #f3f3f3,
+    #dcdcdc
+  );
+  line-height: 24px;
+  text-align: center;
+  font-size: 9px;
+}
+
+.paged-lookup-popup {
+  position: absolute;
+  top: 27px;
+  min-width: 660px;
+  background: #ffffff;
+  border: 1px solid #6f6f6f;
+  box-shadow: 2px 3px 7px
+    rgba(0, 0, 0, 0.28);
+  z-index: 1000;
+}
+
+.sf-select-vendor-name
+.paged-lookup-popup {
+  left: -170px;
+}
+
+.sf-select-vendor-acct
+.paged-lookup-popup {
+  left: -550px;
+}
+
+.paged-lookup-search {
+  width: 100%;
+  height: 30px;
+  border: 0;
+  border-bottom: 1px solid #b8b8b8;
+  padding: 3px 7px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  outline: none;
+}
+
+.paged-lookup-header,
+.paged-lookup-option {
+  display: grid;
+  grid-template-columns:
+    220px
+    330px
+    105px;
+  width: 100%;
+  min-width: 655px;
+}
+
+.paged-lookup-header {
+  height: 27px;
+  border-bottom: 1px solid #888888;
+  background: #e6eef8;
+  color: #003b73;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.paged-lookup-header
+.lookup-col {
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #b5c3d5;
+  padding: 3px 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.paged-lookup-list {
+  width: 100%;
+  max-height: 190px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.paged-lookup-option {
+  min-height: 27px;
+  border: 0;
+  border-bottom: 1px solid #e0e0e0;
+  background: #ffffff;
+  padding: 0;
+  text-align: left;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.paged-lookup-option:hover,
+.paged-lookup-option:focus {
+  background: #dbeafe;
+  outline: none;
+}
+
+.paged-lookup-option
+.lookup-col {
+  display: block;
+  min-width: 0;
+  height: 27px;
+  line-height: 27px;
+  border-right: 1px solid #e2e2e2;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lookup-col-account {
+  text-align: center;
+}
+
+.paged-lookup-message {
+  min-height: 27px;
+  padding: 6px;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  color: #555555;
+  text-align: center;
+}
+
+/* =========================================================
+   STANDARD RESIDENT AND MIXED LOCATIONS
+   ========================================================= */
+
+.sf-label-acct {
+  left: 24px;
+  top: 104px;
+}
+
+.sf-select-acct {
+  left: 24px;
+  top: 126px;
+  width: 98px;
+}
+
+.sf-label-name {
+  left: 164px;
+  top: 104px;
+}
+
+.sf-select-name {
+  left: 164px;
+  top: 126px;
+  width: 520px;
+}
+
+.sf-label-address {
+  left: 164px;
+  top: 156px;
+}
+
+.sf-select-address {
+  left: 164px;
+  top: 178px;
+  width: 450px;
+}
+
+.sf-label-vendor-name {
+  left: 700px;
+  top: 104px;
+}
+
+.sf-select-vendor-name {
+  left: 700px;
+  top: 126px;
+  width: 340px;
+}
+
+.sf-label-vendor-acct {
+  left: 1080px;
+  top: 104px;
+}
+
+.sf-select-vendor-acct {
+  left: 1080px;
+  top: 126px;
+  width: 110px;
+}
+
+/* =========================================================
+   STANDARD BUTTONS
+   ========================================================= */
+
+.shared-filter-apply {
+  position: absolute;
+  left: 736px;
+  top: 180px;
+  width: 190px;
+  height: 54px;
+  border: 1px solid #0d4f84;
+  background: #0d4f84;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 2px 2px 0
+    rgba(0, 0, 0, 0.28);
+}
+
+.shared-filter-clear {
+  position: absolute;
+  left: 950px;
+  top: 180px;
+  width: 110px;
+  height: 54px;
+  border: 1px solid #777777;
+  background: #e6e6e6;
+  color: #003cff;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* =========================================================
+   STANDARD SEARCH RESULTS
+   ========================================================= */
+
+.shared-filter-results-heading {
+  position: absolute;
+  left: 24px;
+  top: 230px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #000000;
+}
+
+.sf-output-name-label {
+  left: 24px;
+  top: 255px;
+}
+
+.sf-output-name {
+  left: 24px;
+  top: 278px;
+  width: 220px;
+}
+
+.sf-output-address-label {
+  left: 274px;
+  top: 255px;
+}
+
+.sf-output-address {
+  left: 274px;
+  top: 278px;
+  width: 430px;
+}
+
+.sf-output-acct-label {
+  left: 736px;
+  top: 255px;
+}
+
+.sf-output-acct {
+  left: 736px;
+  top: 278px;
+  width: 90px;
+}
+
+.sf-output-vendor-name-label {
+  left: 24px;
+  top: 308px;
+}
+
+.sf-output-vendor-name {
+  left: 24px;
+  top: 331px;
+  width: 390px;
+}
+
+.sf-output-vendor-address-label {
+  left: 440px;
+  top: 308px;
+}
+
+.sf-output-vendor-address {
+  left: 440px;
+  top: 331px;
+  width: 360px;
+}
+
+.sf-output-vendor-acct-label {
+  left: 830px;
+  top: 308px;
+}
+
+.sf-output-vendor-acct {
+  left: 830px;
+  top: 331px;
+  width: 90px;
+}
+
+/* =========================================================
+   COMPACT VENDOR-ONLY MODE
+   ========================================================= */
+
+.filter-mode-vendor-only {
+  width: 900px;
+  height: 245px;
+}
+
+.filter-mode-vendor-only
+.shared-filter-instructions {
+  left: 20px;
+  top: 12px;
+  width: 860px;
+  height: 38px;
+}
+
+.filter-mode-vendor-only
+.shared-filter-heading {
+  left: 20px;
+  top: 55px;
+  width: 860px;
+  font-size: 15px;
+}
+
+.filter-mode-vendor-only
+.sf-label-vendor-name {
+  left: 40px;
+  top: 91px;
+}
+
+.filter-mode-vendor-only
+.sf-select-vendor-name {
+  left: 40px;
+  top: 112px;
+  width: 500px;
+}
+
+.filter-mode-vendor-only
+.sf-label-vendor-acct {
+  left: 570px;
+  top: 91px;
+}
+
+.filter-mode-vendor-only
+.sf-select-vendor-acct {
+  left: 570px;
+  top: 112px;
+  width: 130px;
+}
+
+.filter-mode-vendor-only
+.sf-select-vendor-name
+.paged-lookup-popup {
+  left: 0;
+}
+
+.filter-mode-vendor-only
+.sf-select-vendor-acct
+.paged-lookup-popup {
+  left: -530px;
+}
+
+.filter-mode-vendor-only
+.shared-filter-apply {
+  left: 720px;
+  top: 92px;
+  width: 150px;
+  height: 46px;
+}
+
+.filter-mode-vendor-only
+.shared-filter-clear {
+  left: 720px;
+  top: 145px;
+  width: 150px;
+  height: 34px;
+}
+
+.filter-mode-vendor-only
+.shared-filter-results-heading {
+  left: 40px;
+  top: 158px;
+  font-size: 15px;
+}
+
+.filter-mode-vendor-only
+.sf-output-vendor-name-label {
+  left: 40px;
+  top: 184px;
+}
+
+.filter-mode-vendor-only
+.sf-output-vendor-name {
+  left: 40px;
+  top: 204px;
+  width: 280px;
+}
+
+.filter-mode-vendor-only
+.sf-output-vendor-address-label {
+  left: 340px;
+  top: 184px;
+}
+
+.filter-mode-vendor-only
+.sf-output-vendor-address {
+  left: 340px;
+  top: 204px;
+  width: 360px;
+}
+
+.filter-mode-vendor-only
+.sf-output-vendor-acct-label {
+  left: 720px;
+  top: 184px;
+}
+
+.filter-mode-vendor-only
+.sf-output-vendor-acct {
+  left: 720px;
+  top: 204px;
+  width: 100px;
+}

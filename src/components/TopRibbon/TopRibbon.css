@@ -1,0 +1,181 @@
+.top-ribbon {
+    background: #dcdcdc;
+    border-bottom: 2px solid #c2d4f0;
+    padding: 6px 4px;
+}
+
+ .ribbon-inner{
+    display:flex;
+    align-items:stretch;
+    justify-content:flex-start;
+    gap:6px;
+    padding:6px 8px;
+    max-width:1440px;
+    margin:0 auto;
+    overflow:hidden;
+    flex-wrap:nowrap;
+}
+
+.ribbon-group{
+    background:#efefef;
+    border-right:1px solid #cfcfcf;
+    padding:4px 6px 2px 6px;
+    min-width:0;
+    flex:0 0 auto;
+}
+
+.ribbon-buttons{
+    display:flex;
+    gap:6px;
+    align-items:flex-start;
+}
+
+.ribbon-btn{
+    width:72px;
+    height:66px;
+    background:#fff;
+    border:1px solid #bdbdbd;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    padding:6px 4px;
+    box-sizing:border-box;
+    cursor:pointer;
+}
+
+.icon {
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    margin-bottom: 4px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.label {
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.1;
+    word-wrap: break-word;
+}
+
+.group-label{
+    font-size:11px;
+    font-weight:700;
+    text-align:center;
+    padding:4px 6px 6px;
+    border-top:1px solid #d0d0d0;
+
+    height:28px;          /* fixed label height */
+    line-height:1.05;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    white-space:normal;
+    word-break:break-word;
+}
+
+.icon.icon-violations {
+  background-image: url("/icons/VIOLATIONS.png");
+}
+
+.icon.icon-lateassmt {
+  background-image: url("/icons/LATEASSMT.png");
+}
+
+.icon.icon-arrears {
+    background-image: url("/icons/ARREARS.png");
+}
+
+
+.icon.icon-summarize {
+  background-image: url("/icons/SUMMARIZE.png");
+}
+
+.icon.icon-archive-ar {
+  background-image: url("/icons/FileManageMenu.png");
+}
+
+.icon.icon-addressbook {
+  background-image: url("/icons/AddressBook.png");
+}
+
+.icon.icon-showdetailspage {
+  background-image: url("/icons/ShowDetailsPage.png");
+}
+
+
+.icon.icon-accesslistcontacts {
+  background-image: url("/icons/AddressListContacts.png");
+  width: 48px;
+  height: 48px;
+}
+
+
+.icon.icon-reviewacceptchange {
+  background-image: url("/icons/ReviewAcceptChange.png");
+}
+
+
+.icon.icon-addresident {
+  background-image: url("/icons/SUMMARIZE.png");
+}
+
+.icon.icon-editresident {
+  background-image: url("/icons/ARCHIVE.png");
+}
+
+
+.icon.icon-addvendor {
+    background-image: url("/icons/SUMMARIZE.png");
+}
+
+.icon.icon-editvendor {
+    background-image: url("/icons/ARCHIVE.png");
+}
+
+.icon.icon-deletevendor {
+    background-image: url("/icons/ChartResetToMatchStyle.png");
+}
+
+.icon.icon-newyearinvoices {
+    background-image: url("/icons/NewMessageToContact.png");
+}
+
+.icon.icon-masternav {
+  background-image: none;
+  width: 36px;
+  height: 18px;
+}
+
+.ribbon-btn-master {
+    width: 72px;
+    height: 66px;
+    padding-left: 4px;
+    padding-right: 4px;
+    /* padding: 0; */
+    display: grid;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+}
+
+.label-master {
+    width: 72px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.15;
+    margin: 0;
+}
+
+
+.ribbon-btn-daily-deposit {
+    margin-left: 13px;
+}
+
+
+

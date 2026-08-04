@@ -1,0 +1,220 @@
+
+
+
+
+/* ===========================================================
+   SETTINGS — HOA PROFILE
+   Legacy layout converted to React
+   =========================================================== */
+
+.settings-hoa-wrap {
+  position: relative;  
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  display: grid;
+  grid-template-columns: 42% 58%;
+
+  overflow: hidden;
+  background: #ffffff;
+}
+
+
+/* ===========================================================
+   LEFT PANEL
+   =========================================================== */
+
+.settings-hoa-left {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+  border-right: 1px solid #8f8f8f;
+}
+
+.hoa-header-row {
+  flex: 0 0 auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  margin-bottom: 10px;
+}
+
+.hoa-title,
+.hoa-details-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.hoa-title {
+  white-space: nowrap;
+}
+
+.hoa-grid {
+  flex: 1 1 auto;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow: auto;
+  border: 1px solid #999999;
+}
+
+.hoa-grid-head,
+.hoa-grid-row {
+  display: grid;
+  grid-template-columns: 32% 68%;
+  min-width: 100%;
+}
+
+.hoa-grid-head div {
+  padding: 6px 5px;
+
+  background: #dbeafe;
+  border-right: 1px solid #aaaaaa;
+  border-bottom: 1px solid #aaaaaa;
+
+  font-weight: 700;
+}
+
+.hoa-grid-row div {
+  min-height: 26px;
+  padding: 5px;
+
+  border-right: 1px solid #cccccc;
+  border-bottom: 1px solid #cccccc;
+}
+
+.hoa-grid-row.selected div {
+  background: #dbeafe;
+}
+
+
+/* ===========================================================
+   RIGHT PANEL
+   =========================================================== */
+
+.settings-hoa-right {
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 18px;
+
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.hoa-details-grid {
+  min-width: 620px;
+  margin-top: 18px;
+
+  display: grid;
+  grid-template-columns: 160px auto;
+  gap: 9px 10px;
+  align-items: center;
+}
+
+.hoa-details-grid label {
+  font-weight: 700;
+}
+
+.hoa-details-grid input,
+.hoa-details-grid textarea {
+  padding: 2px 6px;
+
+  border: 1px solid #888888;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+}
+
+.hoa-details-grid input {
+  height: 26px;
+}
+
+.hoa-details-actions {
+  margin-top: 18px;
+}
+
+.hoa-save-button {
+  height: 28px;
+  padding: 0 14px;
+
+  background: #efefef;
+  border: 1px solid #666666;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+
+.hoa-grid-row {
+  cursor: pointer;
+}
+
+
+.hoa-save-button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.hoa-unsaved-message {
+  margin-left: 12px;
+  color: #b00000;
+  font-weight: 700;
+}
+
+.hoa-saved-message {
+  margin-left: 12px;
+  color: #006400;
+  font-weight: 700;
+}
+
+.hoa-error-message {
+  margin-left: 12px;
+  color: #b00000;
+  font-weight: 700;
+}
+
+
+.hoa-save-button {
+  height: 28px;
+  padding: 0 14px;
+
+  color: #003cff;
+  background: #efefef;
+  border: 1px solid #666666;
+
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hoa-save-button-saved {
+  color: #008000;
+}
+
+.hoa-save-button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.hoa-unsaved-message {
+  margin-left: 12px;
+  color: #b00000;
+  font-weight: 700;
+}
+
+.hoa-error-message {
+  margin-left: 12px;
+  color: #b00000;
+  font-weight: 700;
+}
+
+

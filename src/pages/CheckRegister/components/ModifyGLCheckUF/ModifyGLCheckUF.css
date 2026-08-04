@@ -1,0 +1,125 @@
+
+
+
+.modify-gl-check-uf {
+  width: 100%;
+  min-height: 280px;
+  padding: 14px 32px 22px 32px;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+  background: #ffffff;
+}
+
+.modify-gl-check-message {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f4e79;
+  text-align: left;
+}
+
+.modify-gl-check-display-row,
+.modify-gl-check-entry-row,
+.modify-gl-check-account-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 12px;
+  margin: 0 0 13px 0;
+}
+
+.modify-gl-check-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+  color: #111111;
+  text-align: left;
+}
+
+.modify-gl-check-field span {
+  display: block;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.modify-gl-check-field input,
+.modify-gl-check-field select {
+  width: 100%;
+  height: 24px;
+  padding: 2px 5px;
+  box-sizing: border-box;
+  border: 1px solid #888888;
+  border-radius: 2px;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  text-align: left;
+}
+
+.modify-gl-check-field input[readonly] {
+  background: #fafafa;
+}
+
+.modify-gl-check-name-field {
+  width: 315px;
+}
+
+.modify-gl-check-amount-field {
+  width: 90px;
+}
+
+.modify-gl-check-current-gl-field {
+  width: 360px;
+}
+
+.modify-gl-check-transaction-field {
+  width: 202px;
+}
+
+.modify-gl-check-new-gl-field {
+  width: 383px;
+}
+
+.modify-gl-check-bank-field {
+  width: 315px;
+}
+
+.modify-gl-check-entity-field {
+  width: 146px;
+}
+
+.modify-gl-check-account-row {
+  position: relative;
+  padding-right: 110px;
+}
+
+.modify-gl-check-submit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+
+  width: 96px;
+  height: 25px;
+  padding: 0;
+
+  border: 1px solid #bdbdbd;
+  border-radius: 3px;
+  background: #eeeeee;
+  color: #aaaaaa;
+
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  line-height: 23px;
+  text-align: center;
+  cursor: not-allowed;
+}
+
+.modify-gl-check-submit:not(:disabled) {
+  border-color: #777777;
+  background: #d9d9d9;
+  color: #111111;
+  cursor: pointer;
+}

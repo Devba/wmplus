@@ -1,0 +1,243 @@
+
+
+
+/* ===========================================================
+   VOID DEPOSIT USER FORM
+   Fixed-pixel layout copied from Legacy DP Void UF
+   =========================================================== */
+
+.uf-voiddeposit {
+  width: 780px;
+  height: 320px;
+  font-family: Arial, sans-serif;
+  color: #111111;
+}
+
+.uf-voiddeposit .uf-window {
+  position: relative;
+  width: 780px;
+  height: 320px;
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  border: 0;
+  overflow: hidden;
+}
+
+.uf-voiddeposit .uf-body {
+  position: relative;
+  width: 780px;
+  height: 320px;
+  margin: 0;
+  padding: 0;
+}
+
+.uf-voiddeposit .uf-header {
+  position: absolute;
+  top: 36px;
+  left: 20px;
+  width: 720px;
+  height: 34px;
+  margin: 0;
+  color: #1d5fd3;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 34px;
+  text-align: left;
+}
+
+.uf-voiddeposit .uf-sub {
+  position: absolute;
+  top: 84px;
+  left: 20px;
+  width: 720px;
+  height: 24px;
+  margin: 0;
+  color: #111111;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: left;
+}
+
+.uf-voiddeposit .uf-top-row {
+  position: absolute;
+  top: 128px;
+  left: 20px;
+  width: 720px;
+  height: 74px;
+}
+
+.uf-voiddeposit .uf-field {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+}
+
+.uf-voiddeposit .uf-transaction-field {
+  top: 0;
+  left: 0;
+  width: 294px;
+  height: 68px;
+}
+
+.uf-voiddeposit .uf-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 294px;
+  height: 22px;
+  color: #111111;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+
+.uf-voiddeposit .uf-input {
+  position: absolute;
+  height: 36px;
+  padding: 4px 10px;
+  border: 1px solid #999999;
+  background: #ffffff;
+  color: #222222;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.uf-voiddeposit .uf-transaction-field .uf-input {
+  top: 30px;
+  left: 0;
+  width: 294px;
+}
+
+.uf-voiddeposit .uf-button-column {
+  position: absolute;
+  top: 30px;
+  left: 314px;
+  width: 176px;
+  height: 42px;
+}
+
+.uf-voiddeposit .uf-button {
+  width: 176px;
+  height: 42px;
+  border: 1px solid #2d6a2d;
+  border-radius: 3px;
+  background: #1f8a2f;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+}
+
+.uf-voiddeposit .uf-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.uf-voiddeposit .uf-detail-row {
+  position: absolute;
+  top: 216px;
+  left: 20px;
+  width: 720px;
+  height: 68px;
+}
+
+.uf-voiddeposit .uf-detail-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 20px;
+  color: #444444;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: left;
+}
+
+.uf-voiddeposit .uf-depositor-field {
+  top: 0;
+  left: 0;
+  width: 294px;
+  height: 68px;
+}
+
+.uf-voiddeposit .uf-depositor-field .uf-detail-label {
+  width: 294px;
+}
+
+.uf-voiddeposit .uf-depositor-field .uf-input {
+  top: 26px;
+  left: 0;
+  width: 294px;
+}
+
+.uf-voiddeposit .uf-id-field {
+  top: 0;
+  left: 312px;
+  width: 112px;
+  height: 68px;
+}
+
+.uf-voiddeposit .uf-id-field .uf-detail-label {
+  width: 112px;
+}
+
+.uf-voiddeposit .uf-id-field .uf-input {
+  top: 26px;
+  left: 0;
+  width: 112px;
+}
+
+.uf-voiddeposit .uf-amount-field {
+  top: 0;
+  left: 442px;
+  width: 158px;
+  height: 68px;
+}
+
+.uf-voiddeposit .uf-amount-field .uf-detail-label {
+  width: 158px;
+}
+
+.uf-voiddeposit .uf-amount-field .uf-input {
+  top: 26px;
+  left: 0;
+  width: 158px;
+}
+
+.uf-voiddeposit .uf-notation-field {
+  top: 0;
+  left: 618px;
+  width: 102px;
+  height: 68px;
+}
+
+.uf-voiddeposit .uf-notation-field .uf-detail-label {
+  width: 102px;
+}
+
+.uf-voiddeposit .uf-notation-field .uf-input {
+  top: 26px;
+  left: 0;
+  width: 102px;
+}
+
+.uf-voiddeposit .uf-input[readonly] {
+  background: #f7f7f7;
+}
+
+.uf-voiddeposit .uf-message {
+  position: absolute;
+  top: 292px;
+  left: 20px;
+  width: 720px;
+  height: 18px;
+  color: #666666;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+}
