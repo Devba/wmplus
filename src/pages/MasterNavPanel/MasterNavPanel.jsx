@@ -11,7 +11,7 @@ function MasterNavPanel({ onSelectPage }) {
 
   <div className="mnp-logo-left">
     <img 
-      src="/PICTURE FILES/hoa-logo.png"
+    src="/PICTURE FILES/hoa-logo.png"  
       alt="HOA-e-Solutions"
     />
   </div>
