@@ -5,6 +5,7 @@
 
 set -e
 
+VPS="alvaro@62.171.142.58"
 TARGET="${1:-backend}"
 
 if [ "$TARGET" == "main" ]; then
