@@ -17,7 +17,8 @@
 }
 
 .ribbon-group{
-    background:#efefef;
+    /* background:#efefef; */
+   background: #dceeff;
     border-right:1px solid #cfcfcf;
     padding:4px 6px 2px 6px;
     min-width:0;
