@@ -34,12 +34,32 @@ export async function fetchResidents() {
   }
 }
 
+function mapToApiSchema(r) {
+  return {
+    account_id: r.acctNo || r.acct || r.account_id,
+    first_name: r.firstName || r.first_name,
+    last_name: r.lastName || r.last_name,
+    display_name: r.name || r.displayName || r.display_name || `${r.firstName || ''} ${r.lastName || ''}`.trim(),
+    address: r.residence || r.address,
+    billing_address: r.billingAddress || r.billing_address || r.residence || r.address,
+    city: r.city,
+    state: r.state || r.st,
+    zip: r.zip,
+    phone: r.phone,
+    email: r.email,
+    type: r.type,
+    active_flag: r.activeFlag || r.active_flag || 'Y',
+    annual_dues: r.dues || r.annualRate || r.annualDues || r.annual_dues || 0.00
+  };
+}
+
 export async function createResident(residentData) {
   try {
+    const apiData = mapToApiSchema(residentData);
     const response = await fetch(`${API_BASE_URL}/residents`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(residentData)
+      body: JSON.stringify(apiData)
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
@@ -48,3 +68,20 @@ export async function createResident(residentData) {
     throw err;
   }
 }
+
+export async function updateResident(accountId, residentData) {
+  try {
+    const apiData = mapToApiSchema(residentData);
+    const response = await fetch(`${API_BASE_URL}/residents/${accountId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(apiData)
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    console.error('Failed to update resident in database:', err);
+    throw err;
+  }
+}
+

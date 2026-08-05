@@ -87,6 +87,50 @@ app.post('/api/residents', async (req, res) => {
   }
 });
 
+app.put('/api/residents/:account_id', async (req, res) => {
+  try {
+    const { account_id } = req.params;
+    const r = req.body;
+    await db.query(`
+      UPDATE ResidentMaster SET
+        FirstName = ?,
+        LastName = ?,
+        DisplayName = ?,
+        ResidenceAddress = ?,
+        BillingAddress = ?,
+        City = ?,
+        StateCode = ?,
+        ZipCode = ?,
+        PrimaryPhone = ?,
+        EmailAddress = ?,
+        ResidentType = ?,
+        ActiveResidentFlag = ?,
+        AnnualDues = ?,
+        TimeStampUpdated = NOW()
+      WHERE ResidentAccountID = ?
+    `, [
+      r.first_name || '',
+      r.last_name || '',
+      r.display_name || `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+      r.address || '',
+      r.billing_address || r.address || '',
+      r.city || 'Miami',
+      r.state || 'FL',
+      r.zip || '33101',
+      r.phone || '',
+      r.email || '',
+      r.type || 'Owner',
+      r.active_flag || 'Y',
+      r.annual_dues || 0.00,
+      account_id
+    ]);
+    res.json({ success: true, message: 'Resident updated successfully' });
+  } catch (err) {
+    console.error('Error updating resident:', err);
+    res.status(500).json({ error: 'Failed to update resident', details: err.message });
+  }
+});
+
 /* ===========================================================
    2. VENDOR ID LIST (VendorMaster)
    =========================================================== */

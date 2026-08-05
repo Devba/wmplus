@@ -1,14 +1,12 @@
 
-
-
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 import './MainDirectory.css';
 
 import TopSection from './components/TopSection/TopSection';
 import BodyBox from './components/BodyBox/BodyBox';
 
-import mainDirectorySampleData from './data/mainDirectorySampleData.js';
+import { fetchResidents, createResident, updateResident } from '../../services/mainDirectoryService.js';
 
 function accountNumberFor(resident) {
   return resident?.acctNo || resident?.acct || '';
@@ -48,9 +46,9 @@ function sortResidentsByAccount(rows) {
 }
 
 function MainDirectory({ onSelectPage }) {
-  const [residents, setResidents] = useState(() =>
-    sortResidentsByAccount(mainDirectorySampleData)
-  );
+  const [residents, setResidents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [selectedResident, setSelectedResident] =
     useState(null);
@@ -63,6 +61,32 @@ function MainDirectory({ onSelectPage }) {
 
   const [appliedAccountFilter, setAppliedAccountFilter] =
     useState('');
+
+  useEffect(() => {
+    let active = true;
+    async function loadData() {
+      try {
+        setLoading(true);
+        const data = await fetchResidents();
+        if (active) {
+          setResidents(sortResidentsByAccount(data));
+          setError(null);
+        }
+      } catch (err) {
+        if (active) {
+          setError(err.message || 'Error loading residents');
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+    loadData();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const sortedResidents = useMemo(
     () => sortResidentsByAccount(residents),
@@ -126,46 +150,68 @@ function MainDirectory({ onSelectPage }) {
     setSelectedResident(null);
   };
 
-  const handleAddResident = (newResident) => {
-    setResidents((currentResidents) =>
-      sortResidentsByAccount([
-        ...currentResidents,
-        newResident
-      ])
-    );
+  const handleAddResident = async (newResident) => {
+    try {
+      await createResident(newResident);
+      setResidents((currentResidents) =>
+        sortResidentsByAccount([
+          ...currentResidents,
+          newResident
+        ])
+      );
 
-    setResidentNameFilter('');
-    setResidentAddressFilter('');
-    setAppliedAccountFilter('');
-    setSelectedResident(newResident);
+      setResidentNameFilter('');
+      setResidentAddressFilter('');
+      setAppliedAccountFilter('');
+      setSelectedResident(newResident);
+    } catch (err) {
+      window.alert('Error creating resident: ' + err.message);
+    }
   };
 
-  const handleEditResident = (
+  const handleEditResident = async (
     originalResident,
     updatedResident
   ) => {
-    setResidents((currentResidents) =>
-      sortResidentsByAccount(
-        currentResidents.map((resident) =>
-          resident === originalResident
-            ? updatedResident
-            : resident
+    try {
+      const accountId = originalResident.acctNo || originalResident.acct || originalResident.account_id;
+      await updateResident(accountId, updatedResident);
+
+      setResidents((currentResidents) =>
+        sortResidentsByAccount(
+          currentResidents.map((resident) =>
+            resident === originalResident
+              ? updatedResident
+              : resident
+          )
         )
-      )
-    );
-
-    setSelectedResident(updatedResident);
-
-    if (appliedAccountFilter) {
-      setAppliedAccountFilter(
-        accountNumberFor(updatedResident)
       );
+
+      setSelectedResident(updatedResident);
+
+      if (appliedAccountFilter) {
+        setAppliedAccountFilter(
+          accountNumberFor(updatedResident)
+        );
+      }
+    } catch (err) {
+      window.alert('Error updating resident: ' + err.message);
     }
   };
 
   return (
     <div className="md-page">
       <div className="md-shell">
+        {loading && (
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(255,255,255,0.9)', border: '1px solid #ccc', padding: '20px', borderRadius: '8px', zIndex: 1000, color: '#333', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+            Loading Resident Data...
+          </div>
+        )}
+        {error && (
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#ffebee', border: '1px solid #c62828', color: '#c62828', padding: '20px', borderRadius: '8px', zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+            Error: {error}
+          </div>
+        )}
         <div className="md-fixed">
           <TopSection
             onSelectPage={onSelectPage}
