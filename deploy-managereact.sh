@@ -23,7 +23,9 @@ echo "🚀 Compilando y desplegando W M+ React ($TARGET) → $BASE_PATH..."
 echo ""
 
 # 1. Build con la ruta base adecuada
-VITE_BASE_PATH="$BASE_PATH" npm run build
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+VITE_BASE_PATH="$BASE_PATH" VITE_GIT_COMMIT="$GIT_COMMIT" VITE_GIT_BRANCH="$GIT_BRANCH" npm run build
 
 # 2. Crear directorio remoto
 echo "📁 Creando directorio remoto..."
