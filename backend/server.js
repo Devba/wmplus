@@ -23,28 +23,46 @@ app.get('/api/health', async (req, res) => {
    1. MAIN DIRECTORY (ResidentMaster)
    =========================================================== */
 
+function parseDecimal(val, defaultVal = 0.00) {
+  if (val === undefined || val === null) return defaultVal;
+  const cleaned = String(val).replace(/[^0-9.-]/g, '');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? defaultVal : num;
+}
+
 app.get('/api/residents', async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT 
         ResidentAccountID as account_id,
         FirstName as first_name,
+        MiddleName as middle_name,
         LastName as last_name,
         DisplayName as display_name,
-        ResidenceAddress as address,
+        ResidenceAddress as residence_address,
+        BillingAddress as billing_address,
         City as city,
-        StateCode as state,
-        ZipCode as zip,
-        PrimaryPhone as phone,
-        EmailAddress as email,
-        ResidentType as type,
+        StateCode as state_code,
+        ZipCode as zip_code,
+        PrimaryPhone as primary_phone,
+        PrimaryCell as primary_cell,
+        SecondaryCell as secondary_cell,
+        EmailAddress as email_address,
+        MoveInDate as move_in_date,
+        ResidentType as resident_type,
         ActiveResidentFlag as active_flag,
+        ACHFlag as ach_flag,
+        AdditionalOwnerFirstName as addl_first_name,
+        AdditionalOwnerMiddleName as addl_middle_name,
+        AdditionalOwnerLastName as addl_last_name,
+        AdditionalOwnerEmail as addl_email,
+        AnnualDuesRate as annual_dues_rate,
         AnnualDues as annual_dues,
-        SpecialAssessmentDues as special_assessment,
-        FinesFeesBalance as fines_balance,
-        PriorYearCredit as credit_balance,
-        MgtCoClientID as mgt_client_id,
-        HOALicenseNumber as hoa_license
+        SpecialAssessmentRate as special_assessment_rate,
+        SpecialAssessmentDues as special_assessment_dues,
+        NextYearAnnualDues as next_year_annual_dues,
+        NextYearSpecialAssmtDues as next_year_special_assmt_dues,
+        ResidentNotes as resident_notes
       FROM ResidentMaster 
       WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
       ORDER BY ResidentAccountID ASC
@@ -61,24 +79,43 @@ app.post('/api/residents', async (req, res) => {
     const r = req.body;
     const [result] = await db.query(`
       INSERT INTO ResidentMaster (
-        ResidentAccountID, FirstName, LastName, DisplayName, ResidenceAddress,
-        City, StateCode, ZipCode, PrimaryPhone, EmailAddress, ResidentType,
-        ActiveResidentFlag, AnnualDues, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+        ResidentAccountID, FirstName, MiddleName, LastName, DisplayName, ResidenceAddress, BillingAddress,
+        City, StateCode, ZipCode, PrimaryPhone, PrimaryCell, SecondaryCell, EmailAddress, MoveInDate,
+        ResidentType, ActiveResidentFlag, ACHFlag, AdditionalOwnerFirstName, AdditionalOwnerMiddleName,
+        AdditionalOwnerLastName, AdditionalOwnerEmail, AnnualDuesRate, AnnualDues, SpecialAssessmentRate,
+        SpecialAssessmentDues, NextYearAnnualDues, NextYearSpecialAssmtDues, ResidentNotes,
+        MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       r.account_id || `RES-${Date.now()}`,
-      r.first_name || '',
-      r.last_name || '',
-      r.display_name || `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-      r.address || '',
-      r.city || 'Miami',
-      r.state || 'FL',
-      r.zip || '33101',
-      r.phone || '',
-      r.email || '',
-      r.type || 'Owner',
+      r.first_name || null,
+      r.middle_name || null,
+      r.last_name || null,
+      r.display_name || null,
+      r.residence_address || null,
+      r.billing_address || null,
+      r.city || null,
+      r.state_code || null,
+      r.zip_code || null,
+      r.primary_phone || null,
+      r.primary_cell || null,
+      r.secondary_cell || null,
+      r.email_address || null,
+      r.move_in_date || null,
+      r.resident_type || null,
       r.active_flag || 'Y',
-      r.annual_dues || 0.00
+      r.ach_flag || null,
+      r.addl_first_name || null,
+      r.addl_middle_name || null,
+      r.addl_last_name || null,
+      r.addl_email || null,
+      parseDecimal(r.annual_dues_rate),
+      parseDecimal(r.annual_dues),
+      parseDecimal(r.special_assessment_rate),
+      parseDecimal(r.special_assessment_dues),
+      parseDecimal(r.next_year_annual_dues),
+      parseDecimal(r.next_year_special_assmt_dues),
+      r.resident_notes || null
     ]);
     res.status(201).json({ success: true, insertedId: result.insertId, account_id: r.account_id });
   } catch (err) {
@@ -94,6 +131,7 @@ app.put('/api/residents/:account_id', async (req, res) => {
     await db.query(`
       UPDATE ResidentMaster SET
         FirstName = ?,
+        MiddleName = ?,
         LastName = ?,
         DisplayName = ?,
         ResidenceAddress = ?,
@@ -102,26 +140,55 @@ app.put('/api/residents/:account_id', async (req, res) => {
         StateCode = ?,
         ZipCode = ?,
         PrimaryPhone = ?,
+        PrimaryCell = ?,
+        SecondaryCell = ?,
         EmailAddress = ?,
+        MoveInDate = ?,
         ResidentType = ?,
         ActiveResidentFlag = ?,
+        ACHFlag = ?,
+        AdditionalOwnerFirstName = ?,
+        AdditionalOwnerMiddleName = ?,
+        AdditionalOwnerLastName = ?,
+        AdditionalOwnerEmail = ?,
+        AnnualDuesRate = ?,
         AnnualDues = ?,
+        SpecialAssessmentRate = ?,
+        SpecialAssessmentDues = ?,
+        NextYearAnnualDues = ?,
+        NextYearSpecialAssmtDues = ?,
+        ResidentNotes = ?,
         TimeStampUpdated = NOW()
       WHERE ResidentAccountID = ?
     `, [
-      r.first_name || '',
-      r.last_name || '',
-      r.display_name || `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-      r.address || '',
-      r.billing_address || r.address || '',
-      r.city || 'Miami',
-      r.state || 'FL',
-      r.zip || '33101',
-      r.phone || '',
-      r.email || '',
-      r.type || 'Owner',
+      r.first_name || null,
+      r.middle_name || null,
+      r.last_name || null,
+      r.display_name || null,
+      r.residence_address || null,
+      r.billing_address || null,
+      r.city || null,
+      r.state_code || null,
+      r.zip_code || null,
+      r.primary_phone || null,
+      r.primary_cell || null,
+      r.secondary_cell || null,
+      r.email_address || null,
+      r.move_in_date || null,
+      r.resident_type || null,
       r.active_flag || 'Y',
-      r.annual_dues || 0.00,
+      r.ach_flag || null,
+      r.addl_first_name || null,
+      r.addl_middle_name || null,
+      r.addl_last_name || null,
+      r.addl_email || null,
+      parseDecimal(r.annual_dues_rate),
+      parseDecimal(r.annual_dues),
+      parseDecimal(r.special_assessment_rate),
+      parseDecimal(r.special_assessment_dues),
+      parseDecimal(r.next_year_annual_dues),
+      parseDecimal(r.next_year_special_assmt_dues),
+      r.resident_notes || null,
       account_id
     ]);
     res.json({ success: true, message: 'Resident updated successfully' });
