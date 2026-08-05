@@ -86,21 +86,7 @@ function App() {
         />
       </div>
 
-      <div style={{
-        position: 'fixed',
-        bottom: 8,
-        right: 8,
-        background: 'rgba(0, 0, 0, 0.6)',
-        color: '#fff',
-        padding: '4px 8px',
-        borderRadius: '4px',
-        fontSize: '11px',
-        fontFamily: 'monospace',
-        zIndex: 9999,
-        pointerEvents: 'none'
-      }}>
-        {import.meta.env.VITE_GIT_BRANCH || 'local'} / {import.meta.env.VITE_GIT_COMMIT || 'dev'}
-      </div>
+
     </div>
   );
 }
