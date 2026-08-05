@@ -1,0 +1,417 @@
+const express = require('express');
+const cors = require('cors');
+const db = require('./db');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3011;
+
+app.use(cors());
+app.use(express.json());
+
+// Health Check
+app.get('/api/health', async (req, res) => {
+  try {
+    const [result] = await db.query('SELECT 1 as alive');
+    res.json({ status: 'ok', database: 'hoamanager26', alive: result[0].alive === 1 });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+/* ===========================================================
+   1. MAIN DIRECTORY (ResidentMaster)
+   =========================================================== */
+
+app.get('/api/residents', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        ResidentAccountID as account_id,
+        FirstName as first_name,
+        LastName as last_name,
+        DisplayName as display_name,
+        ResidenceAddress as address,
+        City as city,
+        StateCode as state,
+        ZipCode as zip,
+        PrimaryPhone as phone,
+        EmailAddress as email,
+        ResidentType as type,
+        ActiveResidentFlag as active_flag,
+        AnnualDues as annual_dues,
+        SpecialAssessmentDues as special_assessment,
+        FinesFeesBalance as fines_balance,
+        PriorYearCredit as credit_balance,
+        MgtCoClientID as mgt_client_id,
+        HOALicenseNumber as hoa_license
+      FROM ResidentMaster 
+      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
+      ORDER BY ResidentAccountID ASC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching residents:', err);
+    res.status(500).json({ error: 'Failed to fetch residents', details: err.message });
+  }
+});
+
+app.post('/api/residents', async (req, res) => {
+  try {
+    const r = req.body;
+    const [result] = await db.query(`
+      INSERT INTO ResidentMaster (
+        ResidentAccountID, FirstName, LastName, DisplayName, ResidenceAddress,
+        City, StateCode, ZipCode, PrimaryPhone, EmailAddress, ResidentType,
+        ActiveResidentFlag, AnnualDues, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+    `, [
+      r.account_id || `RES-${Date.now()}`,
+      r.first_name || '',
+      r.last_name || '',
+      r.display_name || `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+      r.address || '',
+      r.city || 'Miami',
+      r.state || 'FL',
+      r.zip || '33101',
+      r.phone || '',
+      r.email || '',
+      r.type || 'Owner',
+      r.active_flag || 'Y',
+      r.annual_dues || 0.00
+    ]);
+    res.status(201).json({ success: true, insertedId: result.insertId, account_id: r.account_id });
+  } catch (err) {
+    console.error('Error inserting resident:', err);
+    res.status(500).json({ error: 'Failed to insert resident', details: err.message });
+  }
+});
+
+/* ===========================================================
+   2. VENDOR ID LIST (VendorMaster)
+   =========================================================== */
+
+app.get('/api/vendors', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        VendorID as vendor_id,
+        VendorName as vendor_name,
+        AddressLine1 as address,
+        City as city,
+        StateCode as state,
+        ZipCode as zip,
+        PrimaryPhone as phone,
+        EmailAddress as email,
+        ContactName as contact_name,
+        VendorType as vendor_type,
+        TaxID as tax_id,
+        DefaultGLNumber as default_gl_number,
+        DefaultGLAccountName as default_gl_name,
+        CheckNotation as default_check_note,
+        ActiveFlag as active_flag
+      FROM VendorMaster
+      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
+      ORDER BY VendorName ASC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching vendors:', err);
+    res.status(500).json({ error: 'Failed to fetch vendors', details: err.message });
+  }
+});
+
+app.post('/api/vendors', async (req, res) => {
+  try {
+    const v = req.body;
+    const vendorId = v.vendor_id || `VEND-${Date.now().toString().slice(-4)}`;
+    await db.query(`
+      INSERT INTO VendorMaster (
+        VendorID, VendorName, AddressLine1, City, StateCode, ZipCode,
+        PrimaryPhone, EmailAddress, ContactName, VendorType, TaxID,
+        DefaultGLNumber, DefaultGLAccountName, ActiveFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Y', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+    `, [
+      vendorId,
+      v.vendor_name || '',
+      v.address || '',
+      v.city || 'Miami',
+      v.state || 'FL',
+      v.zip || '33101',
+      v.phone || '',
+      v.email || '',
+      v.contact_name || '',
+      v.vendor_type || 'General',
+      v.tax_id || '',
+      v.default_gl_number || 5000,
+      v.default_gl_name || 'General Expense'
+    ]);
+    res.status(201).json({ success: true, vendor_id: vendorId });
+  } catch (err) {
+    console.error('Error inserting vendor:', err);
+    res.status(500).json({ error: 'Failed to insert vendor', details: err.message });
+  }
+});
+
+/* ===========================================================
+   3. CHECK REGISTER (CheckRegister)
+   =========================================================== */
+
+app.get('/api/check-register', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        CheckTransactionNumber as check_txn_num,
+        CheckNumber as check_number,
+        GLAccountName as gl_name,
+        Amount as amount,
+        DateCheckIssued as date_issued,
+        DateCheckCleared as date_cleared,
+        MonthCleared as month_cleared,
+        GLNumber as gl_number,
+        VendorResidentID as payee_id,
+        VendorInvoiceNumber as invoice_num,
+        VendorInvoiceDate as invoice_date,
+        VendorInvoiceAmount as invoice_amount,
+        CheckNotation as note,
+        BankAccount as bank_account,
+        BankAccountID as bank_account_id,
+        Status as status
+      FROM CheckRegister
+      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
+      ORDER BY DateCheckIssued DESC, CheckNumber DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching checks:', err);
+    res.status(500).json({ error: 'Failed to fetch check register', details: err.message });
+  }
+});
+
+app.post('/api/check-register', async (req, res) => {
+  try {
+    const c = req.body;
+    const txnNum = `CHK-${Date.now()}`;
+    await db.query(`
+      INSERT INTO CheckRegister (
+        CheckTransactionNumber, CheckNumber, GLAccountName, Amount, DateCheckIssued,
+        DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
+        VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, Status,
+        MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Issued', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+    `, [
+      txnNum,
+      c.check_number || '',
+      c.gl_name || '',
+      c.amount || 0.00,
+      c.date_issued || new Date().toISOString().slice(0, 10),
+      c.date_cleared || null,
+      c.month_cleared || null,
+      c.gl_number || 5000,
+      c.payee_id || '',
+      c.invoice_num || '',
+      c.invoice_date || null,
+      c.invoice_amount || c.amount || 0.00,
+      c.note || '',
+      c.bank_account || 'Operating 101',
+      c.bank_account_id || 1
+    ]);
+    res.status(201).json({ success: true, check_txn_num: txnNum });
+  } catch (err) {
+    console.error('Error inserting check:', err);
+    res.status(500).json({ error: 'Failed to insert check', details: err.message });
+  }
+});
+
+/* ===========================================================
+   4. DEPOSIT REGISTER (DepositRegister)
+   =========================================================== */
+
+app.get('/api/deposit-register', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        DepositTransactionNumber as deposit_txn_num,
+        DepositorAccountName as payer_name,
+        Amount as amount,
+        BankAccountName as bank_account_name,
+        BankAccountID as bank_account_id,
+        GLAccountName as gl_name,
+        GLNumber as gl_number,
+        DateDeposited as date_deposited,
+        DateCleared as date_cleared,
+        MonthCleared as month_cleared,
+        ResidentAccountID as resident_id,
+        VendorID as vendor_id,
+        DepositNotation as note,
+        Status as status
+      FROM DepositRegister
+      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
+      ORDER BY DateDeposited DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching deposits:', err);
+    res.status(500).json({ error: 'Failed to fetch deposit register', details: err.message });
+  }
+});
+
+app.post('/api/deposit-register', async (req, res) => {
+  try {
+    const d = req.body;
+    const txnNum = `DEP-${Date.now()}`;
+    await db.query(`
+      INSERT INTO DepositRegister (
+        DepositTransactionNumber, DepositorAccountName, Amount, BankAccountName,
+        BankAccountID, GLAccountName, GLNumber, DateDeposited, DateCleared, MonthCleared,
+        ResidentAccountID, DepositNotation, Status, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Posted', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+    `, [
+      txnNum,
+      d.payer_name || '',
+      d.amount || 0.00,
+      d.bank_account_name || 'Operating 101',
+      d.bank_account_id || 1,
+      d.gl_name || 'Maintenance Dues Income',
+      d.gl_number || 4010,
+      d.date_deposited || new Date().toISOString().slice(0, 10),
+      d.date_cleared || null,
+      d.month_cleared || null,
+      d.resident_id || '',
+      d.note || ''
+    ]);
+    res.status(201).json({ success: true, deposit_txn_num: txnNum });
+  } catch (err) {
+    console.error('Error inserting deposit:', err);
+    res.status(500).json({ error: 'Failed to insert deposit', details: err.message });
+  }
+});
+
+/* ===========================================================
+   5. SETTINGS: HOA PROFILE
+   =========================================================== */
+
+app.get('/api/settings/hoa-profile', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        ProfileID as id,
+        HOAName as hoaName,
+        HOALicenseNumber as hoaLicense,
+        AddressLine1 as address1,
+        AddressLine2 as address2,
+        City as city,
+        StateCode as state,
+        ZipCode as zip,
+        ContactName as contactName,
+        ContactPhone as contactPhone,
+        ContactEmail as contactEmail
+      FROM HOAProfile
+      LIMIT 1
+    `);
+    res.json(rows[0] || {});
+  } catch (err) {
+    console.error('Error fetching HOA profile:', err);
+    res.status(500).json({ error: 'Failed to fetch HOA profile', details: err.message });
+  }
+});
+
+app.put('/api/settings/hoa-profile', async (req, res) => {
+  try {
+    const p = req.body;
+    await db.query(`
+      UPDATE HOAProfile SET
+        HOAName = ?,
+        AddressLine1 = ?,
+        AddressLine2 = ?,
+        City = ?,
+        StateCode = ?,
+        ZipCode = ?,
+        ContactName = ?,
+        ContactPhone = ?,
+        ContactEmail = ?,
+        TimeStampUpdated = NOW()
+      WHERE ProfileID = 1 OR MgtCoClientID = 'MGTCO-001'
+    `, [
+      p.hoaName || '',
+      p.address1 || '',
+      p.address2 || '',
+      p.city || '',
+      p.state || '',
+      p.zip || '',
+      p.contactName || '',
+      p.contactPhone || '',
+      p.contactEmail || ''
+    ]);
+    res.json({ success: true, message: 'HOA Profile updated successfully' });
+  } catch (err) {
+    console.error('Error updating HOA profile:', err);
+    res.status(500).json({ error: 'Failed to update HOA profile', details: err.message });
+  }
+});
+
+/* ===========================================================
+   6. SETTINGS: BANKING
+   =========================================================== */
+
+app.get('/api/settings/banking', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        BankAccountID as id,
+        BankType as type,
+        BankIDLabel as label,
+        BankName as name,
+        BankAccountNumber as accountNumber,
+        RoutingNumber as routingNumber,
+        StartingCheckNumber as startingCheckNumber,
+        MinimumBankBalance as minimumBalance
+      FROM BankAccountMaster
+      WHERE ActiveFlag = 'Y'
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching bank accounts:', err);
+    res.status(500).json({ error: 'Failed to fetch bank accounts', details: err.message });
+  }
+});
+
+/* ===========================================================
+   7. AUTO-REFRESH & GITHUB WEBHOOK (Flashback & CI/CD)
+   =========================================================== */
+
+let lastCommit = {
+  flashback: { hash: `init-${Date.now()}`, updatedAt: new Date().toISOString() },
+  backend: { hash: `init-${Date.now()}`, updatedAt: new Date().toISOString() },
+  main: { hash: `init-${Date.now()}`, updatedAt: new Date().toISOString() }
+};
+
+app.get('/api/version', (req, res) => {
+  const target = req.query.target || 'flashback';
+  res.json(lastCommit[target] || lastCommit.flashback);
+});
+
+app.post('/api/webhook/github', (req, res) => {
+  const payload = req.body || {};
+  const ref = payload.ref || '';
+  let branch = 'flashback';
+  if (ref.includes('main')) branch = 'main';
+  else if (ref.includes('backend')) branch = 'backend';
+  else if (ref.includes('flashback')) branch = 'flashback';
+  else if (ref.includes('frontend')) branch = 'frontend';
+
+  const newHash = payload.after || `commit-${Date.now()}`;
+  lastCommit[branch] = {
+    hash: newHash,
+    updatedAt: new Date().toISOString(),
+    message: payload.head_commit?.message || 'Updated via GitHub Push'
+  };
+
+  console.log(`[GitHub Webhook] Push event for branch '${branch}': commit ${newHash}`);
+  res.json({ success: true, branch, commit: newHash });
+});
+
+// START SERVER
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 W M+ Express Backend API running on port ${PORT}`);
+});
