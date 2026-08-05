@@ -20,6 +20,9 @@ function App() {
   );
 
   const [activeOverlay, setActiveOverlay] = useState(null);
+  const [showBadge, setShowBadge] = useState(
+    () => localStorage.getItem('hideBadge') !== 'true'
+  );
 
   useEffect(() => {
     const unsubscribe = subscribeToOverlay(setActiveOverlay);
@@ -86,7 +89,49 @@ function App() {
         />
       </div>
 
-
+      {showBadge ? (
+        <div
+          onClick={() => { setShowBadge(false); localStorage.setItem('hideBadge', 'true'); }}
+          title="Click para ocultar"
+          style={{
+            position: 'fixed',
+            bottom: 52,
+            right: 8,
+            background: 'rgba(0, 0, 0, 0.65)',
+            color: '#fff',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontFamily: 'monospace',
+            zIndex: 9999,
+            cursor: 'pointer',
+            userSelect: 'none'
+          }}
+        >
+          {import.meta.env.VITE_GIT_BRANCH || 'local'} / {import.meta.env.VITE_GIT_COMMIT || 'dev'} ✕
+        </div>
+      ) : (
+        <div
+          onClick={() => { setShowBadge(true); localStorage.setItem('hideBadge', 'false'); }}
+          title="Click para mostrar versión"
+          style={{
+            position: 'fixed',
+            bottom: 52,
+            right: 8,
+            background: 'rgba(0, 0, 0, 0.35)',
+            color: 'rgba(255,255,255,0.5)',
+            padding: '3px 6px',
+            borderRadius: '4px',
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            zIndex: 9999,
+            cursor: 'pointer',
+            userSelect: 'none'
+          }}
+        >
+          v
+        </div>
+      )}
     </div>
   );
 }

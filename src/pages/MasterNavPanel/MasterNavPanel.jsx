@@ -11,7 +11,7 @@ function MasterNavPanel({ onSelectPage }) {
 
   <div className="mnp-logo-left">
     <img 
-    src="/PICTURE FILES/hoa-logo.png"  
+    src="PICTURE FILES/hoa-logo.png"  
       alt="HOA-e-Solutions"
     />
   </div>
@@ -19,14 +19,14 @@ function MasterNavPanel({ onSelectPage }) {
   <div className="mnp-title">
 
   <img
-    src="/PICTURE FILES/manage-plus-logo.png"
+    src="PICTURE FILES/manage-plus-logo.png"
     alt="Manage Plus"
   />
 
   <img
     className="mnp-bubble"
     // src="/PICTURE FILES/hoa-logo.png"
-    src="/PICTURE FILES/bubble1.png"
+    src="PICTURE FILES/bubble1.png"
     alt="Information"
   />
 
@@ -36,7 +36,7 @@ function MasterNavPanel({ onSelectPage }) {
 
       <section className="mnp-mid" aria-label="Master Navigation Panel Options">
         <div className="left-col">
-          <img className="house" src="/PICTURE FILES/HOUSE.jpg" alt="House" />
+          <img className="house" src="PICTURE FILES/HOUSE.jpg" alt="House" />
           <button className="prestart-btn" type="button">
             Pre-Start Up System Programming
           </button>
@@ -106,8 +106,8 @@ function MasterNavPanel({ onSelectPage }) {
       </section>
 
       <footer className="mnp-bottom" aria-label="Legal Notices">
-        <img className="notice notice-left" src="/PICTURE FILES/MASTER NAV WARNING 1.png" alt="Confidentiality notice" />
-        <img className="notice notice-right" src="/PICTURE FILES/MASTER NAV WARNING 2.png" alt="Program protection warning" />
+        <img className="notice notice-left" src="PICTURE FILES/MASTER NAV WARNING 1.png" alt="Confidentiality notice" />
+        <img className="notice notice-right" src="PICTURE FILES/MASTER NAV WARNING 2.png" alt="Program protection warning" />
       </footer>
     </main>
   )
