@@ -662,35 +662,53 @@ Output Format (strict raw JSON, NO markdown block formatting):
       let conditions = [];
       const lower = prompt.toLowerCase().trim();
 
-      const STATE_MAP = {
-        'florida': 'FL', 'fl': 'FL',
-        'california': 'CA', 'ca': 'CA',
-        'new york': 'NY', 'ny': 'NY',
-        'texas': 'TX', 'tx': 'TX'
+      const FULL_STATES = {
+        'florida': 'FL', 'california': 'CA', 'new york': 'NY', 'texas': 'TX',
+        'georgia': 'GA', 'illinois': 'IL', 'north carolina': 'NC', 'nevada': 'NV',
+        'arizona': 'AZ', 'colorado': 'CO', 'washington': 'WA'
       };
 
+      const STATE_CODES = ['FL', 'CA', 'NY', 'TX', 'GA', 'IL', 'NC', 'NV', 'AZ', 'CO', 'WA'];
+
+      const KNOWN_CITIES = [
+        'miami', 'orlando', 'tampa', 'fort lauderdale', 'new york', 'buffalo',
+        'los angeles', 'san francisco', 'san diego', 'houston', 'dallas', 'austin',
+        'atlanta', 'chicago', 'charlotte', 'las vegas', 'phoenix', 'denver', 'seattle'
+      ];
+
       // 1. State check
-      if (lower.includes('florida') || lower.includes(' fl') || lower.includes('estado de') || lower.includes('state')) {
-        for (const [name, code] of Object.entries(STATE_MAP)) {
-          if (lower.includes(name)) {
+      let stateMatched = false;
+      for (const [name, code] of Object.entries(FULL_STATES)) {
+        if (lower.includes(name)) {
+          conditions.push({ field: 'state', operator: '=', value: code });
+          stateMatched = true;
+          break;
+        }
+      }
+      if (!stateMatched) {
+        for (const code of STATE_CODES) {
+          const regex = new RegExp(`\\b${code.toLowerCase()}\\b`, 'i');
+          if (regex.test(lower)) {
             conditions.push({ field: 'state', operator: '=', value: code });
             break;
           }
         }
       }
 
-      // 2. Status check (active/inactive)
-      if (lower.includes('activo') || lower.includes('activos') || lower.includes('active')) {
-        if (!conditions.some(c => c.field === 'state')) {
-          conditions.push({ field: 'status', operator: '=', value: 'Active' });
+      // 2. City check
+      for (const c of KNOWN_CITIES) {
+        if (lower.includes(c)) {
+          const capitalized = c.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          conditions.push({ field: 'city', operator: 'contains', value: capitalized });
+          break;
         }
       }
 
-      // 3. City check
-      if (lower.includes('ciudad') || lower.includes('city') || lower.includes('miami')) {
-        if (lower.includes('miami')) {
-          conditions.push({ field: 'city', operator: 'contains', value: 'Miami' });
-        }
+      // 3. Status check (active/inactive)
+      if (lower.includes('activo') || lower.includes('activos') || lower.includes('active')) {
+        conditions.push({ field: 'status', operator: '=', value: 'Active' });
+      } else if (lower.includes('inactivo') || lower.includes('inactivos') || lower.includes('inactive')) {
+        conditions.push({ field: 'status', operator: '=', value: 'Inactive' });
       }
 
       // 4. Annual Dues check
@@ -704,12 +722,10 @@ Output Format (strict raw JSON, NO markdown block formatting):
 
       // 5. Last Name check
       if (lower.includes('apellido') || lower.includes('last name')) {
-        const parts = lower.split(/apellido|last name/);
-        if (parts[1]) {
-          const nameVal = parts[1].replace(/igual a|=|is/g, '').trim();
-          if (nameVal) {
-            conditions.push({ field: 'lastName', operator: 'contains', value: nameVal });
-          }
+        const match = lower.match(/(?:apellido|last name)\s+(?:es|igual a|=|is|de)?\s*([a-z]+)/i);
+        if (match && match[1]) {
+          const nameVal = match[1].charAt(0).toUpperCase() + match[1].slice(1);
+          conditions.push({ field: 'lastName', operator: 'contains', value: nameVal });
         }
       }
 
