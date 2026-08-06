@@ -110,9 +110,15 @@ function MainDirectory({ onSelectPage }) {
       result = result.filter((res) => {
         return aiConditions.every((cond) => {
           let val = res[cond.field];
-          if (val === undefined || val === null) {
-            if (cond.field === 'annualDuesRate') {
-              val = res.annual_dues_rate ?? res.annualDuesRate ?? 0;
+          if (val === undefined || val === null || val === '') {
+            if (cond.field === 'annualDuesRate' || cond.field === 'annual_dues_rate' || cond.field === 'annualRate') {
+              val = res.annual_dues_rate ?? res.annualDuesRate ?? res.annualRate ?? res.dues ?? 0;
+            } else if (cond.field === 'city') {
+              val = res.city || res.residence || res.address || '';
+            } else if (cond.field === 'state') {
+              val = res.state || res.st || '';
+            } else if (cond.field === 'status') {
+              val = res.status || (res.active === 'Y' || res.activeFlag === 'Y' ? 'Active' : 'Inactive');
             }
           }
           const target = cond.value;
@@ -276,6 +282,7 @@ function MainDirectory({ onSelectPage }) {
             onResetFilter={handleResetFilter}
             onAddResident={handleAddResident}
             onEditResident={handleEditResident}
+            onAiFilter={(conds) => setAiConditions(conds)}
           />
         </div>
 

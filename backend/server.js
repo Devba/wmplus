@@ -641,15 +641,22 @@ The available fields on each resident object are:
 - lastName (string, Last Name)
 - firstName (string, First Name)
 - residence (string, Residence / Street Address)
-- annualDuesRate (number, Annual Dues Rate)
+- city (string, City name, e.g. Miami)
+- state (string, State code, e.g. FL)
+- zip (string, Zip Code)
+- annualDuesRate (number, Annual Dues Rate amount/code)
+- dues (number, Annual Dues Amount)
 - email (string, Email Address)
 - phone (string, Telephone Number)
 - status (string, Active/Inactive)
 
 Return strictly a JSON object with a "conditions" array. Each condition object must have:
-- "field": exact field name from above (e.g. "annualDuesRate", "lastName", "acctNo", "residence")
+- "field": exact field name from above (e.g. "city", "annualDuesRate", "lastName", "acctNo", "residence")
 - "operator": one of [">", "<", ">=", "<=", "=", "!=", "contains"]
 - "value": string or number value to compare against
+
+Example output format for "filtra por ciudad igual a miami":
+{"conditions":[{"field":"city","operator":"=","value":"Miami"}]}
 
 Example output format for "filtra los registros en los que 'annual dues rate' sea mayor que cero":
 {"conditions":[{"field":"annualDuesRate","operator":">","value":0}]}
@@ -666,6 +673,18 @@ DO NOT include markdown block markers like \`\`\`json. Output ONLY raw valid JSO
           const match = lower.match(/\d+(\.\d+)?/);
           const val = match ? parseFloat(match[0]) : 0;
           conditions.push({ field: 'annualDuesRate', operator: '>', value: val });
+        }
+      } else if (lower.includes('ciudad') || lower.includes('city')) {
+        if (lower.includes('miami')) {
+          conditions.push({ field: 'city', operator: 'contains', value: 'Miami' });
+        } else {
+          const words = prompt.split(/\s+/);
+          const lastWord = words[words.length - 1];
+          conditions.push({ field: 'city', operator: 'contains', value: lastWord });
+        }
+      } else if (lower.includes('estado') || lower.includes('status')) {
+        if (lower.includes('active') || lower.includes('activo')) {
+          conditions.push({ field: 'status', operator: 'contains', value: 'Active' });
         }
       }
       return res.json({ success: true, conditions, warning: 'OPENROUTER_API_KEY is not configured in .env. Used local heuristic fallback.' });
