@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 
 const trayItems = [
   { key: 'master-navigation-panel', label: 'Master Navigation Panel' },
@@ -38,6 +38,7 @@ const trayItems = [
 
 function BottomTray({ currentPage, onSelectPage }) {
   const trayRef = useRef(null)
+  const [filter, setFilter] = useState('')
 
   function scrollTray(direction) {
     if (!trayRef.current) return
@@ -47,12 +48,26 @@ function BottomTray({ currentPage, onSelectPage }) {
     })
   }
 
+  const filteredItems = filter
+    ? trayItems.filter(item => 
+        item.label.toLowerCase().includes(filter.toLowerCase()) ||
+        item.key.toLowerCase().includes(filter.toLowerCase())
+      )
+    : trayItems
+
   return (
     <div className="tray-inner">
+      <input
+        type="text"
+        className="tray-search"
+        placeholder="Buscar página..."
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      />
       <button className="tray-arrow" onClick={() => scrollTray(-1)}>&lt;</button>
 
       <div className="tray-scroll" ref={trayRef}>
-        {trayItems.map((item) => (
+        {filteredItems.map((item) => (
             <button
               key={item.key}
               className={'tray-btn ' + (currentPage === item.key ? 'selected' : '')}
@@ -61,6 +76,9 @@ function BottomTray({ currentPage, onSelectPage }) {
               {item.label}
             </button>
           ))}
+        {filteredItems.length === 0 && (
+          <span className="tray-no-results">No se encontraron resultados</span>
+        )}
       </div>
 
       <button className="tray-arrow" onClick={() => scrollTray(1)}>&gt;</button>
