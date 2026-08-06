@@ -676,7 +676,58 @@ Output Format (strict raw JSON, NO markdown block formatting):
         'atlanta', 'chicago', 'charlotte', 'las vegas', 'phoenix', 'denver', 'seattle'
       ];
 
-      // 1. State check
+      const cleanPrompt = prompt.replace(/["']/g, '').trim();
+
+      // 1. Last Name check ("last name = Chen", "apellido Chen", "last name Chen", "apellido = Chen")
+      const lastNameMatch = cleanPrompt.match(/(?:last\s*name|apellido)\s*(?:=|is|igual a|:)?\s*([a-zA-Z\s]+)/i);
+      if (lastNameMatch && lastNameMatch[1]) {
+        const val = lastNameMatch[1].trim();
+        if (val) {
+          conditions.push({ field: 'lastName', operator: '=', value: val });
+          return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+        }
+      }
+
+      // 2. First Name check ("first name = James", "nombre James", "first name James")
+      const firstNameMatch = cleanPrompt.match(/(?:first\s*name|nombre)\s*(?:=|is|igual a|:)?\s*([a-zA-Z\s]+)/i);
+      if (firstNameMatch && firstNameMatch[1] && !cleanPrompt.toLowerCase().includes('last name')) {
+        const val = firstNameMatch[1].trim();
+        if (val) {
+          conditions.push({ field: 'firstName', operator: '=', value: val });
+          return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+        }
+      }
+
+      // 3. Account Number check ("acctNo = RES-001", "account = RES-001", "cuenta RES-001")
+      const acctMatch = cleanPrompt.match(/(?:acct|account|cuenta|res)\s*(?:no|number|#)?\s*(?:=|is|igual a|:)?\s*(RES-?\d+|\d+)/i);
+      if (acctMatch && acctMatch[1]) {
+        let val = acctMatch[1].trim();
+        if (!val.toUpperCase().startsWith('RES-')) val = `RES-${val.padStart(3, '0')}`;
+        conditions.push({ field: 'acctNo', operator: '=', value: val.toUpperCase() });
+        return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+      }
+
+      // 4. Phone Number check ("phone = 305-555-3001", "telefono 305")
+      const phoneMatch = cleanPrompt.match(/(?:phone|telefono|cell|celular)\s*(?:=|is|igual a|:)?\s*([\d\-\(\)\s]+)/i);
+      if (phoneMatch && phoneMatch[1]) {
+        const val = phoneMatch[1].trim();
+        if (val.length >= 3) {
+          conditions.push({ field: 'phone', operator: 'contains', value: val });
+          return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+        }
+      }
+
+      // 5. Email check ("email = mitchell", "correo mitchell@example.com")
+      const emailMatch = cleanPrompt.match(/(?:email|correo)\s*(?:=|is|igual a|:)?\s*([a-zA-Z0-9\.\@\_]+)/i);
+      if (emailMatch && emailMatch[1]) {
+        const val = emailMatch[1].trim();
+        if (val) {
+          conditions.push({ field: 'email', operator: 'contains', value: val });
+          return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+        }
+      }
+
+      // 6. State check
       let stateMatched = false;
       for (const [name, code] of Object.entries(FULL_STATES)) {
         if (lower.includes(name)) {
@@ -695,7 +746,7 @@ Output Format (strict raw JSON, NO markdown block formatting):
         }
       }
 
-      // 2. City check
+      // 7. City check
       for (const c of KNOWN_CITIES) {
         if (lower.includes(c)) {
           const capitalized = c.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -704,28 +755,19 @@ Output Format (strict raw JSON, NO markdown block formatting):
         }
       }
 
-      // 3. Status check (active/inactive)
+      // 8. Status check
       if (lower.includes('activo') || lower.includes('activos') || lower.includes('active')) {
         conditions.push({ field: 'status', operator: '=', value: 'Active' });
       } else if (lower.includes('inactivo') || lower.includes('inactivos') || lower.includes('inactive')) {
         conditions.push({ field: 'status', operator: '=', value: 'Inactive' });
       }
 
-      // 4. Annual Dues check
+      // 9. Annual Dues check
       if (lower.includes('dues') || lower.includes('rate') || lower.includes('cuota') || lower.includes('annual')) {
         if (lower.includes('mayor que') || lower.includes('>') || lower.includes('greater')) {
           const match = lower.match(/\d+(\.\d+)?/);
           const val = match ? parseFloat(match[0]) : 0;
           conditions.push({ field: 'annualDuesRate', operator: '>', value: val });
-        }
-      }
-
-      // 5. Last Name check
-      if (lower.includes('apellido') || lower.includes('last name')) {
-        const match = lower.match(/(?:apellido|last name)\s+(?:es|igual a|=|is|de)?\s*([a-z]+)/i);
-        if (match && match[1]) {
-          const nameVal = match[1].charAt(0).toUpperCase() + match[1].slice(1);
-          conditions.push({ field: 'lastName', operator: 'contains', value: nameVal });
         }
       }
 
