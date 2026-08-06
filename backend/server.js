@@ -635,59 +635,85 @@ app.post('/api/ai-filter', async (req, res) => {
     const apiKey = process.env.OPENROUTER_API_KEY || '';
     const model = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
 
-    const systemMessage = `You are an AI data assistant. Convert the user's natural language request into filter conditions for a list of resident objects.
+    const systemMessage = `You are a database AI query parser. Convert natural language queries into JSON filter conditions for a list of resident objects.
 The available fields on each resident object are:
-- acctNo (string/number, Account Number)
-- lastName (string, Last Name)
-- firstName (string, First Name)
-- residence (string, Residence / Street Address)
-- city (string, City name, e.g. Miami)
-- state (string, State code, e.g. FL)
-- zip (string, Zip Code)
-- annualDuesRate (number, Annual Dues Rate amount/code)
-- dues (number, Annual Dues Amount)
-- email (string, Email Address)
-- phone (string, Telephone Number)
-- status (string, Active/Inactive)
+- acctNo (Account Number e.g. "RES-001")
+- lastName (Last Name e.g. "Mitchell")
+- firstName (First Name e.g. "James")
+- residence (Street Address e.g. "8901 Palm Vista Cir")
+- city (City name e.g. "Miami")
+- state (2-letter state code e.g. "FL" for Florida, "CA" for California, "NY" for New York, "TX" for Texas)
+- zip (Zip Code e.g. "33156")
+- annualDuesRate (number, Annual Dues Rate amount or value)
+- email (Email Address)
+- phone (Telephone Number)
+- status ("Active" or "Inactive")
 
-Return strictly a JSON object with a "conditions" array. Each condition object must have:
-- "field": exact field name from above (e.g. "city", "annualDuesRate", "lastName", "acctNo", "residence")
-- "operator": one of [">", "<", ">=", "<=", "=", "!=", "contains"]
-- "value": string or number value to compare against
+Disambiguation Rules:
+1. "estado de [Nombre]" (e.g. "estado de florida") refers to field: "state" with 2-letter uppercase state code (e.g. value: "FL").
+2. "estado activo" or "estado inactivo" refers to field: "status" with value "Active" or "Inactive".
+3. Valid operators: [">", "<", ">=", "<=", "=", "!=", "contains"].
 
-Example output format for "filtra por ciudad igual a miami":
-{"conditions":[{"field":"city","operator":"=","value":"Miami"}]}
-
-Example output format for "filtra los registros en los que 'annual dues rate' sea mayor que cero":
-{"conditions":[{"field":"annualDuesRate","operator":">","value":0}]}
-
-DO NOT include markdown block markers like \`\`\`json. Output ONLY raw valid JSON.`;
+Output Format (strict raw JSON, NO markdown block formatting):
+{"conditions":[{"field":"state","operator":"=","value":"FL"}]}`;
 
     if (!apiKey) {
-      console.warn('[AI Filter] OPENROUTER_API_KEY not set. Using local fallback parser.');
-      // Local fallback parser for basic queries
+      console.warn('[AI Filter] OPENROUTER_API_KEY not set. Using enhanced local fallback parser.');
       let conditions = [];
-      const lower = prompt.toLowerCase();
-      if (lower.includes('annual dues rate') || lower.includes('annualduesrate') || lower.includes('dues')) {
-        if (lower.includes('mayor que') || lower.includes('>') || lower.includes('greater than')) {
+      const lower = prompt.toLowerCase().trim();
+
+      const STATE_MAP = {
+        'florida': 'FL', 'fl': 'FL',
+        'california': 'CA', 'ca': 'CA',
+        'new york': 'NY', 'ny': 'NY',
+        'texas': 'TX', 'tx': 'TX'
+      };
+
+      // 1. State check
+      if (lower.includes('florida') || lower.includes(' fl') || lower.includes('estado de') || lower.includes('state')) {
+        for (const [name, code] of Object.entries(STATE_MAP)) {
+          if (lower.includes(name)) {
+            conditions.push({ field: 'state', operator: '=', value: code });
+            break;
+          }
+        }
+      }
+
+      // 2. Status check (active/inactive)
+      if (lower.includes('activo') || lower.includes('activos') || lower.includes('active')) {
+        if (!conditions.some(c => c.field === 'state')) {
+          conditions.push({ field: 'status', operator: '=', value: 'Active' });
+        }
+      }
+
+      // 3. City check
+      if (lower.includes('ciudad') || lower.includes('city') || lower.includes('miami')) {
+        if (lower.includes('miami')) {
+          conditions.push({ field: 'city', operator: 'contains', value: 'Miami' });
+        }
+      }
+
+      // 4. Annual Dues check
+      if (lower.includes('dues') || lower.includes('rate') || lower.includes('cuota') || lower.includes('annual')) {
+        if (lower.includes('mayor que') || lower.includes('>') || lower.includes('greater')) {
           const match = lower.match(/\d+(\.\d+)?/);
           const val = match ? parseFloat(match[0]) : 0;
           conditions.push({ field: 'annualDuesRate', operator: '>', value: val });
         }
-      } else if (lower.includes('ciudad') || lower.includes('city')) {
-        if (lower.includes('miami')) {
-          conditions.push({ field: 'city', operator: 'contains', value: 'Miami' });
-        } else {
-          const words = prompt.split(/\s+/);
-          const lastWord = words[words.length - 1];
-          conditions.push({ field: 'city', operator: 'contains', value: lastWord });
-        }
-      } else if (lower.includes('estado') || lower.includes('status')) {
-        if (lower.includes('active') || lower.includes('activo')) {
-          conditions.push({ field: 'status', operator: 'contains', value: 'Active' });
+      }
+
+      // 5. Last Name check
+      if (lower.includes('apellido') || lower.includes('last name')) {
+        const parts = lower.split(/apellido|last name/);
+        if (parts[1]) {
+          const nameVal = parts[1].replace(/igual a|=|is/g, '').trim();
+          if (nameVal) {
+            conditions.push({ field: 'lastName', operator: 'contains', value: nameVal });
+          }
         }
       }
-      return res.json({ success: true, conditions, warning: 'OPENROUTER_API_KEY is not configured in .env. Used local heuristic fallback.' });
+
+      return res.json({ success: true, conditions, warning: 'OPENROUTER_API_KEY is not configured in .env. Used local fallback parser.' });
     }
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {

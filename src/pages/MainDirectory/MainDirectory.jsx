@@ -110,13 +110,19 @@ function MainDirectory({ onSelectPage }) {
       result = result.filter((res) => {
         return aiConditions.every((cond) => {
           let val = res[cond.field];
+          if (cond.field === 'state') {
+            const stVal = (res.state || res.st || '').toLowerCase();
+            const resAddr = (res.residence || res.address || '').toLowerCase();
+            const targetSt = String(cond.value).toLowerCase();
+            if (cond.operator === '=' || cond.operator === 'contains') {
+              return stVal === targetSt || stVal.includes(targetSt) || resAddr.includes(targetSt) || (targetSt === 'fl' && resAddr.includes('florida'));
+            }
+          }
           if (val === undefined || val === null || val === '') {
             if (cond.field === 'annualDuesRate' || cond.field === 'annual_dues_rate' || cond.field === 'annualRate') {
               val = res.annual_dues_rate ?? res.annualDuesRate ?? res.annualRate ?? res.dues ?? 0;
             } else if (cond.field === 'city') {
               val = res.city || res.residence || res.address || '';
-            } else if (cond.field === 'state') {
-              val = res.state || res.st || '';
             } else if (cond.field === 'status') {
               val = res.status || (res.active === 'Y' || res.activeFlag === 'Y' ? 'Active' : 'Inactive');
             }
