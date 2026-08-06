@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config/api.js';
+import { API_BASE_URL, setConnectionStatus } from '../config/api.js';
 import mainDirectorySampleData from '../pages/MainDirectory/data/mainDirectorySampleData.js';
 
 export async function fetchResidents() {
@@ -7,6 +7,7 @@ export async function fetchResidents() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (Array.isArray(data) && data.length > 0) {
+      setConnectionStatus(false);
       return data.map(r => ({
         acctNo: r.account_id,
         acct: r.account_id,
@@ -47,9 +48,11 @@ export async function fetchResidents() {
         proRata: r.pro_rata || ''
       }));
     }
+    setConnectionStatus(true);
     return mainDirectorySampleData;
   } catch (err) {
     console.warn('Could not fetch residents from API, using sample data:', err);
+    setConnectionStatus(true);
     return mainDirectorySampleData;
   }
 }
@@ -97,9 +100,11 @@ export async function createResident(residentData) {
       body: JSON.stringify(apiData)
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    setConnectionStatus(false);
     return await response.json();
   } catch (err) {
     console.error('Failed to save resident to database:', err);
+    setConnectionStatus(true);
     throw err;
   }
 }
@@ -113,9 +118,11 @@ export async function updateResident(accountId, residentData) {
       body: JSON.stringify(apiData)
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    setConnectionStatus(false);
     return await response.json();
   } catch (err) {
     console.error('Failed to update resident in database:', err);
+    setConnectionStatus(true);
     throw err;
   }
 }

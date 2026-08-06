@@ -1,6 +1,3 @@
-
-
-
 import { useRef, useState } from 'react';
 
 import './AddResidentUF.css';
@@ -239,516 +236,416 @@ function AddResidentUF({
   };
 
   return (
-    <div
-      ref={formRef}
-      className="md-add-uf"
-    >
-      <div
-        className="md-add-title"
-        id="mdResidentUFTitle"
-      >
-        {isEditMode
-          ? "This form Edits this Resident's data in the Main Directory"
-          : 'This form enters new Street Addresses with Resident Data into the Main Directory'}
+    <div ref={formRef} className="md-add-uf">
+      {/* Title block */}
+      <div className="md-form-header">
+        <div className="md-header-info">
+          <h2 className="md-add-title" id="mdResidentUFTitle">
+            {isEditMode ? 'Edit Resident Record' : 'Add New Resident Address'}
+          </h2>
+          <p className="md-add-subtitle">
+            {isEditMode
+              ? 'Update account details and property fields in the Main Directory.'
+              : 'Register a new physical property and main owner records.'}
+          </p>
+        </div>
+        <div className="md-add-header-actions">
+          <span className="md-add-video-label">See Instructional Video:</span>
+          <button type="button" className="md-add-info-btn" title="Information Help">i</button>
+        </div>
       </div>
 
-      <div className="md-add-video-label">
-        See Instructional Video Here:
+      <div className="md-cards-container">
+        {/* Card 1: Primary Owner */}
+        <div className="md-card">
+          <div className="md-card-title">Primary Owner Information</div>
+          <div className="md-card-grid">
+            <div className="md-form-group">
+              <label htmlFor="mdAddFirstName" className="md-add-label">
+                First Name <span className="req-red">*</span>
+              </label>
+              <input
+                className="md-add-input"
+                id="mdAddFirstName"
+                type="text"
+                defaultValue={resident?.firstName || ''}
+              />
+            </div>
+            
+            <div className="md-form-group">
+              <label htmlFor="mdAddMiddleName" className="md-add-label">Middle Name</label>
+              <input
+                className="md-add-input"
+                id="mdAddMiddleName"
+                type="text"
+                defaultValue={resident?.middleName || ''}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddLastName" className="md-add-label">
+                Last Name <span className="req-blue">*</span>
+              </label>
+              <input
+                className="md-add-input"
+                id="mdAddLastName"
+                type="text"
+                defaultValue={resident?.lastName || ''}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddPrefix" className="md-add-label">Special Prefix</label>
+              <input
+                className="md-add-input"
+                id="mdAddPrefix"
+                type="text"
+                defaultValue={resident?.prefix || ''}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddAcct" className="md-add-label">Account Number</label>
+              <input
+                className="md-add-input read-only-input"
+                id="mdAddAcct"
+                type="text"
+                value={isEditMode ? (resident?.acctNo || resident?.acct || '') : ''}
+                readOnly
+                tabIndex={-1}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Property & Residence */}
+        <div className="md-card">
+          <div className="md-card-title">Residence Address</div>
+          <div className="md-card-grid">
+            <div className="md-form-group">
+              <label htmlFor="mdAddStreetNum" className="md-add-label">
+                Street Number <span className="req-blue">*</span>
+              </label>
+              <input
+                className="md-add-input"
+                id="mdAddStreetNum"
+                type="text"
+                value={streetNumberValue}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setStreetNumberValue(nextValue);
+                  if (!isEditMode) {
+                    updateBillingAddress(nextValue, streetNameValue);
+                  }
+                }}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddStreetAddress" className="md-add-label">
+                Street Name <span className="req-blue">*</span>
+              </label>
+              <select
+                className="md-add-input"
+                id="mdAddStreetAddress"
+                value={streetNameValue}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setStreetNameValue(nextValue);
+                  if (!isEditMode) {
+                    updateBillingAddress(streetNumberValue, nextValue);
+                  }
+                }}
+              >
+                <option value=""></option>
+                {availableStreetNames.map((street) => (
+                  <option key={street} value={street}>
+                    {street}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Billing Address */}
+        <div className="md-card">
+          <div className="md-card-title">Billing Address</div>
+          <div className="md-card-grid">
+            <div className="md-form-group span-2">
+              <label htmlFor="mdAddBillingAddress" className="md-add-label">
+                Billing Street Address <span className="req-blue">*</span>
+              </label>
+              <input
+                className="md-add-input"
+                id="mdAddBillingAddress"
+                type="text"
+                value={billingAddressValue}
+                onChange={(event) => setBillingAddressValue(event.target.value)}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddBillingCity" className="md-add-label">
+                Billing City <span className="req-blue">*</span>
+              </label>
+              <input
+                className="md-add-input"
+                id="mdAddBillingCity"
+                type="text"
+                defaultValue={resident?.city || (isEditMode ? '' : 'Mount Pleasant')}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddBillingState" className="md-add-label">
+                Billing State <span className="req-blue">*</span>
+              </label>
+              <input
+                className="md-add-input"
+                id="mdAddBillingState"
+                type="text"
+                defaultValue={resident?.state || resident?.st || (isEditMode ? '' : 'SC')}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddBillingZip" className="md-add-label">
+                Billing Zip Code <span className="req-blue">*</span>
+              </label>
+              <input
+                className="md-add-input"
+                id="mdAddBillingZip"
+                type="text"
+                defaultValue={resident?.zip || (isEditMode ? '' : '29466')}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Contact Information */}
+        <div className="md-card">
+          <div className="md-card-title">Primary Contact</div>
+          <div className="md-card-grid">
+            <div className="md-form-group">
+              <label htmlFor="mdAddHomePhone" className="md-add-label">Home Phone</label>
+              <input
+                className="md-add-input"
+                id="mdAddHomePhone"
+                type="text"
+                defaultValue={resident?.phone || ''}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddCell" className="md-add-label">Cell Number</label>
+              <input
+                className="md-add-input"
+                id="mdAddCell"
+                type="text"
+                defaultValue={resident?.primaryCell || ''}
+              />
+            </div>
+
+            <div className="md-form-group span-2">
+              <label htmlFor="mdAddEmail" className="md-add-label">Primary E-Mail</label>
+              <input
+                className="md-add-input"
+                id="mdAddEmail"
+                type="text"
+                defaultValue={resident?.email || ''}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Co-Owner Information */}
+        <div className="md-card">
+          <div className="md-card-title">Additional Owner Information</div>
+          <div className="md-card-grid">
+            <div className="md-form-group">
+              <label htmlFor="mdAddAddlFirst" className="md-add-label">First Name</label>
+              <input
+                className="md-add-input"
+                id="mdAddAddlFirst"
+                type="text"
+                defaultValue={resident?.addlFirst || ''}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddAddlMiddle" className="md-add-label">Middle Name</label>
+              <input
+                className="md-add-input"
+                id="mdAddAddlMiddle"
+                type="text"
+                defaultValue={resident?.addlMiddle || ''}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddAddlLast" className="md-add-label">Last Name</label>
+              <input
+                className="md-add-input"
+                id="mdAddAddlLast"
+                type="text"
+                defaultValue={resident?.addlLast || ''}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddAddlCell" className="md-add-label">Cell Number</label>
+              <input
+                className="md-add-input"
+                id="mdAddAddlCell"
+                type="text"
+                defaultValue={resident?.secondaryCell || ''}
+              />
+            </div>
+
+            <div className="md-form-group span-2">
+              <label htmlFor="mdAddAddlEmail" className="md-add-label">E-Mail</label>
+              <input
+                className="md-add-input"
+                id="mdAddAddlEmail"
+                type="text"
+                defaultValue={resident?.addlEmail || ''}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 6: Property & Rates */}
+        <div className="md-card">
+          <div className="md-card-title">Property Details & Dues</div>
+          <div className="md-card-grid">
+            <div className="md-form-group">
+              <label htmlFor="mdAddPropertyType" className="md-add-label">
+                Property Type
+              </label>
+              <select
+                className="md-add-input"
+                id="mdAddPropertyType"
+                defaultValue={resident?.type || ''}
+              >
+                <option value=""></option>
+                <option value="L">Lot (L)</option>
+                <option value="H">House (H)</option>
+                <option value="R">Rental (R)</option>
+              </select>
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddMoveIn" className="md-add-label">Move In Date</label>
+              <input
+                className="md-add-input"
+                id="mdAddMoveIn"
+                type="text"
+                placeholder="mm/dd/yyyy"
+                defaultValue={resident?.moveInDate || ''}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddAnnualRate" className="md-add-label">
+                Annual Dues Rate <span className="req-blue">*</span>
+              </label>
+              <select
+                className="md-add-input"
+                id="mdAddAnnualRate"
+                defaultValue={resident?.annualRate || 'Rate Code A'}
+              >
+                <option value="Rate Code A">Rate Code A</option>
+              </select>
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddAnnualDues" className="md-add-label">Annual Dues</label>
+              <input
+                className="md-add-input center-text font-bold"
+                id="mdAddAnnualDues"
+                type="text"
+                defaultValue={resident?.annualDues || (isEditMode ? '' : '1800')}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddSpecialRate" className="md-add-label">
+                Special Assm't Rate <span className="req-blue">*</span>
+              </label>
+              <select
+                className="md-add-input"
+                id="mdAddSpecialRate"
+                defaultValue={resident?.specialRate || 'Rate Code A'}
+              >
+                <option value="Rate Code A">Rate Code A</option>
+              </select>
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddSpecialDues" className="md-add-label">Special Assm't</label>
+              <input
+                className="md-add-input center-text font-bold"
+                id="mdAddSpecialDues"
+                type="text"
+                defaultValue={resident?.specialDues || (isEditMode ? '' : '75')}
+              />
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddACH" className="md-add-label">EasyPay ACH</label>
+              <select
+                className="md-add-input"
+                id="mdAddACH"
+                defaultValue={achValue}
+              >
+                <option value=""></option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+
+            <div className="md-form-group">
+              <label htmlFor="mdAddProRata" className="md-add-label">Current Yr ProRata%</label>
+              <input
+                className="md-add-input"
+                id="mdAddProRata"
+                type="text"
+                defaultValue={resident?.proRata || ''}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <button
-        type="button"
-        className="md-add-info-btn"
-      >
-        i
-      </button>
-
-      <div className="md-add-section md-add-primary-title">
-        Primary Owner Information:
+      {/* Notes Section */}
+      <div className="md-notes-section">
+        <div className="md-form-group">
+          <label htmlFor="mdAddNotes" className="md-card-title-inline">Resident Directory Notes</label>
+          <textarea
+            className="md-add-notes"
+            id="mdAddNotes"
+            defaultValue={resident?.notes || ''}
+            placeholder="Add directory notes here..."
+          />
+        </div>
       </div>
 
-      <label className="md-add-label lbl-first">
-        First Name{' '}
-        <span className="req-blue">*</span>
-        <span className="req-red">*</span>
-      </label>
-
-      <input
-        className="md-add-input inp-first"
-        id="mdAddFirstName"
-        type="text"
-        defaultValue={
-          resident?.firstName || ''
-        }
-      />
-
-      <label className="md-add-label lbl-middle">
-        Middle Name
-      </label>
-
-      <input
-        className="md-add-input inp-middle"
-        id="mdAddMiddleName"
-        type="text"
-        defaultValue={
-          resident?.middleName || ''
-        }
-      />
-
-      <label className="md-add-label lbl-last">
-        Last Name{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <input
-        className="md-add-input inp-last"
-        id="mdAddLastName"
-        type="text"
-        defaultValue={
-          resident?.lastName || ''
-        }
-      />
-
-      <label className="md-add-label lbl-prefix">
-        Special Prefix
-      </label>
-
-      <input
-        className="md-add-input inp-prefix"
-        id="mdAddPrefix"
-        type="text"
-        defaultValue={
-          resident?.prefix || ''
-        }
-      />
-
-      <label className="md-add-label lbl-acct">
-        Account Number
-      </label>
-
-      <input
-        className="md-add-input inp-acct"
-        id="mdAddAcct"
-        type="text"
-        value={
-          isEditMode
-            ? resident?.acctNo ||
-              resident?.acct ||
-              ''
-            : ''
-        }
-        readOnly
-        tabIndex={-1}
-      />
-
-      <label className="md-add-label lbl-streetnum">
-        Street Address #{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <input
-        className="md-add-input inp-streetnum"
-        id="mdAddStreetNum"
-        type="text"
-        value={streetNumberValue}
-        onChange={(event) => {
-          const nextValue =
-            event.target.value;
-
-          setStreetNumberValue(nextValue);
-
-          if (!isEditMode) {
-            updateBillingAddress(
-              nextValue,
-              streetNameValue
-            );
-          }
-        }}
-      />
-
-      <label className="md-add-label lbl-street">
-        Street Address{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <select
-        className="md-add-input inp-street"
-        id="mdAddStreetAddress"
-        value={streetNameValue}
-        onChange={(event) => {
-          const nextValue =
-            event.target.value;
-
-          setStreetNameValue(nextValue);
-
-          if (!isEditMode) {
-            updateBillingAddress(
-              streetNumberValue,
-              nextValue
-            );
-          }
-        }}
-      >
-        <option value=""></option>
-
-        {availableStreetNames.map(
-          (street) => (
-            <option
-              key={street}
-              value={street}
-            >
-              {street}
-            </option>
-          )
-        )}
-      </select>
-
-      <label className="md-add-label lbl-billing">
-        Billing Street Address{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <input
-        className="md-add-input inp-billing"
-        id="mdAddBillingAddress"
-        type="text"
-        value={billingAddressValue}
-        onChange={(event) =>
-          setBillingAddressValue(
-            event.target.value
-          )
-        }
-      />
-
-      <label className="md-add-label lbl-bcity">
-        Billing City{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <input
-        className="md-add-input inp-bcity"
-        id="mdAddBillingCity"
-        type="text"
-        defaultValue={
-          resident?.city ||
-          (isEditMode
-            ? ''
-            : 'Mount Pleasant')
-        }
-      />
-
-      <label className="md-add-label lbl-bstate">
-        Billing State{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <input
-        className="md-add-input inp-bstate"
-        id="mdAddBillingState"
-        type="text"
-        defaultValue={
-          resident?.state ||
-          resident?.st ||
-          (isEditMode ? '' : 'SC')
-        }
-      />
-
-      <label className="md-add-label lbl-bzip">
-        Billing Zip Code{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <input
-        className="md-add-input inp-bzip"
-        id="mdAddBillingZip"
-        type="text"
-        defaultValue={
-          resident?.zip ||
-          (isEditMode
-            ? ''
-            : '29466')
-        }
-      />
-
-      <label className="md-add-label lbl-homephone">
-        Home Phone
-      </label>
-
-      <input
-        className="md-add-input inp-homephone"
-        id="mdAddHomePhone"
-        type="text"
-        defaultValue={
-          resident?.phone || ''
-        }
-      />
-
-      <label className="md-add-label lbl-email">
-        Primary E-Mail
-      </label>
-
-      <input
-        className="md-add-input inp-email"
-        id="mdAddEmail"
-        type="text"
-        defaultValue={
-          resident?.email || ''
-        }
-      />
-
-      <label className="md-add-label lbl-cell">
-        Cell Number
-      </label>
-
-      <input
-        className="md-add-input inp-cell"
-        id="mdAddCell"
-        type="text"
-        defaultValue={
-          resident?.primaryCell || ''
-        }
-      />
-
-      <label className="md-add-label lbl-movein">
-        Move In Date
-      </label>
-
-      <input
-        className="md-add-input inp-movein"
-        id="mdAddMoveIn"
-        type="text"
-        placeholder="mm/dd/yyyy"
-        defaultValue={
-          resident?.moveInDate || ''
-        }
-      />
-
-      <label className="md-add-label lbl-proptype">
-        Property Type
-      </label>
-
-      <select
-        className="md-add-input inp-proptype"
-        id="mdAddPropertyType"
-        defaultValue={
-          resident?.type || ''
-        }
-      >
-        <option value=""></option>
-        <option value="L">L</option>
-        <option value="H">H</option>
-        <option value="R">R</option>
-      </select>
-
-      <div className="md-add-prop-help">
-        L = Lot
-        <br />
-        H = House
-        <br />
-        R = Rental
+      {/* Footer */}
+      <div className="md-add-footer">
+        <div className="md-footer-notes">
+          <div><span className="req-red">*</span> If property is corporate owned, insert <strong>"Owner"</strong> in First Name.</div>
+          <div><span className="req-blue">*</span> / <span className="req-red">*</span> Required fields.</div>
+        </div>
+        <button
+          type="button"
+          id="btnMDAddResidentEnterData"
+          className="md-add-enter-btn"
+          onClick={handleEnterData}
+        >
+          {isEditMode ? 'Update Resident' : 'Save Resident'}
+        </button>
       </div>
-
-      <label className="md-add-label lbl-annualrate">
-        Annual Dues Rate{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <select
-        className="md-add-input inp-annualrate"
-        id="mdAddAnnualRate"
-        defaultValue={
-          resident?.annualRate ||
-          'Rate Code A'
-        }
-      >
-        <option value="Rate Code A">
-          Rate Code A
-        </option>
-      </select>
-
-      <label className="md-add-label lbl-annualdues">
-        Annual Dues
-      </label>
-
-      <input
-        className="md-add-input inp-annualdues"
-        id="mdAddAnnualDues"
-        type="text"
-        defaultValue={
-          resident?.annualDues ||
-          (isEditMode ? '' : '1800')
-        }
-      />
-
-      <label className="md-add-label lbl-specialrate">
-        Special Assm&apos;t Rate{' '}
-        <span className="req-blue">*</span>
-      </label>
-
-      <select
-        className="md-add-input inp-specialrate"
-        id="mdAddSpecialRate"
-        defaultValue={
-          resident?.specialRate ||
-          'Rate Code A'
-        }
-      >
-        <option value="Rate Code A">
-          Rate Code A
-        </option>
-      </select>
-
-      <label className="md-add-label lbl-specialdues">
-        Special Assm&apos;t
-      </label>
-
-      <input
-        className="md-add-input inp-specialdues"
-        id="mdAddSpecialDues"
-        type="text"
-        defaultValue={
-          resident?.specialDues ||
-          (isEditMode ? '' : '75')
-        }
-      />
-
-      <div className="md-add-section md-add-addl-title">
-        Additional Owner Information:
-      </div>
-
-      <label className="md-add-label lbl-addfirst">
-        First Name
-      </label>
-
-      <input
-        className="md-add-input inp-addfirst"
-        id="mdAddAddlFirst"
-        type="text"
-        defaultValue={
-          resident?.addlFirst || ''
-        }
-      />
-
-      <label className="md-add-label lbl-addmiddle">
-        Middle Name
-      </label>
-
-      <input
-        className="md-add-input inp-addmiddle"
-        id="mdAddAddlMiddle"
-        type="text"
-        defaultValue={
-          resident?.addlMiddle || ''
-        }
-      />
-
-      <label className="md-add-label lbl-addlast">
-        Last Name
-      </label>
-
-      <input
-        className="md-add-input inp-addlast"
-        id="mdAddAddlLast"
-        type="text"
-        defaultValue={
-          resident?.addlLast || ''
-        }
-      />
-
-      <label className="md-add-label lbl-addemail">
-        E-Mail
-      </label>
-
-      <input
-        className="md-add-input inp-addemail"
-        id="mdAddAddlEmail"
-        type="text"
-        defaultValue={
-          resident?.addlEmail || ''
-        }
-      />
-
-      <label className="md-add-label lbl-addcell">
-        Cell Number
-      </label>
-
-      <input
-        className="md-add-input inp-addcell"
-        id="mdAddAddlCell"
-        type="text"
-        defaultValue={
-          resident?.secondaryCell || ''
-        }
-      />
-
-      <label className="md-add-label lbl-ach">
-        EasyPay ACH
-      </label>
-
-      <select
-        className="md-add-input inp-ach"
-        id="mdAddACH"
-        defaultValue={achValue}
-      >
-        <option value=""></option>
-        <option value="Yes">Yes</option>
-        <option value="No">No</option>
-      </select>
-
-      <div className="md-add-ach-note">
-        (Yes/No)
-      </div>
-
-      <label className="md-add-label lbl-prorata">
-        Current Yr ProRata%
-      </label>
-
-      <input
-        className="md-add-input inp-prorata"
-        id="mdAddProRata"
-        type="text"
-        defaultValue={
-          resident?.proRata || ''
-        }
-      />
-
-      <div className="md-add-section md-add-notes-title">
-        Resident Directory Notes:
-      </div>
-
-      <textarea
-        className="md-add-notes"
-        id="mdAddNotes"
-        defaultValue={
-          resident?.notes || ''
-        }
-      />
-
-      <div className="md-add-corp-note">
-        <span className="req-red">*</span>
-        <br />
-        Note: If property is
-        <br />
-        Corporate owned then
-        <br />
-        insert &quot;Owner&quot; in First
-        <br />
-        Name text box
-      </div>
-
-      <div className="md-add-required-note">
-        <span className="req-blue">*</span>{' '}
-        Required Entries
-      </div>
-
-      <button
-        type="button"
-        id="btnMDAddResidentEnterData"
-        className="md-add-enter-btn"
-        onClick={handleEnterData}
-      >
-        Enter Data
-      </button>
     </div>
   );
 }

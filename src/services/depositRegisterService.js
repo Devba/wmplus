@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config/api.js';
+import { API_BASE_URL, setConnectionStatus } from '../config/api.js';
 import depositRegisterSampleData from '../pages/DepositRegister/data/depositRegisterSampleData.js';
 
 export async function fetchDeposits() {
@@ -7,6 +7,7 @@ export async function fetchDeposits() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (Array.isArray(data) && data.length > 0) {
+      setConnectionStatus(false);
       return data.map(d => ({
         transaction: d.deposit_txn_num,
         depositorName: d.payer_name,
@@ -22,9 +23,12 @@ export async function fetchDeposits() {
         ...d
       }));
     }
+    setConnectionStatus(true);
     return depositRegisterSampleData;
   } catch (err) {
     console.warn('Could not fetch deposits from API, using sample data:', err);
+    setConnectionStatus(true);
     return depositRegisterSampleData;
   }
 }
+

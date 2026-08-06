@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config/api.js';
+import { API_BASE_URL, setConnectionStatus } from '../config/api.js';
 import checkRegisterSampleData from '../pages/CheckRegister/data/checkRegisterSampleData.js';
 
 export async function fetchChecks() {
@@ -7,6 +7,7 @@ export async function fetchChecks() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (Array.isArray(data) && data.length > 0) {
+      setConnectionStatus(false);
       return data.map(c => ({
         checkNo: c.check_number,
         transactionNo: c.check_txn_num,
@@ -25,9 +26,12 @@ export async function fetchChecks() {
         ...c
       }));
     }
+    setConnectionStatus(true);
     return checkRegisterSampleData;
   } catch (err) {
     console.warn('Could not fetch checks from API, using sample data:', err);
+    setConnectionStatus(true);
     return checkRegisterSampleData;
   }
 }
+
