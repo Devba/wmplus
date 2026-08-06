@@ -2,6 +2,7 @@
 
 
 import { useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { openOverlay } from '../../../../engines';
 
 import FilterUF from '../../../../components/FilterUF/FilterUF';
@@ -14,7 +15,8 @@ function ButtonRow({
   onApplyResidentFilter,
   onResetFilter,
   onAddResident,
-  onEditResident
+  onEditResident,
+  onAiFilter
 }) {
   const handleEditResidentDirect = (resident) => {
     const residentName = [
@@ -143,6 +145,64 @@ function ButtonRow({
     });
   };
 
+  const handleAiQuery = async () => {
+    const { value: prompt } = await Swal.fire({
+      title: '🤖 Consulta IA en Lenguaje Natural',
+      input: 'text',
+      inputLabel: 'Introduce tu consulta para filtrar la tabla:',
+      inputPlaceholder: 'Ej: filtra los registros en los que annual dues rate sea mayor que cero',
+      showCancelButton: true,
+      confirmButtonText: 'Consultar IA',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#2b579a',
+      inputValidator: (value) => {
+        if (!value) {
+          return '¡Por favor ingresa una consulta!';
+        }
+      }
+    });
+
+    if (prompt) {
+      Swal.fire({
+        title: 'Procesando consulta...',
+        text: 'Consultando con el modelo OpenRouter AI...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      try {
+        const response = await fetch('/api/ai-filter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        const data = await response.json();
+        Swal.close();
+
+        if (!response.ok || !data.success) {
+          Swal.fire('Error AI', data.error || 'Error al procesar la consulta', 'error');
+          return;
+        }
+
+        if (onAiFilter) {
+          onAiFilter(data.conditions, prompt);
+        }
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Filtro IA Aplicado',
+          text: `Se encontraron y aplicaron ${data.conditions?.length || 0} condición(es).`,
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } catch (err) {
+        Swal.fire('Error de Red', err.message, 'error');
+      }
+    }
+  };
+
   return (
     <div className="md-button-row">
       <button
@@ -170,6 +230,16 @@ function ButtonRow({
         onClick={handleResidentFilter}
       >
         RESIDENT FILTER
+      </button>
+
+      <button
+        id="btnMDAiQuery"
+        type="button"
+        className="btn-blue"
+        style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', fontWeight: 'bold' }}
+        onClick={handleAiQuery}
+      >
+        🤖 AI QUERY
       </button>
 
       <button

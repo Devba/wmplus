@@ -621,6 +621,96 @@ app.post('/api/webhook/github', (req, res) => {
   res.json({ success: true, branch, commit: newHash });
 });
 
+/* ===========================================================
+   8. OPENROUTER AI FILTER API
+   =========================================================== */
+
+app.post('/api/ai-filter', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt string is required' });
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY || '';
+    const model = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
+
+    const systemMessage = `You are an AI data assistant. Convert the user's natural language request into filter conditions for a list of resident objects.
+The available fields on each resident object are:
+- acctNo (string/number, Account Number)
+- lastName (string, Last Name)
+- firstName (string, First Name)
+- residence (string, Residence / Street Address)
+- annualDuesRate (number, Annual Dues Rate)
+- email (string, Email Address)
+- phone (string, Telephone Number)
+- status (string, Active/Inactive)
+
+Return strictly a JSON object with a "conditions" array. Each condition object must have:
+- "field": exact field name from above (e.g. "annualDuesRate", "lastName", "acctNo", "residence")
+- "operator": one of [">", "<", ">=", "<=", "=", "!=", "contains"]
+- "value": string or number value to compare against
+
+Example output format for "filtra los registros en los que 'annual dues rate' sea mayor que cero":
+{"conditions":[{"field":"annualDuesRate","operator":">","value":0}]}
+
+DO NOT include markdown block markers like \`\`\`json. Output ONLY raw valid JSON.`;
+
+    if (!apiKey) {
+      console.warn('[AI Filter] OPENROUTER_API_KEY not set. Using local fallback parser.');
+      // Local fallback parser for basic queries
+      let conditions = [];
+      const lower = prompt.toLowerCase();
+      if (lower.includes('annual dues rate') || lower.includes('annualduesrate') || lower.includes('dues')) {
+        if (lower.includes('mayor que') || lower.includes('>') || lower.includes('greater than')) {
+          const match = lower.match(/\d+(\.\d+)?/);
+          const val = match ? parseFloat(match[0]) : 0;
+          conditions.push({ field: 'annualDuesRate', operator: '>', value: val });
+        }
+      }
+      return res.json({ success: true, conditions, warning: 'OPENROUTER_API_KEY is not configured in .env. Used local heuristic fallback.' });
+    }
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost:3011',
+        'X-Title': 'WM Plus Management'
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.1
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[OpenRouter API Error]', errText);
+      return res.status(502).json({ error: 'Failed to communicate with OpenRouter API', details: errText });
+    }
+
+    const data = await response.json();
+    const rawContent = data.choices?.[0]?.message?.content || '{}';
+    const cleanedJson = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleanedJson);
+
+    return res.json({
+      success: true,
+      conditions: parsed.conditions || [],
+      raw: rawContent
+    });
+  } catch (err) {
+    console.error('Error in /api/ai-filter:', err);
+    return res.status(500).json({ error: 'AI Filter processing failed', details: err.message });
+  }
+});
+
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 W M+ Express Backend API running on port ${PORT}`);

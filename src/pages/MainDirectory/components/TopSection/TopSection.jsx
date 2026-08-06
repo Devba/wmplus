@@ -16,7 +16,8 @@ function TopSection({
   onApplyResidentFilter,
   onResetFilter,
   onAddResident,
-  onEditResident
+  onEditResident,
+  onAiFilter
 }) {
   return (
     <div className="md-topsection">
@@ -32,6 +33,7 @@ function TopSection({
         onResetFilter={onResetFilter}
         onAddResident={onAddResident}
         onEditResident={onEditResident}
+        onAiFilter={onAiFilter}
       />
 
       <FilterRow

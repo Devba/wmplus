@@ -62,6 +62,8 @@ function MainDirectory({ onSelectPage }) {
   const [appliedAccountFilter, setAppliedAccountFilter] =
     useState('');
 
+  const [aiConditions, setAiConditions] = useState([]);
+
   useEffect(() => {
     let active = true;
     async function loadData() {
@@ -94,16 +96,50 @@ function MainDirectory({ onSelectPage }) {
   );
 
   const displayedResidents = useMemo(() => {
-    if (!appliedAccountFilter) {
-      return sortedResidents;
+    let result = sortedResidents;
+
+    if (appliedAccountFilter) {
+      result = result.filter(
+        (resident) =>
+          String(accountNumberFor(resident)) ===
+          String(appliedAccountFilter)
+      );
     }
 
-    return sortedResidents.filter(
-      (resident) =>
-        String(accountNumberFor(resident)) ===
-        String(appliedAccountFilter)
-    );
-  }, [sortedResidents, appliedAccountFilter]);
+    if (aiConditions && aiConditions.length > 0) {
+      result = result.filter((res) => {
+        return aiConditions.every((cond) => {
+          let val = res[cond.field];
+          if (val === undefined || val === null) {
+            if (cond.field === 'annualDuesRate') {
+              val = res.annual_dues_rate ?? res.annualDuesRate ?? 0;
+            }
+          }
+          const target = cond.value;
+          switch (cond.operator) {
+            case '>':
+              return Number(val) > Number(target);
+            case '<':
+              return Number(val) < Number(target);
+            case '>=':
+              return Number(val) >= Number(target);
+            case '<=':
+              return Number(val) <= Number(target);
+            case '=':
+              return String(val).toLowerCase() === String(target).toLowerCase();
+            case '!=':
+              return String(val).toLowerCase() !== String(target).toLowerCase();
+            case 'contains':
+              return String(val).toLowerCase().includes(String(target).toLowerCase());
+            default:
+              return true;
+          }
+        });
+      });
+    }
+
+    return result;
+  }, [sortedResidents, appliedAccountFilter, aiConditions]);
 
   const handleResidentNameChange = (accountNumber) => {
     setResidentNameFilter(accountNumber);
@@ -147,6 +183,7 @@ function MainDirectory({ onSelectPage }) {
     setResidentNameFilter('');
     setResidentAddressFilter('');
     setAppliedAccountFilter('');
+    setAiConditions([]);
     setSelectedResident(null);
   };
 
