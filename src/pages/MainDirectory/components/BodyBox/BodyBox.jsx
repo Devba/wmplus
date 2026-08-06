@@ -6,7 +6,8 @@ import MainDirectoryGrid from './MainDirectoryGrid';
 function BodyBox({
   residents,
   selectedResident,
-  onSelectResident
+  onSelectResident,
+  onDoubleClickResident
 }) {
   return (
     <div className="md-bodybox">
@@ -14,6 +15,7 @@ function BodyBox({
         residents={residents}
         selectedResident={selectedResident}
         onSelectResident={onSelectResident}
+        onDoubleClickResident={onDoubleClickResident}
       />
     </div>
   );

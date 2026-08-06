@@ -5,7 +5,8 @@ import HeaderRow from './HeaderRow';
 function MainDirectoryGrid({
   residents,
   selectedResident,
-  onSelectResident
+  onSelectResident,
+  onDoubleClickResident
 }) {
   const scrollRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
@@ -88,6 +89,9 @@ function MainDirectoryGrid({
                     }
                     onClick={() =>
                       onSelectResident(row)
+                    }
+                    onDoubleClick={() =>
+                      onDoubleClickResident(row)
                     }
                   >
                     <td>{row.acctNo || row.acct}</td>

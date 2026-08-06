@@ -1,6 +1,7 @@
 
 
 
+import { useEffect } from 'react';
 import { openOverlay } from '../../../../engines';
 
 import FilterUF from '../../../../components/FilterUF/FilterUF';
@@ -15,6 +16,51 @@ function ButtonRow({
   onAddResident,
   onEditResident
 }) {
+  const handleEditResidentDirect = (resident) => {
+    const residentName = [
+      resident.lastName,
+      resident.firstName
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    const accountNumber =
+      resident.acctNo ||
+      resident.acct ||
+      '';
+
+    openOverlay({
+      title: 'MAIN DIRECTORY',
+      component: (
+        <AddResidentUF
+          mode="edit"
+          resident={resident}
+          onEnterData={(updatedResident) =>
+            onEditResident(
+              resident,
+              updatedResident
+            )
+          }
+        />
+      ),
+      width: '1400px',
+      maxWidth: '98vw'
+    });
+  };
+
+  useEffect(() => {
+    const handleEditClick = (e) => {
+      if (e.detail) {
+        handleEditResidentDirect(e.detail);
+      }
+    };
+
+    document.addEventListener('edit-click', handleEditClick);
+    return () => {
+      document.removeEventListener('edit-click', handleEditClick);
+    };
+  }, [onEditResident]);
+
   const handleAddResident = () => {
     openOverlay({
       title: 'MAIN DIRECTORY',

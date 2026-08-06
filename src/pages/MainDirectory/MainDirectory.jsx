@@ -199,6 +199,12 @@ function MainDirectory({ onSelectPage }) {
     }
   };
 
+  const handleDoubleClickResident = (resident) => {
+    setSelectedResident(resident);
+    const event = new CustomEvent('edit-click', { detail: resident });
+    document.dispatchEvent(event);
+  };
+
   return (
     <div className="md-page">
       <div className="md-shell">
@@ -240,6 +246,7 @@ function MainDirectory({ onSelectPage }) {
           residents={displayedResidents}
           selectedResident={selectedResident}
           onSelectResident={setSelectedResident}
+          onDoubleClickResident={handleDoubleClickResident}
         />
       </div>
     </div>
