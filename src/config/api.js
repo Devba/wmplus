@@ -14,6 +14,24 @@ const getBaseUrl = () => {
 export const API_BASE_URL = getBaseUrl();
 export const PERSISTENCE_MODE = 'server'; // 'server' for live DB hoamanager26, 'local' for mock
 
+let isOffline = false;
+const subscribers = new Set();
+
+export function setConnectionStatus(offlineStatus) {
+  if (isOffline !== offlineStatus) {
+    isOffline = offlineStatus;
+    subscribers.forEach(cb => cb(isOffline));
+  }
+}
+
+export function subscribeToConnectionStatus(cb) {
+  subscribers.add(cb);
+  cb(isOffline); // Emit current state on subscription
+  return () => {
+    subscribers.delete(cb);
+  };
+}
+
 export async function apiFetch(endpoint, options = {}) {
   try {
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -26,9 +44,13 @@ export async function apiFetch(endpoint, options = {}) {
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }
-    return await res.json();
+    const data = await res.json();
+    setConnectionStatus(false);
+    return data;
   } catch (err) {
     console.warn(`API call failed for ${endpoint}:`, err);
+    setConnectionStatus(true);
     throw err;
   }
 }
+

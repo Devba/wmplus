@@ -13,6 +13,7 @@ import {
 } from './engines';
 
 import { pageMap } from './pages/pageMap';
+import { API_BASE_URL, subscribeToConnectionStatus, setConnectionStatus } from './config/api.js';
 
 function App() {
   const [currentPage, setCurrentPage] = useState(
@@ -23,6 +24,46 @@ function App() {
   const [showBadge, setShowBadge] = useState(
     () => localStorage.getItem('hideBadge') !== 'true'
   );
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToConnectionStatus(setIsOffline);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    async function checkHealth() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/health`);
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        setConnectionStatus(!data.alive);
+      } catch (err) {
+        setConnectionStatus(true);
+      }
+    }
+
+    // Check on startup and then every 15 seconds
+    checkHealth();
+    const timer = setInterval(checkHealth, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleRetry = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`);
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      if (data.alive) {
+        setConnectionStatus(false);
+        window.location.reload();
+      } else {
+        alert("El backend sigue sin conexión a la base de datos.");
+      }
+    } catch (err) {
+      alert("No se pudo establecer conexión con el servidor backend.");
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = subscribeToOverlay(setActiveOverlay);
@@ -130,6 +171,16 @@ function App() {
           }}
         >
           v
+        </div>
+      )}
+
+      {isOffline && (
+        <div className="offline-status-badge">
+          <span className="offline-badge-pulse"></span>
+          <span className="offline-badge-text">⚠️ Modo Offline (Datos Mock)</span>
+          <button className="offline-badge-retry-btn" onClick={handleRetry}>
+            Reintentar
+          </button>
         </div>
       )}
     </div>

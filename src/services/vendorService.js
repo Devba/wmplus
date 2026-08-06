@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config/api.js';
+import { API_BASE_URL, setConnectionStatus } from '../config/api.js';
 import vendorIdListSampleData from '../pages/VendorIdList/data/vendorIdListSampleData.js';
 
 export async function fetchVendors() {
@@ -7,6 +7,7 @@ export async function fetchVendors() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (Array.isArray(data) && data.length > 0) {
+      setConnectionStatus(false);
       return data.map(v => ({
         id: v.vendor_id,
         vendorId: v.vendor_id,
@@ -28,9 +29,12 @@ export async function fetchVendors() {
         ...v
       }));
     }
+    setConnectionStatus(true);
     return vendorIdListSampleData;
   } catch (err) {
     console.warn('Could not fetch vendors from API, using sample data:', err);
+    setConnectionStatus(true);
     return vendorIdListSampleData;
   }
 }
+
