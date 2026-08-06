@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import './AddResidentUF.css';
+import AddressMap from './AddressMap';
 
 function AddResidentUF({
   mode = 'add',
@@ -422,6 +423,16 @@ function AddResidentUF({
             </div>
           </div>
         </div>
+
+        <AddressMap
+          address={billingAddressValue || [
+            streetNumberValue.trim(),
+            streetNameValue.trim()
+          ].filter(Boolean).join(' ')}
+          city={resident?.city || ''}
+          state={resident?.state || resident?.st || ''}
+          zip={resident?.zip || ''}
+        />
 
         {/* Card 4: Contact Information */}
         <div className="md-card">

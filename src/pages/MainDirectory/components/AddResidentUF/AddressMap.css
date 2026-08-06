@@ -1,0 +1,38 @@
+.address-map {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.address-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #003b6f;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.address-map-status {
+  font-size: 12px;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.address-map-status.address-map-error {
+  color: #fecaca;
+}
+
+.address-map-body {
+  height: 280px;
+  position: relative;
+}
+
+.address-map-body .leaflet-container {
+  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+}
