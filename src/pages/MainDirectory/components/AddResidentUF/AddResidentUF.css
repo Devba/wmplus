@@ -171,20 +171,29 @@
 
 .md-add-input {
   height: 38px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #0d2a4a;
   border-radius: 6px;
-  background: #ffffff;
-  color: #0f172a;
+  background: #003b6f;
+  color: #ffffff;
   font-size: 14px;
   padding: 8px 12px;
   transition: all 0.15s ease-in-out;
   width: 100%;
 }
 
+.md-add-input::placeholder {
+  color: #cbd5e1;
+}
+
+.md-add-input option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
 .md-add-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: #67b8f7;
+  box-shadow: 0 0 0 3px rgba(103, 184, 247, 0.25);
 }
 
 .md-add-input.read-only-input {
@@ -214,10 +223,10 @@
 .md-add-notes {
   width: 100%;
   height: 80px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #0d2a4a;
   border-radius: 6px;
-  background: #ffffff;
-  color: #0f172a;
+  background: #003b6f;
+  color: #ffffff;
   font-size: 14px;
   padding: 10px 12px;
   resize: vertical;
@@ -225,10 +234,14 @@
   transition: all 0.15s ease-in-out;
 }
 
+.md-add-notes::placeholder {
+  color: #cbd5e1;
+}
+
 .md-add-notes:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: #67b8f7;
+  box-shadow: 0 0 0 3px rgba(103, 184, 247, 0.25);
 }
 
 /* Footer & Actions */
