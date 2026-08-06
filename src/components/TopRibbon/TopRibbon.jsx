@@ -127,17 +127,17 @@ function TopRibbon() {
 <div className="ribbon-group">
   <div className="ribbon-buttons">
 
-    <div className="ribbon-btn">
+    <div className="ribbon-btn" onClick={() => document.dispatchEvent(new CustomEvent('ribbon-add-vendor'))}>
       <div className="icon icon-addvendor"></div>
       <div className="label">Add Vendor</div>
     </div>
 
-    <div className="ribbon-btn">
+    <div className="ribbon-btn" onClick={() => document.dispatchEvent(new CustomEvent('ribbon-edit-vendor'))}>
       <div className="icon icon-editvendor"></div>
       <div className="label">Edit Vendor</div>
     </div>
 
-    <div className="ribbon-btn">
+    <div className="ribbon-btn" onClick={() => document.dispatchEvent(new CustomEvent('ribbon-delete-vendor'))}>
       <div className="icon icon-deletevendor"></div>
       <div className="label">Delete Vendor</div>
     </div>

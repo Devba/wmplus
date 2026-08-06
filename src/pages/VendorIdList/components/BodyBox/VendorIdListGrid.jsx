@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import HeaderRow from "./HeaderRow";
 
 function VendorIdListGrid({
-  vendorRows = []
+  vendorRows = [],
+  selectedVendor = null,
+  onSelectVendor = () => {},
+  onDoubleClickVendor = () => {}
 }) {
   const scrollRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
@@ -67,6 +70,9 @@ function VendorIdListGrid({
                 (vendor, index) => (
                   <tr
                     key={`${vendor.vendorId}-${index}`}
+                    className={selectedVendor?.vendorId === vendor.vendorId ? 'is-selected' : ''}
+                    onClick={() => onSelectVendor(vendor)}
+                    onDoubleClick={() => onDoubleClickVendor(vendor)}
                   >
                     <td>
                       {vendor.vendorName}

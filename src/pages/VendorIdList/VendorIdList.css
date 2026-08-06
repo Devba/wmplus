@@ -469,3 +469,48 @@
 .vid-table col.vc18 { width: 190px; }
 .vid-table col.vc19 { width: 125px; }
 .vid-table col.vc20 { width: 120px; }
+
+/* Table row selection highlight styles */
+.vid-table tbody tr {
+  cursor: pointer;
+}
+
+.vid-table tbody tr.is-selected td {
+  background: #dbeafe !important;
+  color: #1e3a8a !important;
+  border-top: 1px solid #60a5fa;
+  border-bottom: 1px solid #60a5fa;
+}
+
+.vid-table tbody tr.is-selected td:first-child {
+  border-left: 1px solid #60a5fa;
+}
+
+.vid-table tbody tr.is-selected td:last-child {
+  border-right: 1px solid #60a5fa;
+}
+
+/* Button variants for ButtonRow */
+.vid-btn-green {
+  background-color: #10b981 !important;
+  color: white !important;
+}
+.vid-btn-green:hover {
+  background-color: #059669 !important;
+}
+
+.vid-btn-blue {
+  background-color: #3b82f6 !important;
+  color: white !important;
+}
+.vid-btn-blue:hover {
+  background-color: #2563eb !important;
+}
+
+.vid-btn-red {
+  background-color: #ef4444 !important;
+  color: white !important;
+}
+.vid-btn-red:hover {
+  background-color: #dc2626 !important;
+}

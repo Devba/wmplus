@@ -8,8 +8,12 @@ import FilterUF from "../../../../components/FilterUF/FilterUF";
 function ButtonRow({
   onSelectPage,
   vendorRows = [],
+  selectedVendor = null,
   onApplyVendorFilter,
-  onResetVendorFilter
+  onResetVendorFilter,
+  onAddVendorClick,
+  onEditVendorClick,
+  onDeleteVendorClick
 }) {
   const handleOpenVendorFilter = () => {
     openOverlay({
@@ -34,6 +38,30 @@ function ButtonRow({
 
   return (
     <div className="vid-button-row">
+      <button
+        type="button"
+        className="vid-btn vid-btn-green"
+        onClick={onAddVendorClick}
+      >
+        ADD VENDOR
+      </button>
+
+      <button
+        type="button"
+        className="vid-btn vid-btn-blue"
+        onClick={onEditVendorClick}
+      >
+        EDIT VENDOR
+      </button>
+
+      <button
+        type="button"
+        className="vid-btn vid-btn-red"
+        onClick={onDeleteVendorClick}
+      >
+        DELETE VENDOR
+      </button>
+
       <button
         type="button"
         className="vid-btn"

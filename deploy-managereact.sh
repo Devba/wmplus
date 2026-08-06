@@ -11,6 +11,9 @@ TARGET="${1:-backend}"
 if [ "$TARGET" == "main" ]; then
   BASE_PATH="/managereactv1/"
   REMOTE_DIR="/var/www/polydash/managereactv1"
+elif [ "$TARGET" == "bravo" ] || [ "$TARGET" == "BravoFrontend" ]; then
+  BASE_PATH="/manage-Bravofrontend/"
+  REMOTE_DIR="/var/www/polydash/manage-Bravofrontend"
 else
   BASE_PATH="/managereactv1-backend/"
   REMOTE_DIR="/var/www/polydash/managereactv1-backend"
@@ -29,7 +32,7 @@ VITE_BASE_PATH="$BASE_PATH" VITE_GIT_COMMIT="$GIT_COMMIT" VITE_GIT_BRANCH="$GIT_
 
 # 2. Crear directorio remoto
 echo "📁 Creando directorio remoto..."
-ssh -t -p 44 "$VPS" "sudo mkdir -p $REMOTE_DIR && sudo chown alvaro:alvaro $REMOTE_DIR"
+ssh -p 44 "$VPS" "mkdir -p $REMOTE_DIR"
 
 # 3. Subir el build
 echo "📤 Subiendo dist/ al VPS..."
@@ -39,7 +42,7 @@ rsync -avz -e "ssh -p 44" --delete \
 
 # 4. Ajustar permisos
 echo "🔒 Ajustando permisos..."
-ssh -t -p 44 "$VPS" "sudo chown -R www-data:www-data $REMOTE_DIR && sudo chmod -R 755 $REMOTE_DIR"
+ssh -p 44 "$VPS" "chmod -R 755 $REMOTE_DIR"
 
 echo ""
 echo "✅ ¡Deploy completado para $TARGET!"

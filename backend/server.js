@@ -208,7 +208,9 @@ app.get('/api/vendors', async (req, res) => {
       SELECT 
         VendorID as vendor_id,
         VendorName as vendor_name,
+        CareOfAddressLine as co_address,
         AddressLine1 as address,
+        AddressLine2 as address2,
         City as city,
         StateCode as state,
         ZipCode as zip,
@@ -217,9 +219,16 @@ app.get('/api/vendors', async (req, res) => {
         ContactName as contact_name,
         VendorType as vendor_type,
         TaxID as tax_id,
+        ElectronicCheckYN as electronic_check,
+        ElectronicCheckAmount as electronic_check_amount,
+        ElectronicCheckStartMonth as start_month,
+        ElectronicCheckStartDay as start_day,
+        BankAccount as bank_account,
         DefaultGLNumber as default_gl_number,
         DefaultGLAccountName as default_gl_name,
+        CurrentTransactionNumber as current_txn,
         CheckNotation as default_check_note,
+        VendorNotes as notes,
         ActiveFlag as active_flag
       FROM VendorMaster
       WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
@@ -238,14 +247,17 @@ app.post('/api/vendors', async (req, res) => {
     const vendorId = v.vendor_id || `VEND-${Date.now().toString().slice(-4)}`;
     await db.query(`
       INSERT INTO VendorMaster (
-        VendorID, VendorName, AddressLine1, City, StateCode, ZipCode,
+        VendorID, VendorName, CareOfAddressLine, AddressLine1, AddressLine2, City, StateCode, ZipCode,
         PrimaryPhone, EmailAddress, ContactName, VendorType, TaxID,
-        DefaultGLNumber, DefaultGLAccountName, ActiveFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Y', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+        ElectronicCheckYN, ElectronicCheckAmount, ElectronicCheckStartMonth, ElectronicCheckStartDay, BankAccount,
+        DefaultGLNumber, DefaultGLAccountName, CheckNotation, VendorNotes, ActiveFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       vendorId,
       v.vendor_name || '',
+      v.co_address || '',
       v.address || '',
+      v.address2 || '',
       v.city || 'Miami',
       v.state || 'FL',
       v.zip || '33101',
@@ -254,13 +266,100 @@ app.post('/api/vendors', async (req, res) => {
       v.contact_name || '',
       v.vendor_type || 'General',
       v.tax_id || '',
+      v.electronic_check || 'N',
+      v.electronic_check_amount || null,
+      v.start_month || null,
+      v.start_day || null,
+      v.bank_account || '',
       v.default_gl_number || 5000,
-      v.default_gl_name || 'General Expense'
+      v.default_gl_name || 'General Expense',
+      v.default_check_note || '',
+      v.notes || '',
+      v.active_flag || 'Y'
     ]);
     res.status(201).json({ success: true, vendor_id: vendorId });
   } catch (err) {
     console.error('Error inserting vendor:', err);
     res.status(500).json({ error: 'Failed to insert vendor', details: err.message });
+  }
+});
+
+app.put('/api/vendors/:vendor_id', async (req, res) => {
+  try {
+    const { vendor_id } = req.params;
+    const v = req.body;
+    await db.query(`
+      UPDATE VendorMaster SET
+        VendorName = ?,
+        CareOfAddressLine = ?,
+        AddressLine1 = ?,
+        AddressLine2 = ?,
+        City = ?,
+        StateCode = ?,
+        ZipCode = ?,
+        PrimaryPhone = ?,
+        EmailAddress = ?,
+        ContactName = ?,
+        VendorType = ?,
+        TaxID = ?,
+        ElectronicCheckYN = ?,
+        ElectronicCheckAmount = ?,
+        ElectronicCheckStartMonth = ?,
+        ElectronicCheckStartDay = ?,
+        BankAccount = ?,
+        DefaultGLNumber = ?,
+        DefaultGLAccountName = ?,
+        CheckNotation = ?,
+        VendorNotes = ?,
+        ActiveFlag = ?,
+        TimeStampUpdated = NOW()
+      WHERE VendorID = ? AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+    `, [
+      v.vendor_name || '',
+      v.co_address || '',
+      v.address || '',
+      v.address2 || '',
+      v.city || 'Miami',
+      v.state || 'FL',
+      v.zip || '33101',
+      v.phone || '',
+      v.email || '',
+      v.contact_name || '',
+      v.vendor_type || 'General',
+      v.tax_id || '',
+      v.electronic_check || 'N',
+      v.electronic_check_amount || null,
+      v.start_month || null,
+      v.start_day || null,
+      v.bank_account || '',
+      v.default_gl_number || 5000,
+      v.default_gl_name || 'General Expense',
+      v.default_check_note || '',
+      v.notes || '',
+      v.active_flag || 'Y',
+      vendor_id
+    ]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error updating vendor:', err);
+    res.status(500).json({ error: 'Failed to update vendor', details: err.message });
+  }
+});
+
+app.delete('/api/vendors/:vendor_id', async (req, res) => {
+  try {
+    const { vendor_id } = req.params;
+    await db.query(`
+      UPDATE VendorMaster SET
+        DeletedFlag = 'Y',
+        DeletedDate = NOW(),
+        DeletedByOperatorID = 'SYSTEM'
+      WHERE VendorID = ?
+    `, [vendor_id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting vendor:', err);
+    res.status(500).json({ error: 'Failed to delete vendor', details: err.message });
   }
 });
 

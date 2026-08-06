@@ -7,8 +7,12 @@ import ButtonRow from "./ButtonRow";
 function TopSection({
   onSelectPage,
   vendorRows,
+  selectedVendor,
   onApplyVendorFilter,
-  onResetVendorFilter
+  onResetVendorFilter,
+  onAddVendorClick,
+  onEditVendorClick,
+  onDeleteVendorClick
 }) {
   return (
     <div className="vid-topsection">
@@ -17,12 +21,16 @@ function TopSection({
       <ButtonRow
         onSelectPage={onSelectPage}
         vendorRows={vendorRows}
+        selectedVendor={selectedVendor}
         onApplyVendorFilter={
           onApplyVendorFilter
         }
         onResetVendorFilter={
           onResetVendorFilter
         }
+        onAddVendorClick={onAddVendorClick}
+        onEditVendorClick={onEditVendorClick}
+        onDeleteVendorClick={onDeleteVendorClick}
       />
     </div>
   );
