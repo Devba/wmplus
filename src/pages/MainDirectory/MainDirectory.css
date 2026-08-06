@@ -177,6 +177,55 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 8px;
+}
+
+.md-table-container {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.15);
+  border: 1px solid #b5c7e6;
+  background: #e9f0fa;
+  position: relative;
+}
+
+.md-table-scroll {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #8fa4c8 #dce3f0;
+}
+
+.md-table-scroll::-webkit-scrollbar {
+  height: 14px;
+  width: 14px;
+}
+
+.md-table-scroll::-webkit-scrollbar-track {
+  background: #dce3f0;
+  border-radius: 7px;
+  border: 1px solid #b5c7e6;
+}
+
+.md-table-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7a94c0, #5a7aaa);
+  border-radius: 7px;
+  border: 1px solid #4a6a9a;
+}
+
+.md-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #6a84b0, #4a6a9a);
+}
+
+.md-table-scroll::-webkit-scrollbar-corner {
+  background: #dce3f0;
 }
 
 .md-table-wrap {
@@ -184,11 +233,7 @@
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
-
-  background: #e9f0fa;
-  border: 1px solid #b5c7e6;
-  box-sizing: border-box;
+  overflow: visible;
 }
 
 .md-table {
@@ -197,6 +242,108 @@
   table-layout: fixed;
   border-collapse: collapse;
   background: #ffffff;
+  border-radius: 0;
+}
+
+.md-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.md-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+}
+
+.md-table tbody td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: inherit;
+}
+
+.md-table tbody tr:nth-child(even) td:first-child {
+  background: #f7f9fc !important;
+}
+
+.md-table tbody tr.is-selected td:first-child {
+  background: #dbeafe !important;
+}
+
+/* Left-side fade indicator */
+.md-table-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(270deg, transparent, rgba(233, 240, 250, 0.85));
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.md-table-container.has-scroll::before {
+  opacity: 1;
+}
+
+/* Right-side fade indicator */
+.md-table-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(233, 240, 250, 0.85));
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.md-table-container.has-scroll::after {
+  opacity: 1;
+}
+
+/* Scroll progress indicator */
+.md-table-scroll::-webkit-scrollbar:horizontal {
+  position: relative;
+}
+
+.md-table-container .scroll-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4a90d9, #67b8f7);
+  border-radius: 0 0 8px 8px;
+  transition: width 0.1s ease;
+  z-index: 4;
+}
+
+.md-table-container .scroll-hint {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  font-size: 11px;
+  color: #5a7aaa;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #b5c7e6;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 4;
+}
+
+.md-table-container.has-scroll .scroll-hint {
+  opacity: 1;
 }
 
 .md-table th,

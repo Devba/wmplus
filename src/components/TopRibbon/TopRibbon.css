@@ -1,6 +1,6 @@
 .top-ribbon {
-    background: #ffd6d6;
-    border-bottom: 2px solid #e8b0b0;
+    background: #fff9c4;
+    border-bottom: 2px solid #f0c040;
     padding: 6px 4px;
 }
 
@@ -17,8 +17,8 @@
 }
 
 .ribbon-group{
-    background: #ffe8e8;
-    border-right: 1px solid #d8a0a0;
+    background: #fffde7;
+    border-right: 1px solid #e0b030;
     padding:4px 6px 2px 6px;
     min-width:0;
     flex:0 0 auto;
