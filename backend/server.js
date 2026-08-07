@@ -635,26 +635,29 @@ app.post('/api/ai-filter', async (req, res) => {
     const apiKey = process.env.OPENROUTER_API_KEY || '';
     const model = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
 
-    const systemMessage = `You are a database AI query parser. Convert natural language queries into JSON filter conditions for a list of resident objects.
-The available fields on each resident object are:
-- acctNo (Account Number e.g. "RES-001")
-- lastName (Last Name e.g. "Mitchell")
-- firstName (First Name e.g. "James")
-- residence (Street Address e.g. "8901 Palm Vista Cir")
-- city (City name e.g. "Miami")
-- state (2-letter state code e.g. "FL" for Florida, "CA" for California, "NY" for New York, "TX" for Texas)
-- zip (Zip Code e.g. "33156")
-- annualDuesRate (number, Annual Dues Rate amount or value)
-- email (Email Address)
-- phone (Telephone Number)
-- status ("Active" or "Inactive")
+    const systemMessage = `You are a database AI query parser. Translate natural language queries into JSON filter conditions based strictly on the following database table schema for the "ResidentMaster" table. Do not make assumptions about data not defined in the schema.
 
-Disambiguation Rules:
-1. "estado de [Nombre]" (e.g. "estado de florida") refers to field: "state" with 2-letter uppercase state code (e.g. value: "FL").
-2. "estado activo" or "estado inactivo" refers to field: "status" with value "Active" or "Inactive".
-3. Valid operators: [">", "<", ">=", "<=", "=", "!=", "contains"].
+Table: ResidentMaster
+Schema Fields:
+- acctNo (VARCHAR, Primary Key, resident account ID e.g., "RES-001")
+- lastName (VARCHAR, resident last name e.g., "Mitchell")
+- firstName (VARCHAR, resident first name e.g., "James")
+- residence (VARCHAR, street/residence address e.g., "8901 Palm Vista Cir")
+- city (VARCHAR, city name e.g., "Miami")
+- state (VARCHAR, 2-letter state code e.g., "FL", "NY", "CA", "TX")
+- zip (VARCHAR, zip/postal code e.g., "33156")
+- annualDuesRate (DECIMAL, annual dues amount e.g., 3600.00)
+- email (VARCHAR, email address e.g., "james@email.com")
+- phone (VARCHAR, primary phone number e.g., "305-555-3001")
+- status (VARCHAR, resident active status: "Active" or "Inactive")
 
-Output Format (strict raw JSON, NO markdown block formatting):
+Rules:
+1. Translate "estado de [Nombre]" (e.g., "estado de florida") to field: "state" and value to its 2-letter state code (e.g., "FL").
+2. Translate "estado activo" or "activo" to field: "status" and value: "Active". Translate "estado inactivo" or "inactivo" to field: "status" and value: "Inactive".
+3. Valid operators are: ">", "<", ">=", "<=", "=", "!=", "contains".
+4. Return ONLY a strict raw JSON object with a "conditions" key containing an array of condition objects. No markdown formatting, no code blocks, no explanations.
+
+Output Example:
 {"conditions":[{"field":"state","operator":"=","value":"FL"}]}`;
 
     if (!apiKey) {
