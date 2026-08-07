@@ -187,13 +187,13 @@ function ButtonRow({
         }
 
         if (onAiFilter) {
-          onAiFilter(data.conditions, prompt);
+          onAiFilter(data.residents || null, prompt);
         }
 
         Swal.fire({
           icon: 'success',
           title: 'Filtro IA Aplicado',
-          text: `Se encontraron y aplicaron ${data.conditions?.length || 0} condición(es).`,
+          text: `Se encontraron y aplicaron ${data.residents?.length || 0} registro(s).`,
           timer: 2000,
           showConfirmButton: false
         });

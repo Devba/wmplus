@@ -635,30 +635,52 @@ app.post('/api/ai-filter', async (req, res) => {
     const apiKey = process.env.OPENROUTER_API_KEY || '';
     const model = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
 
-    const systemMessage = `You are a database AI query parser. Translate natural language queries into JSON filter conditions based strictly on the following database table schema for the "ResidentMaster" table. Do not make assumptions about data not defined in the schema.
+    const systemMessage = `You are a database AI query parser. Translate natural language queries into a SQL WHERE clause compatible with the following MySQL database table schema for the "ResidentMaster" table. Do not make assumptions about data not defined in the schema.
 
 Table: ResidentMaster
 Schema Fields:
-- acctNo (VARCHAR, Primary Key - Unique resident account identifier e.g., "RES-001")
-- lastName (VARCHAR - Last name of the resident e.g., "Mitchell")
-- firstName (VARCHAR - First name of the resident e.g., "James")
-- residence (VARCHAR - Street address of the resident's home/residence e.g., "8901 Palm Vista Cir")
-- city (VARCHAR - City where the resident lives e.g., "Miami")
-- state (VARCHAR - 2-letter state code of the resident e.g., "FL", "NY", "CA", "TX")
-- zip (VARCHAR - Zip or postal code of the resident e.g., "33156")
-- annualDuesRate (DECIMAL - Annual dues rate, the total assessment amount due by the resident per year e.g., 3600.00)
-- email (VARCHAR - Email address of the resident e.g., "james@email.com")
-- phone (VARCHAR - Primary phone number of the resident e.g., "305-555-3001")
-- status (VARCHAR - Active/Inactive status of the resident: "Active" or "Inactive")
+- ResidentAccountID (VARCHAR, Primary Key - Unique resident account identifier e.g., "RES-001")
+- LastName (VARCHAR - Last name of the resident e.g., "Mitchell")
+- FirstName (VARCHAR - First name of the resident e.g., "James")
+- ResidenceAddress (VARCHAR - Street address of the resident's home/residence e.g., "8901 Palm Vista Cir")
+- City (VARCHAR - City where the resident lives e.g., "Miami")
+- StateCode (VARCHAR - 2-letter state code of the resident e.g., "FL", "NY", "CA", "TX")
+- ZipCode (VARCHAR - Zip or postal code of the resident e.g., "33156")
+- AnnualDuesRate (DECIMAL - Annual dues rate code or amount due per year e.g., 3600.00)
+- EmailAddress (VARCHAR - Email address of the resident e.g., "james@email.com")
+- PrimaryPhone (VARCHAR - Primary phone number of the resident e.g., "305-555-3001")
+- ActiveResidentFlag (VARCHAR - Active/Inactive resident flag: "Y" for Active or "N" for Inactive)
+- AnnualDuesBalance (DECIMAL - Outstanding dues balance or debt. A positive value means the resident owes money/debt, e.g. 150.00)
 
 Rules:
-1. Translate "estado de [Nombre]" (e.g., "estado de florida") to field: "state" and value to its 2-letter state code (e.g., "FL").
-2. Translate "estado activo" or "activo" to field: "status" and value: "Active". Translate "estado inactivo" or "inactivo" to field: "status" and value: "Inactive".
-3. Valid operators are: ">", "<", ">=", "<=", "=", "!=", "contains".
-4. Return ONLY a strict raw JSON object with a "conditions" key containing an array of condition objects. No markdown formatting, no code blocks, no explanations.
+1. Output ONLY a raw JSON object with a single "whereClause" string key.
+2. The "whereClause" must be a valid SQL expression that can be appended directly to "SELECT * FROM ResidentMaster WHERE ".
+3. Translate "estado de [Nombre]" (e.g., "estado de florida") to StateCode = 'FL'.
+4. Translate "estado activo" or "activo" to ActiveResidentFlag = 'Y'. Translate "estado inactivo" or "inactivo" to ActiveResidentFlag = 'N'.
+5. Use LIKE for substring matches (e.g. EmailAddress LIKE '%mitchell%' or PrimaryPhone LIKE '%305%').
+6. Use LIKE 'prefix%' for starting letters (e.g. LastName LIKE 'C%').
+7. Use standard comparison operators (=, !=, <, >, <=, >=).
+8. For "mayores deudores" or similar ordering requests, you can append "ORDER BY AnnualDuesBalance DESC" or similar to the whereClause, but it MUST still be valid SQL syntactically (e.g., "AnnualDuesBalance > 0 ORDER BY AnnualDuesBalance DESC LIMIT 10").
+9. Do not include markdown formatting, code blocks, or comments in your response.
 
 Output Example:
-{"conditions":[{"field":"state","operator":"=","value":"FL"}]}`;
+{"whereClause":"StateCode = 'FL' AND AnnualDuesRate > 1000"}`;
+
+    function conditionsToSql(conditions) {
+      if (!conditions || conditions.length === 0) return '1=1';
+      return conditions.map(c => {
+        const escapedValue = String(c.value).replace(/'/g, "''");
+        if (c.operator === 'contains') {
+          return `${c.field} LIKE '%${escapedValue}%'`;
+        }
+        const isNumeric = !isNaN(c.value) && (c.field === 'AnnualDuesRate' || c.field === 'AnnualDuesBalance');
+        const quote = isNumeric ? '' : "'";
+        return `${c.field} ${c.operator} ${quote}${escapedValue}${quote}`;
+      }).join(' AND ');
+    }
+
+    let whereClause = '1=1';
+    let source = 'openrouter';
 
     if (!apiKey) {
       console.warn('[AI Filter] OPENROUTER_API_KEY not set. Using enhanced local fallback parser.');
@@ -686,8 +708,7 @@ Output Example:
       if (lastNameMatch && lastNameMatch[1]) {
         const val = lastNameMatch[1].trim();
         if (val) {
-          conditions.push({ field: 'lastName', operator: '=', value: val });
-          return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+          conditions.push({ field: 'LastName', operator: '=', value: val });
         }
       }
 
@@ -696,8 +717,7 @@ Output Example:
       if (firstNameMatch && firstNameMatch[1] && !cleanPrompt.toLowerCase().includes('last name')) {
         const val = firstNameMatch[1].trim();
         if (val) {
-          conditions.push({ field: 'firstName', operator: '=', value: val });
-          return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+          conditions.push({ field: 'FirstName', operator: '=', value: val });
         }
       }
 
@@ -706,8 +726,7 @@ Output Example:
       if (acctMatch && acctMatch[1]) {
         let val = acctMatch[1].trim();
         if (!val.toUpperCase().startsWith('RES-')) val = `RES-${val.padStart(3, '0')}`;
-        conditions.push({ field: 'acctNo', operator: '=', value: val.toUpperCase() });
-        return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+        conditions.push({ field: 'ResidentAccountID', operator: '=', value: val.toUpperCase() });
       }
 
       // 4. Phone Number check ("phone = 305-555-3001", "telefono 305")
@@ -715,8 +734,7 @@ Output Example:
       if (phoneMatch && phoneMatch[1]) {
         const val = phoneMatch[1].trim();
         if (val.length >= 3) {
-          conditions.push({ field: 'phone', operator: 'contains', value: val });
-          return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+          conditions.push({ field: 'PrimaryPhone', operator: 'contains', value: val });
         }
       }
 
@@ -725,8 +743,7 @@ Output Example:
       if (emailMatch && emailMatch[1]) {
         const val = emailMatch[1].trim();
         if (val) {
-          conditions.push({ field: 'email', operator: 'contains', value: val });
-          return res.json({ success: true, conditions, warning: 'Used enhanced fallback parser.' });
+          conditions.push({ field: 'EmailAddress', operator: 'contains', value: val });
         }
       }
 
@@ -734,7 +751,7 @@ Output Example:
       let stateMatched = false;
       for (const [name, code] of Object.entries(FULL_STATES)) {
         if (lower.includes(name)) {
-          conditions.push({ field: 'state', operator: '=', value: code });
+          conditions.push({ field: 'StateCode', operator: '=', value: code });
           stateMatched = true;
           break;
         }
@@ -743,7 +760,7 @@ Output Example:
         for (const code of STATE_CODES) {
           const regex = new RegExp(`\\b${code.toLowerCase()}\\b`, 'i');
           if (regex.test(lower)) {
-            conditions.push({ field: 'state', operator: '=', value: code });
+            conditions.push({ field: 'StateCode', operator: '=', value: code });
             break;
           }
         }
@@ -753,16 +770,16 @@ Output Example:
       for (const c of KNOWN_CITIES) {
         if (lower.includes(c)) {
           const capitalized = c.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-          conditions.push({ field: 'city', operator: 'contains', value: capitalized });
+          conditions.push({ field: 'City', operator: 'contains', value: capitalized });
           break;
         }
       }
 
       // 8. Status check
-      if (lower.includes('activo') || lower.includes('activos') || lower.includes('active')) {
-        conditions.push({ field: 'status', operator: '=', value: 'Active' });
-      } else if (lower.includes('inactivo') || lower.includes('inactivos') || lower.includes('inactive')) {
-        conditions.push({ field: 'status', operator: '=', value: 'Inactive' });
+      if (lower.includes('inactivo') || lower.includes('inactivos') || lower.includes('inactive')) {
+        conditions.push({ field: 'ActiveResidentFlag', operator: '=', value: 'N' });
+      } else if (lower.includes('activo') || lower.includes('activos') || lower.includes('active')) {
+        conditions.push({ field: 'ActiveResidentFlag', operator: '=', value: 'Y' });
       }
 
       // 9. Annual Dues check
@@ -770,47 +787,115 @@ Output Example:
         if (lower.includes('mayor que') || lower.includes('>') || lower.includes('greater')) {
           const match = lower.match(/\d+(\.\d+)?/);
           const val = match ? parseFloat(match[0]) : 0;
-          conditions.push({ field: 'annualDuesRate', operator: '>', value: val });
+          conditions.push({ field: 'AnnualDuesRate', operator: '>', value: val });
         }
       }
 
-      return res.json({ success: true, conditions, warning: 'OPENROUTER_API_KEY is not configured in .env. Used local fallback parser.' });
+      // 10. Debtors check ("deudores", "deuda", "deben")
+      if (lower.includes('deudor') || lower.includes('deudores') || lower.includes('deuda') || lower.includes('deben') || lower.includes('debt')) {
+        conditions.push({ field: 'AnnualDuesBalance', operator: '>', value: 0 });
+      }
+
+      whereClause = conditionsToSql(conditions);
+      // For debtors in fallback, also add ordering
+      if (lower.includes('deudor') || lower.includes('deudores') || lower.includes('deuda') || lower.includes('deben') || lower.includes('debt')) {
+        whereClause += ' ORDER BY AnnualDuesBalance DESC';
+        if (lower.includes('10') || lower.includes('diez')) {
+          whereClause += ' LIMIT 10';
+        }
+      }
+
+      source = 'fallback';
+    } else {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:3011',
+          'X-Title': 'WM Plus Management'
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.1
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[OpenRouter API Error]', errText);
+        return res.status(502).json({ error: 'Failed to communicate with OpenRouter API', details: errText });
+      }
+
+      const data = await response.json();
+      const rawContent = data.choices?.[0]?.message?.content || '{}';
+      const cleanedJson = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanedJson);
+      whereClause = parsed.whereClause || '1=1';
     }
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost:3011',
-        'X-Title': 'WM Plus Management'
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.1
-      })
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('[OpenRouter API Error]', errText);
-      return res.status(502).json({ error: 'Failed to communicate with OpenRouter API', details: errText });
+    // Safety check: prevent destructive keywords
+    const unsafeSqlPattern = /\b(drop|delete|update|insert|alter|replace|truncate|grant|revoke|union|create|exec)\b|;/i;
+    if (unsafeSqlPattern.test(whereClause)) {
+      console.error('[AI Filter Security] Unsafe SQL detected:', whereClause);
+      return res.status(400).json({ error: 'Unsafe SQL query detected by security layer' });
     }
 
-    const data = await response.json();
-    const rawContent = data.choices?.[0]?.message?.content || '{}';
-    const cleanedJson = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleanedJson);
+    console.log(`[AI Filter SQL] Executing query via ${source}: SELECT * FROM ResidentMaster WHERE ${whereClause}`);
+    const [rows] = await db.readOnlyPool.query(`SELECT * FROM ResidentMaster WHERE ${whereClause}`);
+
+    // Map database keys to frontend schema format
+    const mappedResidents = rows.map(r => ({
+      acctNo: r.ResidentAccountID,
+      acct: r.ResidentAccountID,
+      firstName: r.FirstName || '',
+      middleName: r.MiddleName || '',
+      lastName: r.LastName || '',
+      prefix: r.prefix || '',
+      name: r.DisplayName || `${r.FirstName || ''} ${r.LastName || ''}`.trim(),
+      residence: r.ResidenceAddress || '',
+      address: r.ResidenceAddress || '',
+      billingAddress: r.BillingAddress || '',
+      city: r.City || '',
+      state: r.StateCode || '',
+      st: r.StateCode || '',
+      zip: r.ZipCode || '',
+      phone: r.PrimaryPhone || '',
+      email: r.EmailAddress || '',
+      primaryCell: r.PrimaryCell || '',
+      secondaryCell: r.SecondaryCell || '',
+      moveInDate: r.MoveInDate || '',
+      type: r.ResidentType || '',
+      active: r.ActiveResidentFlag || 'Y',
+      activeFlag: r.ActiveResidentFlag || 'Y',
+      ach: r.ACHFlag || '',
+      addlFirst: r.AdditionalOwnerFirstName || '',
+      addlMiddle: r.AdditionalOwnerMiddleName || '',
+      addlLast: r.AdditionalOwnerLastName || '',
+      addlEmail: r.AdditionalOwnerEmail || '',
+      bothFirst: `${r.FirstName || ''}${r.AdditionalOwnerFirstName ? ' & ' + r.AdditionalOwnerFirstName : ''}`.trim(),
+      annualRate: r.AnnualDuesRate || 'Rate Code A',
+      annualDues: r.AnnualDues !== null && r.AnnualDues !== undefined ? String(r.AnnualDues) : '',
+      dues: r.AnnualDues || 0.00,
+      specialRate: r.SpecialAssessmentRate || 'Rate Code A',
+      specialDues: r.SpecialAssessmentDues !== null && r.SpecialAssessmentDues !== undefined ? String(r.SpecialAssessmentDues) : '',
+      nextAnnual: r.NextYearAnnualDues !== null && r.NextYearAnnualDues !== undefined ? String(r.NextYearAnnualDues) : '',
+      nextSpecial: r.NextYearSpecialAssmtDues !== null && r.NextYearSpecialAssmtDues !== undefined ? String(r.NextYearSpecialAssmtDues) : '',
+      notes: r.ResidentNotes || '',
+      proRata: r.pro_rata || ''
+    }));
 
     return res.json({
       success: true,
-      conditions: parsed.conditions || [],
-      raw: rawContent
+      residents: mappedResidents,
+      whereClause,
+      source
     });
+
   } catch (err) {
     console.error('Error in /api/ai-filter:', err);
     return res.status(500).json({ error: 'AI Filter processing failed', details: err.message });

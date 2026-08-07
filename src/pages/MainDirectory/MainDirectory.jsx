@@ -62,7 +62,8 @@ function MainDirectory({ onSelectPage }) {
   const [appliedAccountFilter, setAppliedAccountFilter] =
     useState('');
 
-  const [aiConditions, setAiConditions] = useState([]);
+  const [aiResidents, setAiResidents] = useState(null);
+  const [aiPrompt, setAiPrompt] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -96,7 +97,7 @@ function MainDirectory({ onSelectPage }) {
   );
 
   const displayedResidents = useMemo(() => {
-    let result = sortedResidents;
+    let result = aiResidents !== null ? aiResidents : sortedResidents;
 
     if (appliedAccountFilter) {
       result = result.filter(
@@ -106,61 +107,8 @@ function MainDirectory({ onSelectPage }) {
       );
     }
 
-    if (aiConditions && aiConditions.length > 0) {
-      result = result.filter((res) => {
-        return aiConditions.every((cond) => {
-          let val = res[cond.field];
-          if (cond.field === 'state') {
-            const stVal = (res.state || res.st || '').toLowerCase();
-            const resAddr = (res.residence || res.address || '').toLowerCase();
-            const targetSt = String(cond.value).replace(/["']/g, '').toLowerCase().trim();
-            if (cond.operator === '=' || cond.operator === 'contains') {
-              return stVal === targetSt || stVal.includes(targetSt) || resAddr.includes(targetSt) || (targetSt === 'fl' && resAddr.includes('florida'));
-            }
-          }
-          if (cond.field === 'lastName' || cond.field === 'last_name') {
-            val = res.lastName || res.last_name || res.addlLast || '';
-          } else if (cond.field === 'firstName' || cond.field === 'first_name') {
-            val = res.firstName || res.first_name || res.addlFirst || '';
-          } else if (cond.field === 'acctNo' || cond.field === 'acct' || cond.field === 'account_id') {
-            val = res.acctNo || res.acct || res.account_id || '';
-          } else if (cond.field === 'email' || cond.field === 'email_address') {
-            val = res.email || res.email_address || res.addlEmail || '';
-          } else if (cond.field === 'phone' || cond.field === 'primary_phone') {
-            val = res.phone || res.primary_phone || res.primaryCell || res.secondaryCell || '';
-          } else if (cond.field === 'city') {
-            val = res.city || res.residence || res.address || '';
-          } else if (cond.field === 'status') {
-            val = res.status || (res.active === 'Y' || res.activeFlag === 'Y' ? 'Active' : 'Inactive');
-          } else if (cond.field === 'annualDuesRate' || cond.field === 'annual_dues_rate' || cond.field === 'annualRate') {
-            val = res.annual_dues_rate ?? res.annualDuesRate ?? res.annualRate ?? res.dues ?? 0;
-          }
-
-          const target = String(cond.value).replace(/["']/g, '').trim();
-          switch (cond.operator) {
-            case '>':
-              return Number(val) > Number(target);
-            case '<':
-              return Number(val) < Number(target);
-            case '>=':
-              return Number(val) >= Number(target);
-            case '<=':
-              return Number(val) <= Number(target);
-            case '=':
-              return String(val).toLowerCase() === target.toLowerCase();
-            case '!=':
-              return String(val).toLowerCase() !== target.toLowerCase();
-            case 'contains':
-              return String(val).toLowerCase().includes(target.toLowerCase());
-            default:
-              return true;
-          }
-        });
-      });
-    }
-
     return result;
-  }, [sortedResidents, appliedAccountFilter, aiConditions]);
+  }, [sortedResidents, appliedAccountFilter, aiResidents]);
 
   const handleResidentNameChange = (accountNumber) => {
     setResidentNameFilter(accountNumber);
@@ -204,7 +152,8 @@ function MainDirectory({ onSelectPage }) {
     setResidentNameFilter('');
     setResidentAddressFilter('');
     setAppliedAccountFilter('');
-    setAiConditions([]);
+    setAiResidents(null);
+    setAiPrompt('');
     setSelectedResident(null);
   };
 
@@ -297,7 +246,10 @@ function MainDirectory({ onSelectPage }) {
             onResetFilter={handleResetFilter}
             onAddResident={handleAddResident}
             onEditResident={handleEditResident}
-            onAiFilter={(conds) => setAiConditions(conds)}
+            onAiFilter={(filteredRows, promptText) => {
+              setAiResidents(filteredRows);
+              setAiPrompt(promptText);
+            }}
           />
         </div>
 
