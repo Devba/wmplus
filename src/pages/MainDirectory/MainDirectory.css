@@ -146,12 +146,19 @@
   padding-left: 6px;
 }
 
-.md-name-filter {
-  width: 340px;
+.md-filter-input {
+  height: 24px;
+  border: 1px solid #777777;
+  background: #ffffff;
+  font-size: 13px;
+  padding: 0 8px;
+  width: 420px;
 }
 
-.md-address-filter {
-  width: 360px;
+.md-filter-input:focus {
+  border-color: #003b73;
+  outline: none;
+  box-shadow: 0 0 4px rgba(0, 59, 115, 0.3);
 }
 
 .md-status {

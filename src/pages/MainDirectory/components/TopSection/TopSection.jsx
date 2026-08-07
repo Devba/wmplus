@@ -9,10 +9,8 @@ function TopSection({
   onSelectPage,
   residents,
   selectedResident,
-  residentNameFilter,
-  residentAddressFilter,
-  onResidentNameChange,
-  onResidentAddressChange,
+  searchTerm,
+  onSearchTermChange,
   onApplyResidentFilter,
   onResetFilter,
   onAddResident,
@@ -37,17 +35,8 @@ function TopSection({
       />
 
       <FilterRow
-        residents={residents}
-        residentNameFilter={residentNameFilter}
-        residentAddressFilter={
-          residentAddressFilter
-        }
-        onResidentNameChange={
-          onResidentNameChange
-        }
-        onResidentAddressChange={
-          onResidentAddressChange
-        }
+        searchTerm={searchTerm}
+        onSearchTermChange={onSearchTermChange}
       />
     </div>
   );

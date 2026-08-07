@@ -53,11 +53,7 @@ function MainDirectory({ onSelectPage }) {
   const [selectedResident, setSelectedResident] =
     useState(null);
 
-  const [residentNameFilter, setResidentNameFilter] =
-    useState('');
-
-  const [residentAddressFilter, setResidentAddressFilter] =
-    useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [appliedAccountFilter, setAppliedAccountFilter] =
     useState('');
@@ -107,24 +103,26 @@ function MainDirectory({ onSelectPage }) {
       );
     }
 
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      result = result.filter((r) => {
+        const name = `${r.firstName || ''} ${r.lastName || ''}`.toLowerCase();
+        const acct = String(accountNumberFor(r)).toLowerCase();
+        const address = (r.residence || r.address || '').toLowerCase();
+        const phone = (r.phone || '').toLowerCase();
+        const email = (r.email || '').toLowerCase();
+        return (
+          name.includes(term) ||
+          acct.includes(term) ||
+          address.includes(term) ||
+          phone.includes(term) ||
+          email.includes(term)
+        );
+      });
+    }
+
     return result;
-  }, [sortedResidents, appliedAccountFilter, aiResidents]);
-
-  const handleResidentNameChange = (accountNumber) => {
-    setResidentNameFilter(accountNumber);
-
-    if (accountNumber) {
-      setResidentAddressFilter('');
-    }
-  };
-
-  const handleResidentAddressChange = (accountNumber) => {
-    setResidentAddressFilter(accountNumber);
-
-    if (accountNumber) {
-      setResidentNameFilter('');
-    }
-  };
+  }, [sortedResidents, appliedAccountFilter, aiResidents, searchTerm]);
 
   const handleApplyResidentFilter = (
     accountNumber
@@ -143,14 +141,12 @@ function MainDirectory({ onSelectPage }) {
     }
 
     setAppliedAccountFilter(accountNumber);
-    setResidentNameFilter('');
-    setResidentAddressFilter('');
+    setSearchTerm('');
     setSelectedResident(matchingResident);
   };
 
   const handleResetFilter = () => {
-    setResidentNameFilter('');
-    setResidentAddressFilter('');
+    setSearchTerm('');
     setAppliedAccountFilter('');
     setAiResidents(null);
     setAiPrompt('');
@@ -167,8 +163,7 @@ function MainDirectory({ onSelectPage }) {
         ])
       );
 
-      setResidentNameFilter('');
-      setResidentAddressFilter('');
+      setSearchTerm('');
       setAppliedAccountFilter('');
       setSelectedResident(newResident);
     } catch (err) {
@@ -230,16 +225,8 @@ function MainDirectory({ onSelectPage }) {
             onSelectPage={onSelectPage}
             residents={sortedResidents}
             selectedResident={selectedResident}
-            residentNameFilter={residentNameFilter}
-            residentAddressFilter={
-              residentAddressFilter
-            }
-            onResidentNameChange={
-              handleResidentNameChange
-            }
-            onResidentAddressChange={
-              handleResidentAddressChange
-            }
+            searchTerm={searchTerm}
+            onSearchTermChange={setSearchTerm}
             onApplyResidentFilter={
               handleApplyResidentFilter
             }
