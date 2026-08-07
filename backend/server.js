@@ -666,31 +666,7 @@ app.put('/api/settings/hoa-profile', async (req, res) => {
   }
 });
 
-/* ===========================================================
-   6. SETTINGS: BANKING
-   =========================================================== */
 
-app.get('/api/settings/banking', async (req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT 
-        BankAccountID as id,
-        BankType as type,
-        BankIDLabel as label,
-        BankName as name,
-        BankAccountNumber as accountNumber,
-        RoutingNumber as routingNumber,
-        StartingCheckNumber as startingCheckNumber,
-        MinimumBankBalance as minimumBalance
-      FROM BankAccountMaster
-      WHERE ActiveFlag = 'Y'
-    `);
-    res.json(rows);
-  } catch (err) {
-    console.error('Error fetching bank accounts:', err);
-    res.status(500).json({ error: 'Failed to fetch bank accounts', details: err.message });
-  }
-});
 
 /* ===========================================================
    7. AUTO-REFRESH & GITHUB WEBHOOK (Flashback & CI/CD)
@@ -1005,6 +981,443 @@ Output Example:
   } catch (err) {
     console.error('Error in /api/ai-filter:', err);
     return res.status(500).json({ error: 'AI Filter processing failed', details: err.message });
+  }
+});
+
+/* ===========================================================
+   6. SETTINGS: BANKING & FISCAL YEAR
+   =========================================================== */
+
+app.get('/api/settings/banking', async (req, res) => {
+  try {
+    const [bankRows] = await db.query(`SELECT * FROM BankAccount ORDER BY BankAccountID ASC`);
+    const [fiscalRows] = await db.query(`SELECT * FROM FiscalYearSetup LIMIT 1`);
+
+    const banks = bankRows.map(b => ({
+      id: b.BankAccountID,
+      bankType: b.BankType || '',
+      bankName: b.BankName || '',
+      bankId: b.BankID || '',
+      active: b.ActiveFlag || 'Y',
+      checkMode: b.CheckMode || 'None',
+      startCheck: b.StartCheckNumber || '',
+      glCashAccount: b.GLCashAccount || '',
+      accountNumber: b.AccountNumber || '',
+      routingNumber: b.RoutingNumber || '',
+      startingBalance: b.StartingBalance || 0.00,
+      startingMonth: b.StartingMonth || 'January',
+      contactPerson: b.ContactPerson || '',
+      contactTel: b.ContactTel || '',
+      contactEmail: b.ContactEmail || '',
+      coMingled: b.CoMingled || 'N',
+      coMingledWith: b.CoMingledWith || '',
+      notes: b.Notes || ''
+    }));
+
+    const f = fiscalRows[0] || {};
+    const fiscalSetup = {
+      openingRetainedEarnings: f.OpeningRetainedEarnings || 0.00,
+      endingRetainedEarnings: f.EndingRetainedEarnings || 0.00,
+      currentFiscalYearIncome: f.CurrentFiscalYearIncome || 0.00,
+      accountsReceivable: f.AccountsReceivable || 0.00,
+      accountsPayable: f.AccountsPayable || 0.00,
+      interestEarned: f.InterestEarned || 0.00,
+      previousYearsEndingIncome: f.PreviousYearsEndingIncome || 0.00,
+      miscAssetEntry: f.MiscAssetEntry || 0.00,
+      miscLiabilityEntry: f.MiscLiabilityEntry || 0.00,
+      notes: f.Notes || ''
+    };
+
+    res.json({ success: true, banks, fiscalSetup });
+  } catch (err) {
+    console.error('Error fetching banking settings:', err);
+    res.status(500).json({ error: 'Failed to fetch banking settings', details: err.message });
+  }
+});
+
+app.put('/api/settings/banking', async (req, res) => {
+  try {
+    const { banks, fiscalSetup } = req.body;
+
+    if (Array.isArray(banks)) {
+      for (const b of banks) {
+        if (b.id) {
+          await db.query(`
+            UPDATE BankAccount SET
+              BankType=?, BankName=?, BankID=?, ActiveFlag=?, CheckMode=?,
+              StartCheckNumber=?, GLCashAccount=?, AccountNumber=?, RoutingNumber=?,
+              StartingBalance=?, StartingMonth=?, ContactPerson=?, ContactTel=?,
+              ContactEmail=?, CoMingled=?, CoMingledWith=?, Notes=?, TimeStampUpdated=NOW()
+            WHERE BankAccountID=?
+          `, [
+            b.bankType||'', b.bankName||'', b.bankId||'', b.active||'Y', b.checkMode||'None',
+            b.startCheck||'', b.glCashAccount||'', b.accountNumber||'', b.routingNumber||'',
+            b.startingBalance||0.00, b.startingMonth||'January', b.contactPerson||'', b.contactTel||'',
+            b.contactEmail||'', b.coMingled||'N', b.coMingledWith||'', b.notes||'', b.id
+          ]);
+        }
+      }
+    }
+
+    if (fiscalSetup) {
+      const f = fiscalSetup;
+      await db.query(`
+        UPDATE FiscalYearSetup SET
+          OpeningRetainedEarnings=?, EndingRetainedEarnings=?, CurrentFiscalYearIncome=?,
+          AccountsReceivable=?, AccountsPayable=?, InterestEarned=?,
+          PreviousYearsEndingIncome=?, MiscAssetEntry=?, MiscLiabilityEntry=?,
+          Notes=?, TimeStampUpdated=NOW()
+        WHERE FiscalYearSetupID=1
+      `, [
+        f.openingRetainedEarnings||0, f.endingRetainedEarnings||0, f.currentFiscalYearIncome||0,
+        f.accountsReceivable||0, f.accountsPayable||0, f.interestEarned||0,
+        f.previousYearsEndingIncome||0, f.miscAssetEntry||0, f.miscLiabilityEntry||0,
+        f.notes||''
+      ]);
+    }
+
+    res.json({ success: true, message: 'Banking settings saved successfully' });
+  } catch (err) {
+    console.error('Error saving banking settings:', err);
+    res.status(500).json({ error: 'Failed to save banking settings', details: err.message });
+  }
+});
+
+/* ===========================================================
+   7. SETTINGS: GENERAL SYSTEM PROGRAMMING
+   =========================================================== */
+
+app.get('/api/settings/system', async (req, res) => {
+  try {
+    const [rows] = await db.query(`SELECT * FROM SystemSettings LIMIT 1`);
+    if (rows.length === 0) {
+      return res.json({ success: true, systemSettings: {} });
+    }
+    const r = rows[0];
+    res.json({
+      success: true,
+      printing: {
+        printingMode: r.PrintingMode || 'Local',
+        printerName: r.PrinterName || '',
+        webPrinterId: r.WebPrinterID || '',
+        networkAddress: r.NetworkAddress || '',
+        notes: r.PrintingNotes || ''
+      },
+      numbering: {
+        residentStartingAcct: r.ResidentStartingAcct || '',
+        vendorStartingAcct: r.VendorStartingAcct || '',
+        notes: r.NumberingNotes || ''
+      },
+      streetNames: {
+        streetNames: r.StreetNamesList || '',
+        defaultCity: r.DefaultCity || '',
+        defaultState: r.DefaultState || '',
+        defaultZip: r.DefaultZip || '',
+        notes: r.StreetNamesNotes || ''
+      },
+      webPlus: {
+        webPlusActive: r.WebPlusActive || 'N',
+        webPageIpName: r.WebPageIPName || '',
+        webPageManager: r.WebPageManager || '',
+        webManagerContact: r.WebManagerContact || '',
+        notes: r.WebPlusNotes || ''
+      },
+      cfoManage: {
+        cfoActive: r.CFOActive || 'N',
+        cfoCompanyName: r.CFOCompanyName || '',
+        cfoAddress: r.CFOAddress || '',
+        cfoTel: r.CFOTel || '',
+        cfoRepName: r.CFORepName || '',
+        cfoRepTel: r.CFORepTel || '',
+        cfoRepEmail: r.CFORepEmail || '',
+        cfoVendorId: r.CFOVendorID || '',
+        notes: r.CFONotes || ''
+      },
+      easyPay: {
+        easyPayActive: r.EasyPayActive || 'N',
+        finesPaidFirst: r.FinesPaidFirst || 'N',
+        residentPaysCharges: r.ResidentPaysCharges || 'N',
+        achActive: r.ACHActive || 'N',
+        notes: r.EasyPayNotes || ''
+      },
+      estoppel: {
+        residentEstoppelFee: r.ResidentEstoppelFee || 300.00,
+        letterCode: r.EstoppelLetterCode || '99',
+        paidDirectlyToMgtCo: r.PaidDirectlyToMgtCo || 'NO',
+        payableToHoaSentToMgt: r.PayableToHoaSentToMgt || 'NO',
+        transferWorkingCapitalFee: r.TransferWorkingCapitalFee || 63.00,
+        notes: r.EstoppelNotes || ''
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching system settings:', err);
+    res.status(500).json({ error: 'Failed to fetch system settings', details: err.message });
+  }
+});
+
+app.put('/api/settings/system', async (req, res) => {
+  try {
+    const { printing={}, numbering={}, streetNames={}, webPlus={}, cfoManage={}, easyPay={}, estoppel={} } = req.body;
+
+    await db.query(`
+      UPDATE SystemSettings SET
+        PrintingMode=?, PrinterName=?, WebPrinterID=?, NetworkAddress=?, PrintingNotes=?,
+        ResidentStartingAcct=?, VendorStartingAcct=?, NumberingNotes=?,
+        StreetNamesList=?, DefaultCity=?, DefaultState=?, DefaultZip=?, StreetNamesNotes=?,
+        WebPlusActive=?, WebPageIPName=?, WebPageManager=?, WebManagerContact=?, WebPlusNotes=?,
+        CFOActive=?, CFOCompanyName=?, CFOAddress=?, CFOTel=?, CFORepName=?, CFORepTel=?, CFORepEmail=?, CFOVendorID=?, CFONotes=?,
+        EasyPayActive=?, FinesPaidFirst=?, ResidentPaysCharges=?, ACHActive=?, EasyPayNotes=?,
+        ResidentEstoppelFee=?, EstoppelLetterCode=?, PaidDirectlyToMgtCo=?, PayableToHoaSentToMgt=?, TransferWorkingCapitalFee=?, EstoppelNotes=?,
+        TimeStampUpdated=NOW()
+      WHERE SystemSettingsID=1
+    `, [
+      printing.printingMode||'Local', printing.printerName||'', printing.webPrinterId||'', printing.networkAddress||'', printing.notes||'',
+      numbering.residentStartingAcct||'', numbering.vendorStartingAcct||'', numbering.notes||'',
+      streetNames.streetNames||'', streetNames.defaultCity||'', streetNames.defaultState||'', streetNames.defaultZip||'', streetNames.notes||'',
+      webPlus.webPlusActive||'N', webPlus.webPageIpName||'', webPlus.webPageManager||'', webPlus.webManagerContact||'', webPlus.notes||'',
+      cfoManage.cfoActive||'N', cfoManage.cfoCompanyName||'', cfoManage.cfoAddress||'', cfoManage.cfoTel||'', cfoManage.cfoRepName||'', cfoManage.cfoRepTel||'', cfoManage.cfoRepEmail||'', cfoManage.cfoVendorId||'', cfoManage.notes||'',
+      easyPay.easyPayActive||'N', easyPay.finesPaidFirst||'N', easyPay.residentPaysCharges||'N', easyPay.achActive||'N', easyPay.notes||'',
+      estoppel.residentEstoppelFee||300.00, estoppel.letterCode||'99', estoppel.paidDirectlyToMgtCo||'NO', estoppel.payableToHoaSentToMgt||'NO', estoppel.transferWorkingCapitalFee||63.00, estoppel.notes||''
+    ]);
+
+    res.json({ success: true, message: 'System settings saved successfully' });
+  } catch (err) {
+    console.error('Error saving system settings:', err);
+    res.status(500).json({ error: 'Failed to save system settings', details: err.message });
+  }
+});
+
+/* ===========================================================
+   8. SETTINGS: DUES PROGRAMMING
+   =========================================================== */
+
+app.get('/api/settings/dues', async (req, res) => {
+  try {
+    const [progRows] = await db.query(`SELECT * FROM DuesProgramming`);
+    const [rateRows] = await db.query(`SELECT * FROM DuesRates`);
+
+    const annualProg = progRows.find(p => p.SectionType === 'annualDues') || {};
+    const specialProg = progRows.find(p => p.SectionType === 'specialAssessment') || {};
+
+    const buildRatesObj = (section) => {
+      const filtered = rateRows.filter(r => r.SectionType === section);
+      const result = {};
+      for (const r of filtered) {
+        result[r.RateType] = { current: r.CurrentRate, next: r.NextRate };
+      }
+      return result;
+    };
+
+    res.json({
+      success: true,
+      annualDues: {
+        paymentFrequency: annualProg.PaymentFrequency || 'Annually',
+        dueDate: annualProg.DueDate || '',
+        rates: buildRatesObj('annualDues')
+      },
+      specialAssessment: {
+        paymentFrequency: specialProg.PaymentFrequency || 'Annually',
+        dueDate: specialProg.DueDate || '',
+        rates: buildRatesObj('specialAssessment')
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching dues settings:', err);
+    res.status(500).json({ error: 'Failed to fetch dues settings', details: err.message });
+  }
+});
+
+app.put('/api/settings/dues', async (req, res) => {
+  try {
+    const { annualDues={}, specialAssessment={} } = req.body;
+
+    if (annualDues.paymentFrequency || annualDues.dueDate) {
+      await db.query(`UPDATE DuesProgramming SET PaymentFrequency=?, DueDate=?, TimeStampUpdated=NOW() WHERE SectionType='annualDues'`,
+        [annualDues.paymentFrequency||'Annually', annualDues.dueDate||'']);
+    }
+    if (specialAssessment.paymentFrequency || specialAssessment.dueDate) {
+      await db.query(`UPDATE DuesProgramming SET PaymentFrequency=?, DueDate=?, TimeStampUpdated=NOW() WHERE SectionType='specialAssessment'`,
+        [specialAssessment.paymentFrequency||'Annually', specialAssessment.dueDate||'']);
+    }
+
+    if (annualDues.rates) {
+      for (const [rateType, vals] of Object.entries(annualDues.rates)) {
+        await db.query(`UPDATE DuesRates SET CurrentRate=?, NextRate=? WHERE SectionType='annualDues' AND RateType=?`,
+          [vals.current||0, vals.next||0, rateType]);
+      }
+    }
+    if (specialAssessment.rates) {
+      for (const [rateType, vals] of Object.entries(specialAssessment.rates)) {
+        await db.query(`UPDATE DuesRates SET CurrentRate=?, NextRate=? WHERE SectionType='specialAssessment' AND RateType=?`,
+          [vals.current||0, vals.next||0, rateType]);
+      }
+    }
+
+    res.json({ success: true, message: 'Dues programming saved successfully' });
+  } catch (err) {
+    console.error('Error saving dues settings:', err);
+    res.status(500).json({ error: 'Failed to save dues settings', details: err.message });
+  }
+});
+
+/* ===========================================================
+   9. SETTINGS: FINES & LATE FEES
+   =========================================================== */
+
+app.get('/api/settings/fines', async (req, res) => {
+  try {
+    const [cfgRows] = await db.query(`SELECT * FROM FinesConfig LIMIT 1`);
+    const [typeRows] = await db.query(`SELECT * FROM FineTypesList ORDER BY SortOrder ASC`);
+    const [ruleRows] = await db.query(`SELECT * FROM LetterRules`);
+    const [timeRows] = await db.query(`SELECT * FROM TimingSchedule LIMIT 1`);
+
+    const cfg = cfgRows[0] || {};
+    const timing = timeRows[0] || {};
+
+    const mapRule = (type) => {
+      const r = ruleRows.find(item => item.RuleType === type) || {};
+      return {
+        letter1Amount: r.Letter1Amount || 0,
+        letter1PercentYN: r.Letter1PercentYN || 'N',
+        letter1Percent: r.Letter1Percent || 0,
+        letter1GL: r.Letter1GL || '',
+        letter2Amount: r.Letter2Amount || 0,
+        letter2PercentYN: r.Letter2PercentYN || 'N',
+        letter2Percent: r.Letter2Percent || 0,
+        letter2GL: r.Letter2GL || '',
+        finalAmount: r.FinalAmount || 0,
+        finalGL: r.FinalGL || ''
+      };
+    };
+
+    const timedRows = typeRows.filter(r => r.FineCategory === 'timed').map(r => [
+      r.LetterCode, r.ViolationType, r.GLCode, String(r.FineAmount), r.ActiveFlag
+    ]);
+    const immediateRows = typeRows.filter(r => r.FineCategory === 'immediate').map(r => [
+      r.LetterCode, r.ViolationType, r.GLCode, String(r.FineAmount), r.ActiveFlag
+    ]);
+
+    res.json({
+      success: true,
+      restartDays: cfg.RestartDays || 0,
+      fineAmount: cfg.FineAmount || 0,
+      timedRows,
+      immediateRows,
+      arrearsRules: mapRule('arrearsRules'),
+      annualDuesRules: mapRule('annualDuesLateFees'),
+      specialAssmtRules: mapRule('specialAssessmentLateFees'),
+      timingSchedule: {
+        warning1Days: timing.Warning1Days || 30,
+        warning2Days: timing.Warning2Days || 60,
+        collection1Days: timing.Collection1Days || 90,
+        collection2Days: timing.Collection2Days || 120,
+        finalDays: timing.FinalDays || 150
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching fines settings:', err);
+    res.status(500).json({ error: 'Failed to fetch fines settings', details: err.message });
+  }
+});
+
+app.put('/api/settings/fines', async (req, res) => {
+  try {
+    const data = req.body;
+
+    if (data.restartDays !== undefined || data.fineAmount !== undefined) {
+      await db.query(`UPDATE FinesConfig SET RestartDays=?, FineAmount=?, TimeStampUpdated=NOW() WHERE FinesConfigID=1`,
+        [data.restartDays||0, data.fineAmount||0]);
+    }
+
+    if (data.timingSchedule) {
+      const t = data.timingSchedule;
+      await db.query(`UPDATE TimingSchedule SET Warning1Days=?, Warning2Days=?, Collection1Days=?, Collection2Days=?, FinalDays=?, TimeStampUpdated=NOW() WHERE TimingScheduleID=1`,
+        [t.warning1Days||30, t.warning2Days||60, t.collection1Days||90, t.collection2Days||120, t.finalDays||150]);
+    }
+
+    const saveRules = async (ruleType, rulesObj) => {
+      if (!rulesObj) return;
+      await db.query(`
+        UPDATE LetterRules SET
+          Letter1Amount=?, Letter1PercentYN=?, Letter1Percent=?, Letter1GL=?,
+          Letter2Amount=?, Letter2PercentYN=?, Letter2Percent=?, Letter2GL=?,
+          FinalAmount=?, FinalGL=?, TimeStampUpdated=NOW()
+        WHERE RuleType=?
+      `, [
+        rulesObj.letter1Amount||0, rulesObj.letter1PercentYN||'N', rulesObj.letter1Percent||0, rulesObj.letter1GL||'',
+        rulesObj.letter2Amount||0, rulesObj.letter2PercentYN||'N', rulesObj.letter2Percent||0, rulesObj.letter2GL||'',
+        rulesObj.finalAmount||0, rulesObj.finalGL||'', ruleType
+      ]);
+    };
+
+    await saveRules('arrearsRules', data.arrearsRules);
+    await saveRules('annualDuesLateFees', data.annualDuesRules);
+    await saveRules('specialAssessmentLateFees', data.specialAssmtRules);
+
+    res.json({ success: true, message: 'Fines and late fees settings saved successfully' });
+  } catch (err) {
+    console.error('Error saving fines settings:', err);
+    res.status(500).json({ error: 'Failed to save fines settings', details: err.message });
+  }
+});
+
+/* ===========================================================
+   10. SETTINGS: GL MAPPING
+   =========================================================== */
+
+app.get('/api/settings/gl-mapping', async (req, res) => {
+  try {
+    const [rows] = await db.query(`SELECT * FROM GLAccounts WHERE ActiveFlag='Y' ORDER BY SortOrder ASC`);
+    const mapped = rows.map(r => ({
+      id: r.GLAccountID,
+      glNumber: r.GLNumber,
+      glName: r.GLName,
+      sourceTable: r.SourceTable,
+      description: r.Description,
+      bankType: r.BankType,
+      bankId: r.BankID,
+      pc: r.PC,
+      parentGl: r.ParentGL,
+      consolidatedParentGl: r.ConsolidatedParentGL,
+      dc: r.DC,
+      ar: r.AR,
+      effectiveDate: r.EffectiveDate,
+      createdBy: r.CreatedBy,
+      createdDate: r.CreatedDate,
+      lastEditedBy: r.LastEditedBy,
+      systemLocked: Boolean(r.SystemLocked)
+    }));
+    res.json({ success: true, glAccounts: mapped });
+  } catch (err) {
+    console.error('Error fetching GL mapping:', err);
+    res.status(500).json({ error: 'Failed to fetch GL mapping', details: err.message });
+  }
+});
+
+app.put('/api/settings/gl-mapping', async (req, res) => {
+  try {
+    const { glAccounts } = req.body;
+    if (Array.isArray(glAccounts)) {
+      for (const [idx, r] of glAccounts.entries()) {
+        if (r.id) {
+          await db.query(`
+            UPDATE GLAccounts SET
+              GLNumber=?, GLName=?, SourceTable=?, Description=?, BankType=?, BankID=?,
+              PC=?, ParentGL=?, ConsolidatedParentGL=?, DC=?, AR=?, EffectiveDate=?,
+              LastEditedBy=?, SystemLocked=?, SortOrder=?, TimeStampUpdated=NOW()
+            WHERE GLAccountID=?
+          `, [
+            r.glNumber||'', r.glName||'', r.sourceTable||'', r.description||'', r.bankType||'', r.bankId||'',
+            r.pc||'P', r.parentGl||'', r.consolidatedParentGl||'', r.dc||'D', r.ar||'A', r.effectiveDate||'',
+            r.lastEditedBy||'SYSTEM', r.systemLocked ? 1 : 0, idx, r.id
+          ]);
+        }
+      }
+    }
+    res.json({ success: true, message: 'GL Accounts updated successfully' });
+  } catch (err) {
+    console.error('Error updating GL mapping:', err);
+    res.status(500).json({ error: 'Failed to update GL mapping', details: err.message });
   }
 });
 
