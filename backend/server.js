@@ -505,21 +505,83 @@ app.get('/api/settings/hoa-profile', async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT 
-        ProfileID as id,
-        HOAName as hoaName,
-        HOALicenseNumber as hoaLicense,
-        AddressLine1 as address1,
-        AddressLine2 as address2,
-        City as city,
-        StateCode as state,
-        ZipCode as zip,
-        ContactName as contactName,
-        ContactPhone as contactPhone,
-        ContactEmail as contactEmail
+        ProfileID,
+        MgtCoClientID,
+        HOALicenseNumber,
+        HOAName,
+        HOABillingName,
+        HOALetterName,
+        HOAAddress,
+        HOAEmail,
+        ContactName,
+        ContactPhone,
+        ContactEmail,
+        HOANotes,
+        LicenseStatus,
+        SubscriptionRenewalDate,
+        LicenseType,
+        LicenseSize,
+        ClientNotes,
+        SelfManaged,
+        MgtCoName,
+        MgtCoAddress,
+        MgtCoContactName,
+        MgtCoContactTel,
+        MgtCoContactEmail,
+        ClientRepresentative,
+        RepPhone,
+        RepEmail,
+        MgtCoLetterEmail,
+        MgtCoLetterPhone,
+        ManagementNotes
       FROM HOAProfile
       LIMIT 1
     `);
-    res.json(rows[0] || {});
+    
+    if (rows.length === 0) {
+      return res.json({
+        hoaProfile: {},
+        clientInfo: {},
+        management: {}
+      });
+    }
+
+    const r = rows[0];
+    res.json({
+      hoaProfile: {
+        hoaCorporateName: r.HOAName || '',
+        hoaBillingName: r.HOABillingName || '',
+        hoaLetterName: r.HOALetterName || '',
+        hoaAddress: r.HOAAddress || '',
+        hoaEmail: r.HOAEmail || '',
+        hoaContactName: r.ContactName || '',
+        hoaContactTel: r.ContactPhone || '',
+        hoaNotes: r.HOANotes || ''
+      },
+      clientInfo: {
+        clientId: r.MgtCoClientID || '',
+        licenseNumber: r.HOALicenseNumber || '',
+        licenseStatus: r.LicenseStatus || 'Active',
+        subscriptionRenewalDate: r.SubscriptionRenewalDate || '2026-12-31',
+        licenseType: r.LicenseType || 'Standard',
+        licenseSize: r.LicenseSize || '100',
+        clientNotes: r.ClientNotes || ''
+      },
+      management: {
+        selfManaged: r.SelfManaged || 'N',
+        mgtCoName: r.MgtCoName || '',
+        mgtCoAddress: r.MgtCoAddress || '',
+        mgtCoContactName: r.MgtCoContactName || '',
+        mgtCoContactTel: r.MgtCoContactTel || '',
+        mgtCoContactEmail: r.MgtCoContactEmail || '',
+        clientRepresentative: r.ClientRepresentative || '',
+        repTel: r.RepPhone || '',
+        repEmail: r.RepEmail || '',
+        mgtCoLetterEmail: r.MgtCoLetterEmail || '',
+        mgtCoLetterTel: r.MgtCoLetterPhone || '',
+        managementNotes: r.ManagementNotes || ''
+      }
+    });
   } catch (err) {
     console.error('Error fetching HOA profile:', err);
     res.status(500).json({ error: 'Failed to fetch HOA profile', details: err.message });
@@ -528,31 +590,75 @@ app.get('/api/settings/hoa-profile', async (req, res) => {
 
 app.put('/api/settings/hoa-profile', async (req, res) => {
   try {
-    const p = req.body;
+    const data = req.body;
+    const hp = data.hoaProfile || {};
+    const ci = data.clientInfo || {};
+    const mgt = data.management || {};
+
     await db.query(`
       UPDATE HOAProfile SET
         HOAName = ?,
-        AddressLine1 = ?,
-        AddressLine2 = ?,
-        City = ?,
-        StateCode = ?,
-        ZipCode = ?,
+        HOABillingName = ?,
+        HOALetterName = ?,
+        HOAAddress = ?,
+        HOAEmail = ?,
         ContactName = ?,
         ContactPhone = ?,
         ContactEmail = ?,
+        HOANotes = ?,
+        MgtCoClientID = ?,
+        HOALicenseNumber = ?,
+        LicenseStatus = ?,
+        SubscriptionRenewalDate = ?,
+        LicenseType = ?,
+        LicenseSize = ?,
+        ClientNotes = ?,
+        SelfManaged = ?,
+        MgtCoName = ?,
+        MgtCoAddress = ?,
+        MgtCoContactName = ?,
+        MgtCoContactTel = ?,
+        MgtCoContactEmail = ?,
+        ClientRepresentative = ?,
+        RepPhone = ?,
+        RepEmail = ?,
+        MgtCoLetterEmail = ?,
+        MgtCoLetterPhone = ?,
+        ManagementNotes = ?,
         TimeStampUpdated = NOW()
-      WHERE ProfileID = 1 OR MgtCoClientID = 'MGTCO-001'
+      WHERE ProfileID = 1 OR MgtCoClientID = ?
     `, [
-      p.hoaName || '',
-      p.address1 || '',
-      p.address2 || '',
-      p.city || '',
-      p.state || '',
-      p.zip || '',
-      p.contactName || '',
-      p.contactPhone || '',
-      p.contactEmail || ''
+      hp.hoaCorporateName || '',
+      hp.hoaBillingName || '',
+      hp.hoaLetterName || '',
+      hp.hoaAddress || '',
+      hp.hoaEmail || '',
+      hp.hoaContactName || '',
+      hp.hoaContactTel || '',
+      hp.hoaEmail || '',
+      hp.hoaNotes || '',
+      ci.clientId || '',
+      ci.licenseNumber || '',
+      ci.licenseStatus || 'Active',
+      ci.subscriptionRenewalDate || '',
+      ci.licenseType || '',
+      ci.licenseSize || '',
+      ci.clientNotes || '',
+      mgt.selfManaged || 'N',
+      mgt.mgtCoName || '',
+      mgt.mgtCoAddress || '',
+      mgt.mgtCoContactName || '',
+      mgt.mgtCoContactTel || '',
+      mgt.mgtCoContactEmail || '',
+      mgt.clientRepresentative || '',
+      mgt.repTel || '',
+      mgt.repEmail || '',
+      mgt.mgtCoLetterEmail || '',
+      mgt.mgtCoLetterTel || '',
+      mgt.managementNotes || '',
+      ci.clientId || 'MGTCO-001'
     ]);
+
     res.json({ success: true, message: 'HOA Profile updated successfully' });
   } catch (err) {
     console.error('Error updating HOA profile:', err);

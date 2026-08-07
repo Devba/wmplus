@@ -1,5 +1,5 @@
 
-
+import { API_BASE_URL } from '../../../config/api';
 
 /*
   HOA Profile persistence service
@@ -11,12 +11,11 @@
     server = Node/Express API
 */
 
-const PERSISTENCE_MODE = 'local';
+const PERSISTENCE_MODE = 'server';
 
 const STORAGE_KEY = 'wmplus-settings-hoa-profile';
 
-const SERVER_URL =
-  'http://localhost:3011/api/settings/hoa-profile';
+const SERVER_URL = `${API_BASE_URL}/settings/hoa-profile`;
 
 
 export async function loadHOAProfile() {
