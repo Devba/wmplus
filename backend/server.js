@@ -639,17 +639,17 @@ app.post('/api/ai-filter', async (req, res) => {
 
 Table: ResidentMaster
 Schema Fields:
-- acctNo (VARCHAR, Primary Key, resident account ID e.g., "RES-001")
-- lastName (VARCHAR, resident last name e.g., "Mitchell")
-- firstName (VARCHAR, resident first name e.g., "James")
-- residence (VARCHAR, street/residence address e.g., "8901 Palm Vista Cir")
-- city (VARCHAR, city name e.g., "Miami")
-- state (VARCHAR, 2-letter state code e.g., "FL", "NY", "CA", "TX")
-- zip (VARCHAR, zip/postal code e.g., "33156")
-- annualDuesRate (DECIMAL, annual dues amount e.g., 3600.00)
-- email (VARCHAR, email address e.g., "james@email.com")
-- phone (VARCHAR, primary phone number e.g., "305-555-3001")
-- status (VARCHAR, resident active status: "Active" or "Inactive")
+- acctNo (VARCHAR, Primary Key - Unique resident account identifier e.g., "RES-001")
+- lastName (VARCHAR - Last name of the resident e.g., "Mitchell")
+- firstName (VARCHAR - First name of the resident e.g., "James")
+- residence (VARCHAR - Street address of the resident's home/residence e.g., "8901 Palm Vista Cir")
+- city (VARCHAR - City where the resident lives e.g., "Miami")
+- state (VARCHAR - 2-letter state code of the resident e.g., "FL", "NY", "CA", "TX")
+- zip (VARCHAR - Zip or postal code of the resident e.g., "33156")
+- annualDuesRate (DECIMAL - Annual dues rate, the total assessment amount due by the resident per year e.g., 3600.00)
+- email (VARCHAR - Email address of the resident e.g., "james@email.com")
+- phone (VARCHAR - Primary phone number of the resident e.g., "305-555-3001")
+- status (VARCHAR - Active/Inactive status of the resident: "Active" or "Inactive")
 
 Rules:
 1. Translate "estado de [Nombre]" (e.g., "estado de florida") to field: "state" and value to its 2-letter state code (e.g., "FL").
