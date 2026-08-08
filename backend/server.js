@@ -32,45 +32,103 @@ function parseDecimal(val, defaultVal = 0.00) {
 
 app.get('/api/residents', async (req, res) => {
   try {
-    const [rows] = await db.query(`
-      SELECT 
-        ResidentAccountID as account_id,
-        FirstName as first_name,
-        MiddleName as middle_name,
-        LastName as last_name,
-        DisplayName as display_name,
-        ResidenceAddress as residence_address,
-        BillingAddress as billing_address,
-        City as city,
-        StateCode as state_code,
-        ZipCode as zip_code,
-        PrimaryPhone as primary_phone,
-        PrimaryCell as primary_cell,
-        SecondaryCell as secondary_cell,
-        EmailAddress as email_address,
-        MoveInDate as move_in_date,
-        ResidentType as resident_type,
-        ActiveResidentFlag as active_flag,
-        ACHFlag as ach_flag,
-        AdditionalOwnerFirstName as addl_first_name,
-        AdditionalOwnerMiddleName as addl_middle_name,
-        AdditionalOwnerLastName as addl_last_name,
-        AdditionalOwnerEmail as addl_email,
-        AnnualDuesRate as annual_dues_rate,
-        AnnualDues as annual_dues,
-        SpecialAssessmentRate as special_assessment_rate,
-        SpecialAssessmentDues as special_assessment_dues,
-        NextYearAnnualDues as next_year_annual_dues,
-        NextYearSpecialAssmtDues as next_year_special_assmt_dues,
-        ResidentNotes as resident_notes
-      FROM ResidentMaster 
-      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
-      ORDER BY ResidentAccountID ASC
-    `);
-    res.json(rows);
+    const limit = 500;
+
+    const offset = Math.max(
+      Number.parseInt(req.query.offset, 10) || 0,
+      0
+    );
+
+    const search = String(req.query.search || '').trim();
+
+    let whereClause = `
+      (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+    `;
+
+    const params = [];
+
+    if (search) {
+      whereClause += `
+        AND (
+          LastName LIKE ?
+          OR FirstName LIKE ?
+          OR DisplayName LIKE ?
+          OR ResidentAccountID LIKE ?
+          OR ResidenceAddress LIKE ?
+        )
+      `;
+
+      const searchValue = `%${search}%`;
+
+      params.push(
+        searchValue,
+        searchValue,
+        searchValue,
+        searchValue,
+        searchValue
+      );
+    }
+
+    params.push(limit, offset);
+
+    const [rows] = await db.query(
+      `
+        SELECT
+          ResidentAccountID as account_id,
+          FirstName as first_name,
+          MiddleName as middle_name,
+          LastName as last_name,
+          DisplayName as display_name,
+          ResidenceAddress as residence_address,
+          BillingAddress as billing_address,
+          City as city,
+          StateCode as state_code,
+          ZipCode as zip_code,
+          PrimaryPhone as primary_phone,
+          PrimaryCell as primary_cell,
+          SecondaryCell as secondary_cell,
+          EmailAddress as email_address,
+          MoveInDate as move_in_date,
+          ResidentType as resident_type,
+          ActiveResidentFlag as active_flag,
+          ACHFlag as ach_flag,
+          AdditionalOwnerFirstName as addl_first_name,
+          AdditionalOwnerMiddleName as addl_middle_name,
+          AdditionalOwnerLastName as addl_last_name,
+          AdditionalOwnerEmail as addl_email,
+          AnnualDuesRate as annual_dues_rate,
+          AnnualDues as annual_dues,
+          SpecialAssessmentRate as special_assessment_rate,
+          SpecialAssessmentDues as special_assessment_dues,
+          NextYearAnnualDues as next_year_annual_dues,
+          NextYearSpecialAssmtDues as next_year_special_assmt_dues,
+          ResidentNotes as resident_notes
+        FROM ResidentMaster
+        WHERE ${whereClause}
+        ORDER BY
+          LastName ASC,
+          FirstName ASC,
+          ResidentAccountID ASC
+        LIMIT ? OFFSET ?
+      `,
+      params
+    );
+
+    res.json({
+      residents: rows,
+      offset,
+      limit,
+      hasMore: rows.length === limit,
+      search
+    });
+
   } catch (err) {
     console.error('Error fetching residents:', err);
-    res.status(500).json({ error: 'Failed to fetch residents', details: err.message });
+
+    res.status(500).json({
+      error: 'Failed to fetch residents',
+      details: err.message
+    });
   }
 });
 
@@ -370,31 +428,137 @@ app.delete('/api/vendors/:vendor_id', async (req, res) => {
 app.get('/api/check-register', async (req, res) => {
   try {
     const [rows] = await db.query(`
-      SELECT 
-        CheckTransactionNumber as check_txn_num,
-        CheckNumber as check_number,
-        GLAccountName as gl_name,
-        Amount as amount,
-        DateCheckIssued as date_issued,
-        DateCheckCleared as date_cleared,
-        MonthCleared as month_cleared,
-        GLNumber as gl_number,
-        VendorResidentID as payee_id,
-        VendorInvoiceNumber as invoice_num,
-        VendorInvoiceDate as invoice_date,
-        VendorInvoiceAmount as invoice_amount,
-        CheckNotation as note,
-        BankAccount as bank_account,
-        BankAccountID as bank_account_id,
-        Status as status
-      FROM CheckRegister
-      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
-      ORDER BY DateCheckIssued DESC, CheckNumber DESC
+      SELECT
+        cr.CheckTransactionNumber AS check_txn_num,
+        cr.CheckNumber AS check_number,
+        COALESCE(
+          v.VendorName,
+          r.DisplayName,
+          mc.ManagementCompanyName,
+          cr.VendorResidentID
+        ) AS payee_name,
+        cr.GLAccountName AS gl_name,
+        cr.Amount AS amount,
+        cr.DateCheckIssued AS date_issued,
+        cr.DateCheckCleared AS date_cleared,
+        cr.MonthCleared AS month_cleared,
+        cr.GLNumber AS gl_number,
+        cr.VendorResidentID AS payee_id,
+        cr.VendorInvoiceNumber AS invoice_num,
+        cr.VendorInvoiceDate AS invoice_date,
+        cr.VendorInvoiceAmount AS invoice_amount,
+        cr.CheckNotation AS note,
+        cr.BankAccount AS bank_account,
+        cr.BankAccountID AS bank_account_id,
+        CONCAT(ba.BankName, ' - ', ba.BankID) AS bank_account_display,
+        cr.Status AS status
+      FROM CheckRegister cr
+
+      LEFT JOIN VendorMaster v
+        ON v.VendorID = cr.VendorResidentID
+
+      LEFT JOIN ResidentMaster r
+        ON r.ResidentAccountID = cr.VendorResidentID
+
+      LEFT JOIN ManagementCompanyClient mc
+        ON mc.MgtCoClientID = cr.VendorResidentID
+
+      LEFT JOIN BankAccount ba
+      ON ba.BankAccountID = cr.BankAccountID
+
+      WHERE cr.DeletedFlag IS NULL
+         OR cr.DeletedFlag != 'Y'
+
+      ORDER BY
+        cr.DateCheckIssued DESC,
+        cr.CheckNumber DESC
     `);
+
     res.json(rows);
+
   } catch (err) {
     console.error('Error fetching checks:', err);
-    res.status(500).json({ error: 'Failed to fetch check register', details: err.message });
+
+    res.status(500).json({
+      error: 'Failed to fetch check register',
+      details: err.message
+    });
+  }
+});
+
+app.get('/api/check-register/next-check-number', async (req, res) => {
+  try {
+    const bankAccountId = Number(req.query.bankAccountId);
+
+    if (!bankAccountId) {
+      return res.status(400).json({
+        error: 'bankAccountId is required'
+      });
+    }
+
+    const [bankRows] = await db.query(
+      `
+        SELECT
+          BankAccountID,
+          CheckMode,
+          StartCheckNumber
+        FROM BankAccount
+        WHERE BankAccountID = ?
+        LIMIT 1
+      `,
+      [bankAccountId]
+    );
+
+    if (bankRows.length === 0) {
+      return res.status(404).json({
+        error: 'Bank account not found'
+      });
+    }
+
+    const bank = bankRows[0];
+
+    if (String(bank.CheckMode || '').toLowerCase() !== 'system') {
+      return res.json({
+        checkMode: bank.CheckMode || 'None',
+        nextCheckNumber: ''
+      });
+    }
+
+    const [checkRows] = await db.query(
+      `
+        SELECT MAX(CAST(CheckNumber AS UNSIGNED)) AS maxCheckNumber
+        FROM CheckRegister
+        WHERE BankAccountID = ?
+          AND CheckNumber REGEXP '^[0-9]+$'
+      `,
+      [bankAccountId]
+    );
+
+    const startCheckNumber =
+      Number(bank.StartCheckNumber) || 1;
+
+    const maxCheckNumber =
+      Number(checkRows[0]?.maxCheckNumber) || 0;
+
+    const nextCheckNumber =
+      maxCheckNumber >= startCheckNumber
+        ? maxCheckNumber + 1
+        : startCheckNumber;
+
+    res.json({
+      checkMode: bank.CheckMode,
+      nextCheckNumber: String(nextCheckNumber)
+    });
+  } catch (err) {
+    console.error(
+      'Error determining next check number:',
+      err
+    );
+
+    res.status(500).json({
+      error: 'Failed to determine next check number',
+      details: err.message
+    });
   }
 });
 
@@ -440,25 +604,39 @@ app.post('/api/check-register', async (req, res) => {
 app.get('/api/deposit-register', async (req, res) => {
   try {
     const [rows] = await db.query(`
-      SELECT 
-        DepositTransactionNumber as deposit_txn_num,
-        DepositorAccountName as payer_name,
-        Amount as amount,
-        BankAccountName as bank_account_name,
-        BankAccountID as bank_account_id,
-        GLAccountName as gl_name,
-        GLNumber as gl_number,
-        DateDeposited as date_deposited,
-        DateCleared as date_cleared,
-        MonthCleared as month_cleared,
-        ResidentAccountID as resident_id,
-        VendorID as vendor_id,
-        DepositNotation as note,
-        Status as status
-      FROM DepositRegister
-      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
-      ORDER BY DateDeposited DESC
-    `);
+  SELECT
+    dr.DepositTransactionNumber AS deposit_txn_num,
+    dr.DepositorAccountName AS payer_name,
+    dr.Amount AS amount,
+    dr.BankAccountName AS bank_account_name,
+    dr.BankAccountID AS bank_account_id,
+    CONCAT(
+      ba.BankName,
+      ' - ',
+      dr.BankAccountName,
+      ' - ',
+      dr.BankAccountID
+    ) AS bank_account_display,
+    dr.GLAccountName AS gl_name,
+    dr.GLNumber AS gl_number,
+    dr.DateDeposited AS date_deposited,
+    dr.DateCleared AS date_cleared,
+    dr.MonthCleared AS month_cleared,
+    dr.ResidentAccountID AS resident_id,
+    dr.VendorID AS vendor_id,
+    dr.DepositNotation AS note,
+    dr.Status AS status
+  FROM DepositRegister dr
+
+  LEFT JOIN BankAccount ba
+    ON ba.BankAccountID = dr.BankAccountID
+
+  WHERE dr.DeletedFlag IS NULL
+     OR dr.DeletedFlag != 'Y'
+
+  ORDER BY dr.DateDeposited DESC
+`);
+
     res.json(rows);
   } catch (err) {
     console.error('Error fetching deposits:', err);
