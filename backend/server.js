@@ -422,7 +422,7 @@ app.delete('/api/vendors/:vendor_id', async (req, res) => {
 });
 
 /* ===========================================================
-   3. CHECK REGISTER (CheckRegister)
+   3. CHECK REGISTER (CheckRegister) & ACID TRANSACTION POSTING
    =========================================================== */
 
 app.get('/api/check-register', async (req, res) => {
@@ -562,22 +562,44 @@ app.get('/api/check-register/next-check-number', async (req, res) => {
   }
 });
 
-app.post('/api/check-register', async (req, res) => {
+app.get('/api/check-register/next-check-number', async (req, res) => {
   try {
+    const bankAccountId = req.query.bankAccountId || 1;
+    const [bankRows] = await db.query('SELECT StartCheckNumber FROM BankAccount WHERE BankAccountID = ?', [bankAccountId]);
+    const [checkRows] = await db.query('SELECT MAX(CAST(CheckNumber AS UNSIGNED)) as maxCheck FROM CheckRegister WHERE BankAccountID = ?', [bankAccountId]);
+
+    const startCheck = bankRows[0]?.StartCheckNumber ? parseInt(bankRows[0].StartCheckNumber, 10) : 1001;
+    const maxCheck = checkRows[0]?.maxCheck ? parseInt(checkRows[0].maxCheck, 10) : 0;
+
+    const nextCheck = Math.max(startCheck, maxCheck + 1);
+    res.json({ success: true, nextCheckNumber: String(nextCheck) });
+  } catch (err) {
+    console.error('Error getting next check number:', err);
+    res.status(500).json({ error: 'Failed to get next check number', details: err.message });
+  }
+});
+
+app.post('/api/check-register', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
     const c = req.body;
-    const txnNum = `CHK-${Date.now()}`;
-    await db.query(`
+    const txnNum = c.check_txn_num || `CHK-${Date.now()}`;
+    const bankAccountId = c.bank_account_id || 1;
+    const amount = parseFloat(c.amount) || 0.00;
+
+    await connection.query(`
       INSERT INTO CheckRegister (
         CheckTransactionNumber, CheckNumber, GLAccountName, Amount, DateCheckIssued,
         DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
         VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, Status,
-        MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Issued', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+        DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       txnNum,
       c.check_number || '',
       c.gl_name || '',
-      c.amount || 0.00,
+      amount,
       c.date_issued || new Date().toISOString().slice(0, 10),
       c.date_cleared || null,
       c.month_cleared || null,
@@ -585,20 +607,36 @@ app.post('/api/check-register', async (req, res) => {
       c.payee_id || '',
       c.invoice_num || '',
       c.invoice_date || null,
-      c.invoice_amount || c.amount || 0.00,
+      c.invoice_amount || amount,
       c.note || '',
       c.bank_account || 'Operating 101',
-      c.bank_account_id || 1
+      bankAccountId
     ]);
-    res.status(201).json({ success: true, check_txn_num: txnNum });
+
+    // Real-time Bank Cash Flow update (decrease balance)
+    await connection.query(`
+      UPDATE BankAccount 
+      SET StartingBalance = StartingBalance - ?, TimeStampUpdated = NOW()
+      WHERE BankAccountID = ?
+    `, [amount, bankAccountId]);
+
+    await connection.commit();
+    res.status(201).json({
+      success: true,
+      check_txn_num: txnNum,
+      message: 'Check posted and Bank Cash Flow updated successfully'
+    });
   } catch (err) {
-    console.error('Error inserting check:', err);
-    res.status(500).json({ error: 'Failed to insert check', details: err.message });
+    await connection.rollback();
+    console.error('Error posting check transaction:', err);
+    res.status(500).json({ error: 'Failed to post check transaction', details: err.message });
+  } finally {
+    connection.release();
   }
 });
 
 /* ===========================================================
-   4. DEPOSIT REGISTER (DepositRegister)
+   4. DEPOSIT REGISTER (DepositRegister) & ACID TRANSACTION POSTING
    =========================================================== */
 
 app.get('/api/deposit-register', async (req, res) => {
@@ -634,9 +672,8 @@ app.get('/api/deposit-register', async (req, res) => {
   WHERE dr.DeletedFlag IS NULL
      OR dr.DeletedFlag != 'Y'
 
-  ORDER BY dr.DateDeposited DESC
+  ORDER BY dr.DateDeposited DESC, dr.DepositTransactionNumber DESC
 `);
-
     res.json(rows);
   } catch (err) {
     console.error('Error fetching deposits:', err);
@@ -645,35 +682,60 @@ app.get('/api/deposit-register', async (req, res) => {
 });
 
 app.post('/api/deposit-register', async (req, res) => {
+  const connection = await db.getConnection();
   try {
+    await connection.beginTransaction();
     const d = req.body;
-    const txnNum = `DEP-${Date.now()}`;
-    await db.query(`
+    const txnNum = d.deposit_txn_num || `DEP-${Date.now()}`;
+    const bankAccountId = d.bank_account_id || 1;
+    const amount = parseFloat(d.amount) || 0.00;
+
+    await connection.query(`
       INSERT INTO DepositRegister (
         DepositTransactionNumber, DepositorAccountName, Amount, BankAccountName,
-        BankAccountID, GLAccountName, GLNumber, DateDeposited, DateCleared, MonthCleared,
-        ResidentAccountID, DepositNotation, Status, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Posted', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+        BankAccountID, GLAccountName, GLNumber, DateDeposited, DateCleared,
+        MonthCleared, ResidentAccountID, VendorID, DepositNotation, Status,
+        DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Posted', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       txnNum,
       d.payer_name || '',
-      d.amount || 0.00,
+      amount,
       d.bank_account_name || 'Operating 101',
-      d.bank_account_id || 1,
-      d.gl_name || 'Maintenance Dues Income',
-      d.gl_number || 4010,
+      bankAccountId,
+      d.gl_name || '',
+      d.gl_number || 4000,
       d.date_deposited || new Date().toISOString().slice(0, 10),
       d.date_cleared || null,
       d.month_cleared || null,
       d.resident_id || '',
+      d.vendor_id || '',
       d.note || ''
     ]);
-    res.status(201).json({ success: true, deposit_txn_num: txnNum });
+
+    // Real-time Bank Cash Flow update (increase balance)
+    await connection.query(`
+      UPDATE BankAccount 
+      SET StartingBalance = StartingBalance + ?, TimeStampUpdated = NOW()
+      WHERE BankAccountID = ?
+    `, [amount, bankAccountId]);
+
+    await connection.commit();
+    res.status(201).json({
+      success: true,
+      deposit_txn_num: txnNum,
+      message: 'Deposit posted and Bank Cash Flow updated successfully'
+    });
   } catch (err) {
-    console.error('Error inserting deposit:', err);
-    res.status(500).json({ error: 'Failed to insert deposit', details: err.message });
+    await connection.rollback();
+    console.error('Error posting deposit transaction:', err);
+    res.status(500).json({ error: 'Failed to post deposit transaction', details: err.message });
+  } finally {
+    connection.release();
   }
 });
+
+
 
 /* ===========================================================
    5. SETTINGS: HOA PROFILE
