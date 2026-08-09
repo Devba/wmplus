@@ -431,12 +431,14 @@ app.get('/api/check-register', async (req, res) => {
       SELECT
         cr.CheckTransactionNumber AS check_txn_num,
         cr.CheckNumber AS check_number,
+
         COALESCE(
           v.VendorName,
           r.DisplayName,
           mc.ManagementCompanyName,
           cr.VendorResidentID
         ) AS payee_name,
+
         cr.GLAccountName AS gl_name,
         cr.Amount AS amount,
         cr.DateCheckIssued AS date_issued,
@@ -450,8 +452,17 @@ app.get('/api/check-register', async (req, res) => {
         cr.CheckNotation AS note,
         cr.BankAccount AS bank_account,
         cr.BankAccountID AS bank_account_id,
-        CONCAT(ba.BankName, ' - ', ba.BankID) AS bank_account_display,
+
+        CONCAT(
+          ba.BankName,
+          ' - ',
+          ba.BankType,
+          ' - ',
+          ba.BankID
+        ) AS bank_account_display,
+
         cr.Status AS status
+
       FROM CheckRegister cr
 
       LEFT JOIN VendorMaster v
@@ -464,7 +475,7 @@ app.get('/api/check-register', async (req, res) => {
         ON mc.MgtCoClientID = cr.VendorResidentID
 
       LEFT JOIN BankAccount ba
-      ON ba.BankAccountID = cr.BankAccountID
+        ON ba.BankAccountID = cr.BankAccountID
 
       WHERE cr.DeletedFlag IS NULL
          OR cr.DeletedFlag != 'Y'
