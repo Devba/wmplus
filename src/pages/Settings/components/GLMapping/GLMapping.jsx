@@ -2442,7 +2442,14 @@ const BANK_TYPES = [
 ];
 
 function cloneRows(rows) {
-  return rows.map((row) => ({ ...row }));
+  return rows.map((row) => ({
+    ...row,
+    useInCR: row.useInCR || 'N',
+    useInDP: row.useInDP || 'N',
+    useInAPR: row.useInAPR || 'N',
+    useInBDC: row.useInBDC || 'N',
+    useInXfer: row.useInXfer || 'N'
+  }));
 }
 
 function digitsOnly(value) {
@@ -2738,12 +2745,14 @@ function GLMapping({
       return;
     }
 
-    if (selectedRow.systemLocked === true) {
-      window.alert(
-        'This is a fixed system GL# row and cannot be edited.'
-      );
-      return;
-    }
+    
+
+    // if (selectedRow.systemLocked === true) {
+    //   window.alert(
+    //     'This is a fixed system GL# row and cannot be edited.'
+    //   );
+    //   return;
+    // }
 
     setEditSnapshot(cloneRows(currentRows));
     setEditingRowIndex(selectedRowIndex);
@@ -2765,11 +2774,17 @@ function GLMapping({
       return true;
     }
 
+    
+
     const row = currentRows[editingRowIndex];
 
     if (!row) {
       return true;
     }
+
+    if (row.systemLocked === true) {
+  return true;
+}
 
     const glNumber = String(row.glNumber || '').trim();
     const glName = String(row.glName || '').trim();
@@ -2878,6 +2893,13 @@ function GLMapping({
       glNumber: '',
       glName: '',
       sourceTable: selectedRow.sourceTable || '',
+
+      useInCR: 'N',
+      useInDP: 'N',
+      useInAPR: 'N',
+      useInBDC: 'N',
+      useInXfer: 'N',
+
       description: '',
       bankType: selectedRow.bankType || 'Operating',
       bankId:
@@ -3093,71 +3115,92 @@ function GLMapping({
   }
 
   async function saveCurrentSettings() {
-    if (!validateEditedRow()) {
-      return false;
-    }
+  if (!validateEditedRow()) {
+    return false;
+  }
 
-    setIsSaving(true);
-    setSaveError('');
-    setSaveMessage('');
+  setIsSaving(true);
+  setSaveError('');
+  setSaveMessage('');
 
-    try {
-      const now = todayString();
+  try {
+    const now = todayString();
 
-      const updatedRows = currentRows.map((row) => {
-        const nextRow = {
-          ...row,
-          effectiveDate: now,
-          lastEditedBy: 'USER',
-          createdBy: row.createdBy || 'USER',
-          createdDate: row.createdDate || now
-        };
+    // -----------------------------------------
+    // NORMAL SINGLE-ROW EDIT
+    // -----------------------------------------
+    if (editingRowIndex !== null) {
+      const editedRow = {
+        ...currentRows[editingRowIndex],
+        effectiveDate: now,
+        lastEditedBy: 'USER',
+        createdBy:
+          currentRows[editingRowIndex].createdBy ||
+          'USER',
+        createdDate:
+          currentRows[editingRowIndex].createdDate ||
+          now
+      };
 
-        delete nextRow.isNew;
+      delete editedRow.isNew;
 
-        return nextRow;
-      });
-
-      const completeData = {
+      const saveData = {
         expenseRows:
           activeSection === 'expense'
-            ? updatedRows
-            : expenseRows,
+            ? [editedRow]
+            : [],
         revenueRows:
           activeSection === 'revenue'
-            ? updatedRows
-            : revenueRows,
+            ? [editedRow]
+            : [],
         activeSection
       };
 
-      await saveGLMapping(completeData);
+      await saveGLMapping(saveData);
+
+      const updatedRows = [...currentRows];
+      updatedRows[editingRowIndex] = editedRow;
 
       if (activeSection === 'expense') {
         setExpenseRows(updatedRows);
       } else {
         setRevenueRows(updatedRows);
       }
-
-      setEditingRowIndex(null);
-      setEditSnapshot(null);
-      setHasUnsavedChanges(false);
-      setSaveMessage('Changes saved.');
-
-      return true;
-    } catch (error) {
-      console.error(error);
-
-      setSaveError(
-        error.message ||
-        'Unable to save GL Mapping settings.'
-      );
-
-      return false;
-    } finally {
-      setIsSaving(false);
     }
-  }
 
+    // -----------------------------------------
+    // OTHER TABLE-WIDE CHANGES
+    // Move Up / Move Down / etc.
+    // -----------------------------------------
+    else {
+      const completeData = {
+        expenseRows,
+        revenueRows,
+        activeSection
+      };
+
+      await saveGLMapping(completeData);
+    }
+
+    setEditingRowIndex(null);
+    setEditSnapshot(null);
+    setHasUnsavedChanges(false);
+    setSaveMessage('Changes saved.');
+
+    return true;
+  } catch (error) {
+    console.error(error);
+
+    setSaveError(
+      error.message ||
+      'Unable to save GL Mapping settings.'
+    );
+
+    return false;
+  } finally {
+    setIsSaving(false);
+  }
+}
   async function restoreLastSavedData() {
     const savedData = await loadGLMapping();
 
@@ -3459,6 +3502,11 @@ function GLMapping({
                 <th style={{ width: '120px' }}>Created By</th>
                 <th style={{ width: '130px' }}>Created Date</th>
                 <th style={{ width: '130px' }}>Last Edited By</th>
+                <th style={{ width: '90px' }}>Use in CR</th>
+                <th style={{ width: '90px' }}>Use in DP</th>
+                <th style={{ width: '90px' }}>Use in APR</th>
+                <th style={{ width: '90px' }}>Use in BDC</th>
+                <th style={{ width: '100px' }}>Use in XFER</th>
                 <th style={{ width: '180px' }}>
                   Table GL# Recorded
                 </th>
@@ -3471,6 +3519,19 @@ function GLMapping({
                   editingRowIndex === index &&
                   row.systemLocked !== true;
 
+                  
+
+                const usageEditable =
+                  editingRowIndex === index;
+
+                  const sourceTableName = String(
+                  row.sourceTable || ''
+                )
+                  .trim()
+                  .replace(/\s+/g, ' ')
+                  .toLowerCase();
+
+                
                 const availableBankIds =
                   bankIdOptions(row.bankType);
 
@@ -3657,6 +3718,115 @@ function GLMapping({
                         false,
                         true
                       )}
+                    </td>
+
+                    <td>
+                    <select
+                      value={row.useInCR || 'N'}
+                      disabled={!usageEditable}
+                      // disabled={
+                      //   !usageEditable ||
+                      //   sourceTableName !== 'check register'
+                      // }
+                      onChange={(event) =>
+                        updateRowField(
+                          index,
+                          'useInCR',
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="N">No</option>
+                      <option value="Y">Yes</option>
+                    </select>
+                  </td>
+
+                  <td>
+                    <select
+                      value={row.useInDP || 'N'}
+                      // DP
+                      disabled={!usageEditable}
+                      // disabled={
+                      //   !usageEditable ||
+                      //   sourceTableName !== 'deposit register'
+                      // }
+                      onChange={(event) =>
+                        updateRowField(
+                          index,
+                          'useInDP',
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="N">No</option>
+                      <option value="Y">Yes</option>
+                    </select>
+                  </td>
+
+                  <td>
+                    <select
+                      value={row.useInAPR || 'N'}
+                      // APR
+                      disabled={!usageEditable}
+                        // disabled={
+                        //   !usageEditable ||
+                        //   sourceTableName !== "ass'mt pay'mt register"
+                        // }
+                      onChange={(event) =>
+                        updateRowField(
+                          index,
+                          'useInAPR',
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="N">No</option>
+                      <option value="Y">Yes</option>
+                    </select>
+                  </td>
+
+                  <td>
+                      <select
+                        value={row.useInBDC || 'N'}
+                        // BDC
+                        disabled={!usageEditable}
+                      // disabled={
+                      //   !usageEditable ||
+                      //   sourceTableName !== 'bank debit & credits'
+                      // }
+                        onChange={(event) =>
+                          updateRowField(
+                            index,
+                            'useInBDC',
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="N">No</option>
+                        <option value="Y">Yes</option>
+                      </select>
+                    </td>
+
+                    <td>
+                      <select
+                        value={row.useInXfer || 'N'}
+                        // XFER
+                        disabled={!usageEditable}
+                      // disabled={
+                      //   !usageEditable ||
+                      //   sourceTableName !== '$$ xfer & intra account deposits'
+                      // }
+                        onChange={(event) =>
+                          updateRowField(
+                            index,
+                            'useInXfer',
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="N">No</option>
+                        <option value="Y">Yes</option>
+                      </select>
                     </td>
 
                     <td>

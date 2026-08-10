@@ -38,6 +38,28 @@ function parseMoney(value) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+
+const formatDateForDatabase = (dateText) => {
+  const value = String(dateText || '').trim();
+
+  if (!value) return null;
+
+  const parts = value.replace(/-/g, '/').split('/');
+
+  if (parts.length !== 3) return null;
+
+  const month = String(parts[0]).padStart(2, '0');
+  const day = String(parts[1]).padStart(2, '0');
+  const year = parts[2];
+
+  return `${year}-${month}-${day}`;
+};
+
+
+
+
+
+
 function formatDateForTransaction(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -82,14 +104,57 @@ useEffect(() => {
   loadBanks();
 }, []);
 
+
+
+
 useEffect(() => {
-  async function loadResidentsAndVendors() {
+  async function loadCRGLAccounts() {
     try {
-      const [residentResponse, vendorResponse] =
-        await Promise.all([
-          fetch(`${API_BASE_URL}/residents?offset=0`),
-          fetch(`${API_BASE_URL}/vendors`)
-        ]);
+      const response = await fetch(
+        `${API_BASE_URL}/gl-options?screen=CR`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Server returned ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      const rows = Array.isArray(data.glAccounts)
+        ? data.glAccounts
+        : Array.isArray(data)
+          ? data
+          : [];
+
+      setServerGLAccounts(
+        rows.map((gl) => ({
+          bankId: String(gl.bankId || ''),
+          category: gl.glName || '',
+          glNumber: String(gl.glNumber || '')
+        }))
+      );
+    } catch (error) {
+      console.error(
+        'Error loading Check Register GL options:',
+        error
+      );
+
+      setServerGLAccounts([]);
+    }
+  }
+
+  loadCRGLAccounts();
+}, []);
+
+
+useEffect(() => {
+  async function loadResidents() {
+    try {
+      const residentResponse = await fetch(
+        `${API_BASE_URL}/residents?offset=0`
+      );
 
       if (!residentResponse.ok) {
         throw new Error(
@@ -97,54 +162,73 @@ useEffect(() => {
         );
       }
 
+      const residentData = await residentResponse.json();
+      const residentRows = residentData.residents || [];
+
+      setResidentOffset(residentData.offset || 0);
+      setResidentHasMore(Boolean(residentData.hasMore));
+
+      const loadedResidents = residentRows.map((resident) => ({
+        id: String(resident.account_id),
+
+        lastName:
+          resident.last_name ||
+          resident.display_name ||
+          resident.account_id ||
+          '',
+
+        fullName:
+          resident.display_name ||
+          `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
+
+        address: resident.residence_address || ''
+      }));
+
+      setResidents(loadedResidents);
+
+    } catch (error) {
+      console.error(
+        'Error loading residents:',
+        error
+      );
+
+      setResidents([]);
+    }
+  }
+
+  async function loadVendors() {
+    try {
+      const vendorResponse = await fetch(
+        `${API_BASE_URL}/vendors`
+      );
+
       if (!vendorResponse.ok) {
         throw new Error(
           `Vendors server returned ${vendorResponse.status}`
         );
       }
 
-      const residentData = await residentResponse.json();
       const vendorRows = await vendorResponse.json();
-
-      const residentRows = residentData.residents || [];
-
-      setResidentOffset(residentData.offset || 0);
-      setResidentHasMore(Boolean(residentData.hasMore));
-
-      const loadedResidents = residentRows
-  .map((resident) => ({
-    id: String(resident.account_id),
-    lastName:
-  resident.last_name ||
-  resident.display_name ||
-  resident.account_id ||
-  '',
-    fullName:
-      resident.display_name ||
-      `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
-    address: resident.residence_address || ''
-  }))
-  
 
       const loadedVendors = vendorRows.map((vendor) => ({
         id: String(vendor.vendor_id),
         name: vendor.vendor_name || ''
       }));
 
-      setResidents(loadedResidents);
       setVendors(loadedVendors);
+
     } catch (error) {
       console.error(
-        'Error loading residents/vendors:',
+        'Error loading vendors:',
         error
       );
 
-      setResidents([]);
       setVendors([]);
     }
   }
 
-  loadResidentsAndVendors();
+  loadResidents();
+  loadVendors();
 }, []);
 
 
@@ -193,12 +277,12 @@ const loadNextResidentChunk = async () => {
   }
 };
 
-const searchResidents = async (searchText) => {
+const searchResidents = async (searchText, sortMode = 'name') => {
   const trimmedSearch = String(searchText || '').trim();
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/residents?search=${encodeURIComponent(trimmedSearch)}&offset=0`
+      `${API_BASE_URL}/residents?search=${encodeURIComponent(trimmedSearch)}&offset=0&sort=${sortMode}`
     );
 
     if (!response.ok) {
@@ -258,7 +342,7 @@ const handleResidentAddressQueryChange = async (event) => {
   setResidentAddressQuery(value);
   setResidentAddressDropdownOpen(true);
 
-  await searchResidents(value);
+  await searchResidents(value, 'address');
 };
 
 const selectResidentFromAddressSearch = (resident) => {
@@ -287,6 +371,7 @@ const selectResidentFromAddressSearch = (resident) => {
 
   const [checkNumber, setCheckNumber] = useState('');
   const [checkNotation, setCheckNotation] = useState('');
+  const [serverGLAccounts, setServerGLAccounts] = useState([]);
   const [autoWithdrawal, setAutoWithdrawal] = useState(false);
 
   const [residentNameSearch, setResidentNameSearch] =
@@ -413,8 +498,8 @@ setGLAccounts(matchingGLAccounts);
 }, [selectedBank]);
 
   const availableGLAccounts = useMemo(
-  () => glAccounts,
-  [glAccounts]
+  () => serverGLAccounts,
+  [serverGLAccounts]
 );
 
   const bankBalance = selectedBank
@@ -684,63 +769,117 @@ setGLAccounts(matchingGLAccounts);
     setHelperEntityId('');
   };
 
-  const handleEnterCheck = () => {
-    if (!requiredFieldsComplete) return;
+const handleEnterCheck = async () => {
+  if (!requiredFieldsComplete) return;
 
-    const now = new Date();
+  const now = new Date();
 
-    const newCheck = {
-      checkNo: autoWithdrawal ? 'AW' : checkNumber,
-      payeeName: entityName,
-      amount: formatMoney(checkAmount),
+  const newCheck = {
+    checkNo: autoWithdrawal ? 'AW' : checkNumber,
+    payeeName: entityName,
+    amount: formatMoney(checkAmount),
 
-      dateIssued: '',
-      dateCleared: '',
-      monthCleared: '',
+    dateIssued: '',
+    dateCleared: '',
+    monthCleared: '',
 
-      glAccount: glCategory,
-      vendorOrResidentAcct: entityId,
+    glAccount: glCategory,
+    vendorOrResidentAcct: entityId,
 
-      vendorInvoiceNo,
-      vendorInvoiceDate,
-      vendorInvoiceAmount: vendorInvoiceAmount
-        ? formatMoney(vendorInvoiceAmount)
-        : '',
+    vendorInvoiceNo,
+    vendorInvoiceDate,
+    vendorInvoiceAmount: vendorInvoiceAmount
+      ? formatMoney(vendorInvoiceAmount)
+      : '',
 
-      checkNotation,
+    checkNotation,
 
-      bankAcct: bankId,
-      checkAllowed: 'Y',
-      glNo: glNumber,
+    bankAcct: bankId,
+    checkAllowed: 'Y',
+    glNo: glNumber,
 
-      transactionNo: formatDateForTransaction(now),
+    transactionNo: formatDateForTransaction(now),
 
-      escrowFlag:
-        selectedBank?.id === '301' ? 'Y' : 'N',
+    escrowFlag:
+      selectedBank?.id === '301' ? 'Y' : 'N',
 
-      bankAccount: selectedBank?.name || ''
-    };
+    bankAccount: selectedBank?.name || ''
+  };
 
-    const confirmed = window.confirm(
-      'Enter this new check?\n\n' +
-        `Payee: ${newCheck.payeeName}\n` +
-        `Amount: ${newCheck.amount}\n` +
-        `Bank: ${newCheck.bankAccount}\n` +
-        `GL: ${newCheck.glNo} - ${newCheck.glAccount}`
+  const confirmed = window.confirm(
+    'Enter this new check?\n\n' +
+      `Payee: ${newCheck.payeeName}\n` +
+      `Amount: ${newCheck.amount}\n` +
+      `Bank: ${newCheck.bankAccount}\n` +
+      `GL: ${newCheck.glNo} - ${newCheck.glAccount}`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/check-register`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          check_txn_num: newCheck.transactionNo,
+          check_number: newCheck.checkNo,
+          gl_name: newCheck.glAccount,
+          amount: parseMoney(checkAmount),
+          date_issued: null,
+          date_cleared: null,
+          month_cleared: null,
+          gl_number: newCheck.glNo,
+          payee_id: newCheck.vendorOrResidentAcct,
+          invoice_num: newCheck.vendorInvoiceNo,
+          invoice_date: formatDateForDatabase(
+            newCheck.vendorInvoiceDate
+          ),
+          invoice_amount: vendorInvoiceAmount
+            ? parseMoney(vendorInvoiceAmount)
+            : 0,
+          note: newCheck.checkNotation,
+          bank_account: newCheck.bankAccount,
+          bank_account_id: bankId
+        })
+      }
     );
 
-    if (!confirmed) return;
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result?.details ||
+        result?.error ||
+        `Server returned ${response.status}`
+      );
+    }
 
     if (typeof onAddCheck === 'function') {
       onAddCheck(newCheck);
     }
 
     window.alert(
-      'The check was added to the bottom of the Check Register.'
+      'The check was saved to the database and added to the Check Register.'
     );
 
     clearEntryForm();
-  };
+
+  } catch (error) {
+    console.error(
+      'Error saving check:',
+      error
+    );
+
+    window.alert(
+      'The check was NOT saved.\n\n' +
+      error.message
+    );
+  }
+};
 
   return (
     <div className="enter-check-uf">
@@ -782,9 +921,22 @@ setGLAccounts(matchingGLAccounts);
                 type="text"
                 inputMode="decimal"
                 value={checkAmount}
-                onChange={(event) =>
-                  setCheckAmount(event.target.value)
-                }
+                onChange={(event) => {
+                const value = event.target.value;
+
+                setCheckAmount(value);
+
+                setVendorInvoiceAmount((current) => {
+                  if (
+                    !current ||
+                    current === checkAmount
+                  ) {
+                    return value;
+                  }
+
+                  return current;
+                });
+              }}
               />
             </div>
           </label>
@@ -799,26 +951,41 @@ setGLAccounts(matchingGLAccounts);
             />
           </label>
 
-          <label className="enter-check-field">
-            <span>CHECK G/L ACCOUNT CATEGORY</span>
+<label className="enter-check-field">
+  <span>CHECK G/L ACCOUNT CATEGORY</span>
 
-            <select
-              value={glCategory}
-              onChange={handleGLChange}
-              disabled={!bankId}
-            >
-              <option value="">Select GL category</option>
+  {!bankId ? (
+    <select
+      value=""
+      onChange={() => {}}
+      onMouseDown={(event) => {
+        event.preventDefault();
 
-              {availableGLAccounts.map((gl) => (
-                <option
-                  key={`${gl.bankId}-${gl.glNumber}`}
-                  value={gl.category}
-                >
-                  {gl.category}
-                </option>
-              ))}
-            </select>
-          </label>
+        window.alert(
+          'Please select a Bank Account before choosing a G/L Account Category.'
+        );
+      }}
+    >
+      <option value="">Select GL category</option>
+    </select>
+  ) : (
+    <select
+      value={glCategory}
+      onChange={handleGLChange}
+    >
+      <option value="">Select GL category</option>
+
+      {availableGLAccounts.map((gl) => (
+        <option
+          key={`${gl.bankId}-${gl.glNumber}`}
+          value={gl.category}
+        >
+          {gl.category}
+        </option>
+      ))}
+    </select>
+  )}
+</label>
 
           <label className="enter-check-field">
             <span>Assigned GL#</span>
@@ -873,9 +1040,28 @@ setGLAccounts(matchingGLAccounts);
               type="text"
               placeholder="MM/DD/YYYY"
               value={vendorInvoiceDate}
-              onChange={(event) =>
-                setVendorInvoiceDate(event.target.value)
-              }
+ onChange={(event) => {
+  setVendorInvoiceDate(event.target.value);
+}}
+
+onBlur={(event) => {
+  let value = event.target.value
+    .trim()
+    .replace(/-/g, '/');
+
+  const parts = value.split('/');
+
+  if (parts.length === 2) {
+    const currentYear = new Date().getFullYear();
+
+    const month = String(parts[0]).padStart(2, '0');
+    const day = String(parts[1]).padStart(2, '0');
+
+    value = `${month}/${day}/${currentYear}`;
+  }
+
+  setVendorInvoiceDate(value);
+}}
             />
           </label>
 
@@ -1095,7 +1281,10 @@ setGLAccounts(matchingGLAccounts);
     type="text"
     value={residentAddressQuery}
     placeholder="Select resident address"
-    onFocus={() => setResidentAddressDropdownOpen(true)}
+    onFocus={async () => {
+  setResidentAddressDropdownOpen(true);
+  await searchResidents(residentAddressQuery, 'address');
+}}
     onChange={handleResidentAddressQueryChange}
     autoComplete="off"
   />

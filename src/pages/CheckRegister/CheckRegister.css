@@ -407,10 +407,10 @@
 }
 
 .checkreg-table .col-bank {
-  width: 140px;
+  width: 180px;
   min-width: 130px;
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .checkreg-table .col-allowed {
@@ -484,7 +484,7 @@
 }
 
 .checkreg-table col.c-bank {
-  width: 120px;
+  width: 180px;
 }
 
 .checkreg-table col.c-allowed {

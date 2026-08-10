@@ -41,6 +41,11 @@ app.get('/api/residents', async (req, res) => {
 
     const search = String(req.query.search || '').trim();
 
+    const sort =
+      String(req.query.sort || 'name').toLowerCase() === 'address'
+        ? 'address'
+        : 'name';
+
     let whereClause = `
       (DeletedFlag IS NULL OR DeletedFlag != 'Y')
     `;
@@ -48,26 +53,59 @@ app.get('/api/residents', async (req, res) => {
     const params = [];
 
     if (search) {
-      whereClause += `
-        AND (
-          LastName LIKE ?
-          OR FirstName LIKE ?
-          OR DisplayName LIKE ?
-          OR ResidentAccountID LIKE ?
-          OR ResidenceAddress LIKE ?
-        )
-      `;
-
       const searchValue = `%${search}%`;
 
-      params.push(
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue
-      );
+      if (sort === 'address') {
+        whereClause += `
+          AND ResidenceAddress LIKE ?
+        `;
+
+        params.push(searchValue);
+      } else {
+        whereClause += `
+          AND (
+            LastName LIKE ?
+            OR FirstName LIKE ?
+            OR DisplayName LIKE ?
+            OR ResidentAccountID LIKE ?
+            OR ResidenceAddress LIKE ?
+          )
+        `;
+
+        params.push(
+          searchValue,
+          searchValue,
+          searchValue,
+          searchValue,
+          searchValue
+        );
+      }
     }
+
+    const orderBy =
+      sort === 'address'
+        ? `
+          ORDER BY
+            CASE
+              WHEN TRIM(ResidenceAddress) REGEXP '^[0-9]+'
+              THEN CAST(
+                SUBSTRING_INDEX(
+                  TRIM(ResidenceAddress),
+                  ' ',
+                  1
+                ) AS UNSIGNED
+              )
+              ELSE 999999999
+            END ASC,
+            ResidenceAddress ASC,
+            ResidentAccountID ASC
+        `
+        : `
+          ORDER BY
+            LastName ASC,
+            FirstName ASC,
+            ResidentAccountID ASC
+        `;
 
     params.push(limit, offset);
 
@@ -105,10 +143,7 @@ app.get('/api/residents', async (req, res) => {
           ResidentNotes as resident_notes
         FROM ResidentMaster
         WHERE ${whereClause}
-        ORDER BY
-          LastName ASC,
-          FirstName ASC,
-          ResidentAccountID ASC
+        ${orderBy}
         LIMIT ? OFFSET ?
       `,
       params
@@ -119,7 +154,8 @@ app.get('/api/residents', async (req, res) => {
       offset,
       limit,
       hasMore: rows.length === limit,
-      search
+      search,
+      sort
     });
 
   } catch (err) {
@@ -481,8 +517,8 @@ app.get('/api/check-register', async (req, res) => {
          OR cr.DeletedFlag != 'Y'
 
       ORDER BY
-        cr.DateCheckIssued DESC,
-        cr.CheckNumber DESC
+         cr.DateCheckIssued ASC,
+         cr.CheckNumber ASC
     `);
 
     res.json(rows);
@@ -1662,7 +1698,12 @@ app.get('/api/settings/gl-mapping', async (req, res) => {
       createdBy: r.CreatedBy,
       createdDate: r.CreatedDate,
       lastEditedBy: r.LastEditedBy,
-      systemLocked: Boolean(r.SystemLocked)
+      systemLocked: Boolean(r.SystemLocked),
+      useInCR: r.UseInCR || 'N',
+      useInDP: r.UseInDP || 'N',
+      useInAPR: r.UseInAPR || 'N',
+      useInBDC: r.UseInBDC || 'N',
+      useInXFER: r.UseInXFER || 'N'
     }));
     res.json({ success: true, glAccounts: mapped });
   } catch (err) {
@@ -1679,14 +1720,50 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
         if (r.id) {
           await db.query(`
             UPDATE GLAccounts SET
-              GLNumber=?, GLName=?, SourceTable=?, Description=?, BankType=?, BankID=?,
-              PC=?, ParentGL=?, ConsolidatedParentGL=?, DC=?, AR=?, EffectiveDate=?,
-              LastEditedBy=?, SystemLocked=?, SortOrder=?, TimeStampUpdated=NOW()
-            WHERE GLAccountID=?
+            GLNumber=?,
+            GLName=?,
+            SourceTable=?,
+            Description=?,
+            BankType=?,
+            BankID=?,
+            PC=?,
+            ParentGL=?,
+            ConsolidatedParentGL=?,
+            DC=?,
+            AR=?,
+            EffectiveDate=?,
+            LastEditedBy=?,
+            SystemLocked=?,
+            UseInCR=?,
+            UseInDP=?,
+            UseInAPR=?,
+            UseInBDC=?,
+            UseInXFER=?,
+            SortOrder=?,
+            TimeStampUpdated=NOW()
+          WHERE GLAccountID=?
           `, [
-            r.glNumber||'', r.glName||'', r.sourceTable||'', r.description||'', r.bankType||'', r.bankId||'',
-            r.pc||'P', r.parentGl||'', r.consolidatedParentGl||'', r.dc||'D', r.ar||'A', r.effectiveDate||'',
-            r.lastEditedBy||'SYSTEM', r.systemLocked ? 1 : 0, idx, r.id
+            r.glNumber || '',
+            r.glName || '',
+            r.sourceTable || '',
+            r.description || '',
+            r.bankType || '',
+            r.bankId || '',
+            r.pc || 'P',
+            r.parentGl || '',
+            r.consolidatedParentGl || '',
+            r.dc || 'D',
+            r.ar || 'A',
+            r.effectiveDate || '',
+            r.lastEditedBy || 'SYSTEM',
+            r.systemLocked ? 1 : 0,
+            r.useInCR || 'N',
+            r.useInDP || 'N',
+            r.useInAPR || 'N',
+            r.useInBDC || 'N',
+            r.useInXFER || 'N',
+            idx,
+            r.id
           ]);
         }
       }
@@ -1697,6 +1774,76 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
     res.status(500).json({ error: 'Failed to update GL mapping', details: err.message });
   }
 });
+
+
+
+/* ===========================================================
+   GL OPTIONS FOR TRANSACTION ENTRY
+=========================================================== */
+app.get('/api/gl-options', async (req, res) => {
+  try {
+    const screen = String(req.query.screen || '')
+      .trim()
+      .toUpperCase();
+
+    const fieldMap = {
+      CR: 'UseInCR',
+      DP: 'UseInDP',
+      APR: 'UseInAPR',
+      BDC: 'UseInBDC',
+      XFER: 'UseInXFER'
+    };
+
+    const useField = fieldMap[screen];
+
+    if (!useField) {
+      return res.status(400).json({
+        error: 'Invalid screen. Use CR, DP, APR, BDC, or XFER.'
+      });
+    }
+
+    const [rows] = await db.query(`
+      SELECT
+        GLAccountID,
+        GLNumber,
+        GLName,
+        SourceTable,
+        BankType,
+        BankID
+      FROM GLAccounts
+      WHERE ActiveFlag = 'Y'
+        AND ${useField} = 'Y'
+      ORDER BY SortOrder ASC, GLAccountID ASC
+    `);
+
+    const glAccounts = rows.map((row) => ({
+      id: row.GLAccountID,
+      glNumber: row.GLNumber,
+      glName: row.GLName,
+      sourceTable: row.SourceTable,
+      bankType: row.BankType,
+      bankId: row.BankID
+    }));
+
+    res.json({
+      success: true,
+      count: glAccounts.length,
+      glAccounts
+    });
+  } catch (err) {
+    console.error('Error fetching GL options:', err);
+
+    res.status(500).json({
+      error: 'Failed to fetch GL options',
+      details: err.message
+    });
+  }
+});
+
+
+
+
+
 
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {
