@@ -1385,7 +1385,12 @@ app.get('/api/settings/gl-mapping', async (req, res) => {
       createdBy: r.CreatedBy,
       createdDate: r.CreatedDate,
       lastEditedBy: r.LastEditedBy,
-      systemLocked: Boolean(r.SystemLocked)
+      systemLocked: Boolean(r.SystemLocked),
+      useInCR: r.UseInCR || 'N',
+      useInDP: r.UseInDP || 'N',
+      useInAPR: r.UseInAPR || 'N',
+      useInBDC: r.UseInBDC || 'N',
+      useInXFER: r.UseInXFER || 'N'
     }));
     res.json({ success: true, glAccounts: mapped });
   } catch (err) {
@@ -1404,11 +1409,13 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
             UPDATE GLAccounts SET
               GLNumber=?, GLName=?, SourceTable=?, Description=?, BankType=?, BankID=?,
               PC=?, ParentGL=?, ConsolidatedParentGL=?, DC=?, AR=?, EffectiveDate=?,
+              UseInCR=?, UseInDP=?, UseInAPR=?, UseInBDC=?, UseInXFER=?,
               LastEditedBy=?, SystemLocked=?, SortOrder=?, TimeStampUpdated=NOW()
             WHERE GLAccountID=?
           `, [
             r.glNumber||'', r.glName||'', r.sourceTable||'', r.description||'', r.bankType||'', r.bankId||'',
             r.pc||'P', r.parentGl||'', r.consolidatedParentGl||'', r.dc||'D', r.ar||'A', r.effectiveDate||'',
+            r.useInCR||'N', r.useInDP||'N', r.useInAPR||'N', r.useInBDC||'N', r.useInXFER||'N',
             r.lastEditedBy||'SYSTEM', r.systemLocked ? 1 : 0, idx, r.id
           ]);
         }
@@ -1418,6 +1425,78 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
   } catch (err) {
     console.error('Error updating GL mapping:', err);
     res.status(500).json({ error: 'Failed to update GL mapping', details: err.message });
+  }
+});
+
+/* ===========================================================
+   11. SETTINGS: GL OPTIONS (dropdown choices for entry screens)
+   Approved contract (2026-08-10):
+     - screen: CR | DP | APR | BDC | XFER
+     - returns full GL objects (glNumber, glName, bankType, bankId, sourceTable, ...)
+     - filters by the matching useIn* flag
+     - bank matching: if bankId provided, prefer GLs for that bank; otherwise returns all
+   =========================================================== */
+
+app.get('/api/gl-options', async (req, res) => {
+  try {
+    const screen = String(req.query.screen || '').toUpperCase().trim();
+    const bankId = req.query.bankId ? String(req.query.bankId).trim() : '';
+
+    const flagByScreen = {
+      CR: 'UseInCR',
+      DP: 'UseInDP',
+      APR: 'UseInAPR',
+      BDC: 'UseInBDC',
+      XFER: 'UseInXFER'
+    };
+
+    const flag = flagByScreen[screen];
+
+    let sql = `SELECT * FROM GLAccounts WHERE ActiveFlag='Y'`;
+    const params = [];
+
+    if (flag) {
+      sql += ` AND ${flag} = 'Y'`;
+    }
+
+    sql += ` ORDER BY SortOrder ASC, GLNumber ASC`;
+
+    const [rows] = await db.query(sql, params);
+
+    const mapped = rows.map(r => ({
+      id: r.GLAccountID,
+      glNumber: r.GLNumber,
+      glName: r.GLName,
+      sourceTable: r.SourceTable,
+      description: r.Description,
+      bankType: r.BankType,
+      bankId: r.BankID,
+      pc: r.PC,
+      parentGl: r.ParentGL,
+      dc: r.DC,
+      ar: r.AR,
+      activeFlag: r.ActiveFlag,
+      useInCR: r.UseInCR || 'N',
+      useInDP: r.UseInDP || 'N',
+      useInAPR: r.UseInAPR || 'N',
+      useInBDC: r.UseInBDC || 'N',
+      useInXFER: r.UseInXFER || 'N'
+    }));
+
+    // If a bank was selected, prefer GLs configured for that bank;
+    // keep the rest as fallback since server-side matching rule is not finalized yet.
+    let options = mapped;
+    if (bankId) {
+      const forBank = mapped.filter(g => g.bankId === bankId);
+      if (forBank.length > 0) {
+        options = forBank;
+      }
+    }
+
+    res.json({ success: true, screen, bankId, count: options.length, glOptions: options });
+  } catch (err) {
+    console.error('Error fetching GL options:', err);
+    res.status(500).json({ error: 'Failed to fetch GL options', details: err.message });
   }
 });
 
