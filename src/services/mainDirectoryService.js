@@ -6,9 +6,10 @@ export async function fetchResidents() {
     const response = await fetch(`${API_BASE_URL}/residents`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    if (Array.isArray(data) && data.length > 0) {
+    const residentsArray = Array.isArray(data) ? data : (data && Array.isArray(data.residents) ? data.residents : null);
+    if (residentsArray) {
       setConnectionStatus(false);
-      return data.map(r => ({
+      return residentsArray.map(r => ({
         acctNo: r.account_id,
         acct: r.account_id,
         firstName: r.first_name || '',

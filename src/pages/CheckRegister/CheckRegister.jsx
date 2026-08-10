@@ -4,9 +4,11 @@
 // PAGE STATE OWNER
 // =====================================================
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import './CheckRegister.css';
+
+import { API_BASE_URL } from '../../config/api';
 
 import BodyBox from './components/BodyBox/BodyBox';
 import TopSection from './components/TopSection/TopSection';
@@ -14,9 +16,55 @@ import TopSection from './components/TopSection/TopSection';
 import checkRegisterSampleData from './data/checkRegisterSampleData';
 
 function CheckRegister({ onSelectPage }) {
-  const [checkRows, setCheckRows] = useState(
-    checkRegisterSampleData
-  );
+  const [checkRows, setCheckRows] = useState([]);
+
+
+useEffect(() => {
+  async function loadCheckRegister() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/check-register`);
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const rows = await response.json();
+
+const mappedRows = rows.map((row) => ({
+  checkNo: row.check_number,
+  payeeName: row.payee_name,
+  amount: row.amount,
+  dateIssued: row.date_issued,
+  dateCleared: row.date_cleared,
+  monthCleared: row.month_cleared,
+  glAccount: row.gl_name,
+  vendorOrResidentAcct: row.payee_id,
+  vendorInvoiceNo: row.invoice_num,
+  vendorInvoiceDate: row.invoice_date,
+  vendorInvoiceAmount: row.invoice_amount,
+  checkNotation: row.note,
+  bankAcct: row.bank_account,
+  checkAllowed: row.status,
+  glNo: row.gl_number,
+  transactionNo: row.check_txn_num,
+  escrowFlag: '',
+  bankAccount: row.bank_account_display
+}));
+
+setCheckRows(mappedRows);
+
+
+
+    } catch (error) {
+      console.error('Error loading Check Register:', error);
+    }
+  }
+
+  loadCheckRegister();
+}, []);
+
+
+ 
 
   const [
     vendorResidentAccountFilter,

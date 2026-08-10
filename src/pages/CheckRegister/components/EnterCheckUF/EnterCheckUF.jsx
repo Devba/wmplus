@@ -1,132 +1,15 @@
 
 
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './EnterCheckUF.css';
+import { API_BASE_URL } from '../../../../config/api';
 
-const banks = [
-  {
-    id: '101',
-    name: '101 - Operating Account',
-    balance: 25000,
-    openChecks: 1900,
-    checkMode: 'system',
-    nextCheck: 1050
-  },
-  {
-    id: '102',
-    name: '102 - Operating Account 2',
-    balance: 18000,
-    openChecks: 600,
-    checkMode: 'manual',
-    nextCheck: 3401
-  },
-  {
-    id: '201',
-    name: '201 - Capital Account',
-    balance: 100000,
-    openChecks: 0,
-    checkMode: 'system',
-    nextCheck: 5001
-  },
-  {
-    id: '301',
-    name: '301 - Escrow Account',
-    balance: 12000,
-    openChecks: 250,
-    checkMode: 'manual',
-    nextCheck: 9001
-  }
-];
 
-const glAccounts = [
-  {
-    bankId: '101',
-    category: 'Water',
-    glNumber: '7010'
-  },
-  {
-    bankId: '101',
-    category: 'Electric',
-    glNumber: '7020'
-  },
-  {
-    bankId: '101',
-    category: 'Landscaping',
-    glNumber: '7030'
-  },
-  {
-    bankId: '102',
-    category: 'Water',
-    glNumber: '7110'
-  },
-  {
-    bankId: '102',
-    category: 'Electric',
-    glNumber: '7120'
-  },
-  {
-    bankId: '102',
-    category: 'Repairs',
-    glNumber: '7130'
-  },
-  {
-    bankId: '201',
-    category: 'Reserve Transfer',
-    glNumber: '8010'
-  },
-  {
-    bankId: '201',
-    category: 'Capital Repair',
-    glNumber: '8020'
-  },
-  {
-    bankId: '301',
-    category: 'Escrow Refund',
-    glNumber: '9501'
-  },
-  {
-    bankId: '301',
-    category: 'Escrow Deposit',
-    glNumber: '9500'
-  }
-];
 
-const residents = [
-  {
-    id: '17770',
-    lastName: 'Riccoboni',
-    fullName: 'Rick Riccoboni',
-    address: '12 Main St'
-  },
-  {
-    id: '17769',
-    lastName: 'Wenger',
-    fullName: 'Paul Wenger',
-    address: '14 Oak Ave'
-  },
-  {
-    id: '17771',
-    lastName: 'Bates',
-    fullName: 'Linda Bates',
-    address: '55 Pine Ln'
-  }
-];
 
-const vendors = [
-  {
-    id: '101',
-    name: 'ABC Landscaping'
-  },
-  {
-    id: '102',
-    name: 'City Water Dept'
-  },
-  {
-    id: '103',
-    name: 'HVAC Repair Co'
-  }
-];
+
+
 
 function formatMoney(value) {
   const amount = Number(
@@ -167,6 +50,226 @@ function formatDateForTransaction(date) {
 }
 
 function EnterCheckUF({ onAddCheck }) {
+  const [banks, setBanks] = useState([]);
+  const [glAccounts, setGLAccounts] = useState([]);
+  const [residents, setResidents] = useState([]);
+  const [vendors, setVendors] = useState([]);
+
+
+useEffect(() => {
+  async function loadBanks() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/settings/banking`);
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const loadedBanks = (data.banks || []).map((bank) => ({
+        ...bank,
+        id: String(bank.id),
+        name: `${bank.bankName} - ${bank.bankType} - ${bank.bankId}`
+      }));
+
+      setBanks(loadedBanks);
+    } catch (error) {
+      console.error('Error loading banks:', error);
+    }
+  }
+
+  loadBanks();
+}, []);
+
+useEffect(() => {
+  async function loadResidentsAndVendors() {
+    try {
+      const [residentResponse, vendorResponse] =
+        await Promise.all([
+          fetch(`${API_BASE_URL}/residents?offset=0`),
+          fetch(`${API_BASE_URL}/vendors`)
+        ]);
+
+      if (!residentResponse.ok) {
+        throw new Error(
+          `Residents server returned ${residentResponse.status}`
+        );
+      }
+
+      if (!vendorResponse.ok) {
+        throw new Error(
+          `Vendors server returned ${vendorResponse.status}`
+        );
+      }
+
+      const residentData = await residentResponse.json();
+      const vendorRows = await vendorResponse.json();
+
+      const residentRows = residentData.residents || [];
+
+      setResidentOffset(residentData.offset || 0);
+      setResidentHasMore(Boolean(residentData.hasMore));
+
+      const loadedResidents = residentRows
+  .map((resident) => ({
+    id: String(resident.account_id),
+    lastName:
+  resident.last_name ||
+  resident.display_name ||
+  resident.account_id ||
+  '',
+    fullName:
+      resident.display_name ||
+      `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
+    address: resident.residence_address || ''
+  }))
+  
+
+      const loadedVendors = vendorRows.map((vendor) => ({
+        id: String(vendor.vendor_id),
+        name: vendor.vendor_name || ''
+      }));
+
+      setResidents(loadedResidents);
+      setVendors(loadedVendors);
+    } catch (error) {
+      console.error(
+        'Error loading residents/vendors:',
+        error
+      );
+
+      setResidents([]);
+      setVendors([]);
+    }
+  }
+
+  loadResidentsAndVendors();
+}, []);
+
+
+const loadNextResidentChunk = async () => {
+  if (!residentHasMore) return;
+
+  try {
+    const nextOffset = residentOffset + 500;
+
+    const response = await fetch(
+      `${API_BASE_URL}/residents?offset=${nextOffset}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rows = data.residents || [];
+
+    const nextResidents = rows.map((resident) => ({
+      id: String(resident.account_id),
+      lastName:
+  resident.last_name ||
+  resident.display_name ||
+  resident.account_id ||
+  '',
+      fullName:
+        resident.display_name ||
+        `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
+      address: resident.residence_address || ''
+    }));
+
+    setResidents((currentResidents) => [
+      ...currentResidents,
+      ...nextResidents
+    ]);
+
+    setResidentOffset(data.offset || nextOffset);
+    setResidentHasMore(Boolean(data.hasMore));
+  } catch (error) {
+    console.error(
+      'Error loading next resident chunk:',
+      error
+    );
+  }
+};
+
+const searchResidents = async (searchText) => {
+  const trimmedSearch = String(searchText || '').trim();
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/residents?search=${encodeURIComponent(trimmedSearch)}&offset=0`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rows = data.residents || [];
+
+    const matchingResidents = rows.map((resident) => ({
+      id: String(resident.account_id),
+      lastName:
+  resident.last_name ||
+  resident.display_name ||
+  resident.account_id ||
+  '',
+      fullName:
+        resident.display_name ||
+        `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
+      address: resident.residence_address || ''
+    }));
+
+    setResidents(matchingResidents);
+    setResidentOffset(data.offset || 0);
+    setResidentHasMore(Boolean(data.hasMore));
+  } catch (error) {
+    console.error(
+      'Error searching residents:',
+      error
+    );
+  }
+};
+
+
+const handleResidentNameQueryChange = async (event) => {
+  const value = event.target.value;
+
+  setResidentNameQuery(value);
+  setResidentNameDropdownOpen(true);
+
+  await searchResidents(value);
+};
+
+const selectResidentFromSearch = (resident) => {
+  loadResident(resident.id);
+
+  setResidentNameQuery(
+    `${resident.lastName} | ${resident.id} | ${resident.address}`
+  );
+
+  setResidentNameDropdownOpen(false);
+};
+
+const handleResidentAddressQueryChange = async (event) => {
+  const value = event.target.value;
+
+  setResidentAddressQuery(value);
+  setResidentAddressDropdownOpen(true);
+
+  await searchResidents(value);
+};
+
+const selectResidentFromAddressSearch = (resident) => {
+  loadResident(resident.id);
+
+  setResidentAddressQuery(resident.address || '');
+
+  setResidentAddressDropdownOpen(false);
+};
+
+
   const [bankId, setBankId] = useState('');
   const [checkAmount, setCheckAmount] = useState('');
   const [entityId, setEntityId] = useState('');
@@ -187,11 +290,28 @@ function EnterCheckUF({ onAddCheck }) {
   const [autoWithdrawal, setAutoWithdrawal] = useState(false);
 
   const [residentNameSearch, setResidentNameSearch] =
-    useState('');
+  useState('');
+  const [residentNameQuery, setResidentNameQuery] = useState('');
+  const [residentNameDropdownOpen, setResidentNameDropdownOpen] =
+  useState(false);
+
+
   const [residentAddressSearch, setResidentAddressSearch] =
-    useState('');
+  useState('');
+  const [residentAddressQuery, setResidentAddressQuery] =
+  useState('');
+
+  const [residentAddressDropdownOpen, setResidentAddressDropdownOpen] =
+    useState(false);
+  
+
+
+  const [residentOffset, setResidentOffset] = useState(0);
+  const [residentHasMore, setResidentHasMore] = useState(false);
+
   const [vendorNameSearch, setVendorNameSearch] =
-    useState('');
+  useState('');
+
   const [vendorAccountSearch, setVendorAccountSearch] =
     useState('');
   const [helperEntityId, setHelperEntityId] = useState('');
@@ -201,10 +321,70 @@ function EnterCheckUF({ onAddCheck }) {
     [bankId]
   );
 
+  useEffect(() => {
+  async function loadGLAccounts() {
+    if (!selectedBank) {
+      setGLAccounts([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/settings/gl-mapping`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+
+  const matchingGLAccounts = (data.glAccounts || [])
+  .filter((gl) => {
+    const allowedBankTypes = String(gl.bankType || '')
+      .split(',')
+      .map((type) => type.trim().toLowerCase());
+
+    const selectedBankType =
+      String(selectedBank.bankType || '').trim().toLowerCase();
+
+    const isAssignableAccount =
+      !String(gl.glNumber || '').includes('-');
+
+    return (
+      isAssignableAccount &&
+      (
+        allowedBankTypes.includes(selectedBankType) ||
+        allowedBankTypes.includes('all')
+      )
+    );
+  })
+
+
+  .map((gl) => ({
+    bankId: String(gl.bankId),
+    category: gl.glName,
+    glNumber: String(gl.glNumber)
+  }));
+
+setGLAccounts(matchingGLAccounts);
+    } catch (error) {
+      console.error(
+        'Error loading GL accounts:',
+        error
+      );
+
+      setGLAccounts([]);
+    }
+  }
+
+  loadGLAccounts();
+}, [selectedBank]);
+
   const availableGLAccounts = useMemo(
-    () => glAccounts.filter((gl) => gl.bankId === bankId),
-    [bankId]
-  );
+  () => glAccounts,
+  [glAccounts]
+);
 
   const bankBalance = selectedBank
     ? formatMoney(selectedBank.balance)
@@ -261,64 +441,135 @@ function EnterCheckUF({ onAddCheck }) {
     setResidentAddressSearch('');
   };
 
-  const handleBankChange = (event) => {
-    const newBankId = event.target.value;
-    const bank =
-      banks.find((item) => item.id === newBankId) || null;
+  const handleBankChange = async (event) => {
+  const newBankId = event.target.value;
 
-    setBankId(newBankId);
-    setGLCategory('');
-    setGLNumber('');
+  const bank =
+    banks.find((item) => item.id === newBankId) || null;
 
-    if (!bank) {
-      setCheckNumber('');
-      return;
-    }
+  setBankId(newBankId);
+  setGLCategory('');
+  setGLNumber('');
+  setCheckNumber('');
 
-    if (bank.checkMode === 'system') {
-      setCheckNumber(String(bank.nextCheck));
-    } else {
-      setCheckNumber('');
-    }
-  };
+  if (!bank) return;
 
-  const handleGLChange = (event) => {
-    const category = event.target.value;
-
-    setGLCategory(category);
-
-    const gl = availableGLAccounts.find(
-      (item) => item.category === category
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/check-register/next-check-number?bankAccountId=${newBankId}`
     );
 
-    setGLNumber(gl?.glNumber || '');
-  };
-
-  const handleResidentNameSearch = (event) => {
-    const residentId = event.target.value;
-
-    setResidentNameSearch(residentId);
-
-    if (!residentId) {
-      resetPartySearches();
-      return;
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
     }
 
-    loadResident(residentId);
-  };
+    const data = await response.json();
 
-  const handleResidentAddressSearch = (event) => {
-    const residentId = event.target.value;
+    if (
+      String(data.checkMode || '').toLowerCase() === 'system'
+    ) {
+      setCheckNumber(data.nextCheckNumber || '');
+    }
+  } catch (error) {
+    console.error(
+      'Error loading next check number:',
+      error
+    );
+  }
+};
 
-    setResidentAddressSearch(residentId);
+  const handleGLChange = async (event) => {
+  const category = event.target.value;
 
-    if (!residentId) {
-      resetPartySearches();
-      return;
+  setGLCategory(category);
+  setGLNumber('');
+
+  if (!category || !selectedBank) return;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/settings/gl-mapping`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
     }
 
-    loadResident(residentId);
-  };
+    const data = await response.json();
+
+    const gl = (data.glAccounts || []).find((item) => {
+  const allowedBankTypes = String(item.bankType || '')
+    .split(',')
+    .map((type) => type.trim().toLowerCase());
+
+  const selectedBankType =
+    String(selectedBank.bankType || '').trim().toLowerCase();
+
+  const isActualGL =
+    !String(item.glNumber || '').includes('-');
+
+  return (
+    isActualGL &&
+    item.glName === category &&
+    (
+      allowedBankTypes.includes(selectedBankType) ||
+      allowedBankTypes.includes('all')
+    )
+  );
+});
+
+    setGLNumber(
+      gl?.glNumber !== undefined && gl?.glNumber !== null
+        ? String(gl.glNumber)
+        : ''
+    );
+  } catch (error) {
+    console.error(
+      'Error loading assigned GL number:',
+      error
+    );
+
+    setGLNumber('');
+  }
+};
+
+  const handleResidentNameSearch = async (event) => {
+  const residentId = event.target.value;
+
+  if (residentId === '__LOAD_MORE__') {
+    await loadNextResidentChunk();
+    setResidentNameSearch('');
+    return;
+  }
+
+  setResidentNameSearch(residentId);
+
+  if (!residentId) {
+    resetPartySearches();
+    return;
+  }
+
+  loadResident(residentId);
+};
+
+ const handleResidentAddressSearch = async (event) => {
+  const residentId = event.target.value;
+
+  if (residentId === '__LOAD_MORE__') {
+    await loadNextResidentChunk();
+    setResidentAddressSearch('');
+    return;
+  }
+
+  setResidentAddressSearch(residentId);
+
+  if (!residentId) {
+    resetPartySearches();
+    return;
+  }
+
+  loadResident(residentId);
+};
 
   const handleVendorNameSearch = (event) => {
     const vendorId = event.target.value;
@@ -715,22 +966,42 @@ function EnterCheckUF({ onAddCheck }) {
             <label className="enter-check-field">
               <span>Resident Name</span>
 
-              <select
-                value={residentNameSearch}
-                onChange={handleResidentNameSearch}
-              >
-                <option value="">Select resident</option>
+              <div className="enter-check-resident-combo">
+  <input
+    type="text"
+    value={residentNameQuery}
+    placeholder="Select resident"
+    onFocus={() => setResidentNameDropdownOpen(true)}
+    onChange={handleResidentNameQueryChange}
+    autoComplete="off"
+  />
 
-                {residents.map((resident) => (
-                  <option
-                    key={resident.id}
-                    value={resident.id}
-                  >
-                    {resident.lastName} | {resident.id} |{' '}
-                    {resident.address}
-                  </option>
-                ))}
-              </select>
+  {residentNameDropdownOpen && (
+    <div className="enter-check-resident-dropdown">
+      {residents.map((resident) => (
+        <button
+          key={resident.id}
+          type="button"
+          className="enter-check-resident-option"
+          onClick={() => selectResidentFromSearch(resident)}
+        >
+          {resident.lastName} | {resident.id} | {resident.address}
+        </button>
+      ))}
+
+      {residentHasMore && (
+        <button
+          type="button"
+          className="enter-check-resident-option enter-check-load-more"
+          onClick={loadNextResidentChunk}
+        >
+          Load next 500 residents...
+        </button>
+      )}
+    </div>
+  )}
+</div>
+
             </label>
 
             <label className="enter-check-field">
@@ -780,28 +1051,52 @@ function EnterCheckUF({ onAddCheck }) {
             <label className="enter-check-field">
               <span>Resident Address</span>
 
-              <select
-                value={residentAddressSearch}
-                onChange={handleResidentAddressSearch}
-              >
-                <option value="">
-                  Select resident address
-                </option>
+ 
 
-                {residents.map((resident) => (
-                  <option
-                    key={resident.id}
-                    value={resident.id}
-                  >
-                    {resident.address}
-                  </option>
-                ))}
-              </select>
+             <div className="enter-check-resident-combo">
+  <input
+    type="text"
+    value={residentAddressQuery}
+    placeholder="Select resident address"
+    onFocus={() => setResidentAddressDropdownOpen(true)}
+    onChange={handleResidentAddressQueryChange}
+    autoComplete="off"
+  />
+
+  {residentAddressDropdownOpen && (
+    <div className="enter-check-resident-dropdown">
+      {residents.map((resident) => (
+        <button
+          key={resident.id}
+          type="button"
+          className="enter-check-resident-option"
+          onClick={() =>
+            selectResidentFromAddressSearch(resident)
+          }
+        >
+          {resident.address} | {resident.lastName} | {resident.id}
+        </button>
+      ))}
+
+      {residentHasMore && (
+        <button
+          type="button"
+          className="enter-check-resident-option enter-check-load-more"
+          onClick={loadNextResidentChunk}
+        >
+          Load next 500 residents...
+        </button>
+      )}
+    </div>
+  )}
+</div>   
+
+
             </label>
 
             <label className="enter-check-field enter-check-helper-id">
               <span>Vendor/Resident ID:</span>
-
+             
               <input
                 type="text"
                 value={helperEntityId}
