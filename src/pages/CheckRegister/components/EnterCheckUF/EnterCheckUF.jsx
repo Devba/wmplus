@@ -1,7 +1,7 @@
 
 
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import './EnterCheckUF.css';
 import { API_BASE_URL } from '../../../../config/api';
 
@@ -304,7 +304,38 @@ const selectResidentFromAddressSearch = (resident) => {
   const [residentAddressDropdownOpen, setResidentAddressDropdownOpen] =
     useState(false);
   
+  const residentNameComboRef = useRef(null);
+const residentAddressComboRef = useRef(null);
 
+useEffect(() => {
+  const handleClickOutsideResidentLookups = (event) => {
+    if (
+      residentNameComboRef.current &&
+      !residentNameComboRef.current.contains(event.target)
+    ) {
+      setResidentNameDropdownOpen(false);
+    }
+
+    if (
+      residentAddressComboRef.current &&
+      !residentAddressComboRef.current.contains(event.target)
+    ) {
+      setResidentAddressDropdownOpen(false);
+    }
+  };
+
+  document.addEventListener(
+    'mousedown',
+    handleClickOutsideResidentLookups
+  );
+
+  return () => {
+    document.removeEventListener(
+      'mousedown',
+      handleClickOutsideResidentLookups
+    );
+  };
+}, []);
 
   const [residentOffset, setResidentOffset] = useState(0);
   const [residentHasMore, setResidentHasMore] = useState(false);
@@ -966,7 +997,10 @@ setGLAccounts(matchingGLAccounts);
             <label className="enter-check-field">
               <span>Resident Name</span>
 
-              <div className="enter-check-resident-combo">
+              <div
+                className="enter-check-resident-combo"
+                ref={residentNameComboRef}
+              >
   <input
     type="text"
     value={residentNameQuery}
@@ -1053,7 +1087,10 @@ setGLAccounts(matchingGLAccounts);
 
  
 
-             <div className="enter-check-resident-combo">
+             <div
+                className="enter-check-resident-combo"
+                ref={residentAddressComboRef}
+              >
   <input
     type="text"
     value={residentAddressQuery}

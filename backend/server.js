@@ -653,42 +653,68 @@ app.post('/api/check-register', async (req, res) => {
 app.get('/api/deposit-register', async (req, res) => {
   try {
     const [rows] = await db.query(`
-  SELECT
-    dr.DepositTransactionNumber AS deposit_txn_num,
-    dr.DepositorAccountName AS payer_name,
-    dr.Amount AS amount,
-    dr.BankAccountName AS bank_account_name,
-    dr.BankAccountID AS bank_account_id,
-    CONCAT(
-      ba.BankName,
-      ' - ',
-      dr.BankAccountName,
-      ' - ',
-      dr.BankAccountID
-    ) AS bank_account_display,
-    dr.GLAccountName AS gl_name,
-    dr.GLNumber AS gl_number,
-    dr.DateDeposited AS date_deposited,
-    dr.DateCleared AS date_cleared,
-    dr.MonthCleared AS month_cleared,
-    dr.ResidentAccountID AS resident_id,
-    dr.VendorID AS vendor_id,
-    dr.DepositNotation AS note,
-    dr.Status AS status
-  FROM DepositRegister dr
+      SELECT
+        dr.DepositTransactionNumber AS deposit_txn_num,
+        dr.DepositorAccountName AS depositor_account_name,
+        dr.Amount AS amount,
 
-  LEFT JOIN BankAccount ba
-    ON ba.BankAccountID = dr.BankAccountID
+        COALESCE(
+          r.DisplayName,
+          v.VendorName,
+          dr.DepositorAccountName,
+          dr.ResidentAccountID,
+          dr.VendorID
+        ) AS payer_name,
 
-  WHERE dr.DeletedFlag IS NULL
-     OR dr.DeletedFlag != 'Y'
+        dr.BankAccountName AS bank_account,
+        dr.BankAccountID AS bank_account_id,
 
-  ORDER BY dr.DateDeposited DESC, dr.DepositTransactionNumber DESC
-`);
+        CONCAT(
+          ba.BankName,
+          ' - ',
+          ba.BankType,
+          ' - ',
+          ba.BankID
+        ) AS bank_account_display,
+
+        dr.GLAccountName AS gl_name,
+        dr.GLNumber AS gl_number,
+        dr.DateDeposited AS date_deposited,
+        dr.DateCleared AS date_cleared,
+        dr.MonthCleared AS month_cleared,
+        dr.ResidentAccountID AS resident_id,
+        dr.VendorID AS vendor_id,
+        dr.DepositNotation AS note,
+        dr.Status AS status
+
+      FROM DepositRegister dr
+
+      LEFT JOIN ResidentMaster r
+        ON r.ResidentAccountID = dr.ResidentAccountID
+
+      LEFT JOIN VendorMaster v
+        ON v.VendorID = dr.VendorID
+
+      LEFT JOIN BankAccount ba
+        ON ba.BankAccountID = dr.BankAccountID
+
+      WHERE dr.DeletedFlag IS NULL
+         OR dr.DeletedFlag != 'Y'
+
+      ORDER BY
+        dr.DateDeposited DESC,
+        dr.DepositTransactionNumber DESC
+    `);
+
     res.json(rows);
+
   } catch (err) {
     console.error('Error fetching deposits:', err);
-    res.status(500).json({ error: 'Failed to fetch deposit register', details: err.message });
+
+    res.status(500).json({
+      error: 'Failed to fetch deposit register',
+      details: err.message
+    });
   }
 });
 
