@@ -8,7 +8,8 @@
     server = Node/Express API
 */
 
-const PERSISTENCE_MODE = 'local';
+const PERSISTENCE_MODE = 'server';
+
 
 const STORAGE_KEY =
   'wmplus-settings-fines-late-fees';

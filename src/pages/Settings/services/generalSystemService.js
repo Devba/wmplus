@@ -8,13 +8,13 @@
     server = Node/Express API
 */
 
-const PERSISTENCE_MODE = 'local';
+const PERSISTENCE_MODE = 'server';
 
 const STORAGE_KEY =
   'wmplus-settings-general-system';
 
 const SERVER_URL =
-  'http://localhost:3011/api/settings/general-system';
+  'http://localhost:3011/api/settings/system';
 
 export async function loadGeneralSystemSettings() {
   if (PERSISTENCE_MODE === 'server') {

@@ -1396,6 +1396,567 @@ app.put('/api/settings/banking', async (req, res) => {
   }
 });
 
+
+/* ===========================================================
+   SETTINGS: FINES / LATE FEES PROGRAMMING
+   =========================================================== */
+
+app.get('/api/settings/fines-late-fees', async (req, res) => {
+  try {
+    const [[configRow]] = await db.query(`
+      SELECT *
+      FROM FinesConfig
+      WHERE FinesConfigID = 1
+      LIMIT 1
+    `);
+
+    const [fineTypeRows] = await db.query(`
+      SELECT
+        FineCategory,
+        SortOrder,
+        LetterCode,
+        ViolationType,
+        GLCode,
+        FineAmount,
+        ActiveFlag
+      FROM FineTypesList
+      ORDER BY FineCategory, SortOrder
+    `);
+
+    const [letterRows] = await db.query(`
+      SELECT *
+      FROM LetterRules
+      ORDER BY LetterRulesID
+    `);
+
+    const [[timingRow]] = await db.query(`
+      SELECT *
+      FROM TimingSchedule
+      WHERE TimingScheduleID = 1
+      LIMIT 1
+    `);
+
+    function buildFineTypeList(category) {
+      return fineTypeRows
+        .filter((row) => row.FineCategory === category)
+        .map((row) => [
+          row.LetterCode || '',
+          row.ViolationType || '',
+          row.GLCode || '',
+          Number(row.FineAmount || 0).toFixed(2),
+          row.ActiveFlag || 'Y'
+        ]);
+    }
+
+    function buildLetterRule(ruleType) {
+      const row =
+        letterRows.find(
+          (r) => r.RuleType === ruleType
+        ) || {};
+
+      return {
+        letter1Amount:
+          Number(row.Letter1Amount || 0).toFixed(2),
+        letter1PercentYN:
+          row.Letter1PercentYN || 'N',
+        letter1Percent:
+          Number(row.Letter1Percent || 0).toFixed(2),
+        letter1GL:
+          row.Letter1GL || '',
+        letter2Amount:
+          Number(row.Letter2Amount || 0).toFixed(2),
+        letter2PercentYN:
+          row.Letter2PercentYN || 'N',
+        letter2Percent:
+          Number(row.Letter2Percent || 0).toFixed(2),
+        letter2GL:
+          row.Letter2GL || '',
+        finalAmount:
+          Number(row.FinalAmount || 0).toFixed(2),
+        finalGL:
+          row.FinalGL || ''
+      };
+    }
+
+    res.json({
+      success: true,
+
+      violationFineRules: {
+        restartDays:
+          configRow?.RestartDays !== undefined
+            ? String(configRow.RestartDays)
+            : '',
+        fineAmount:
+          configRow?.FineAmount !== undefined
+            ? Number(configRow.FineAmount).toFixed(2)
+            : ''
+      },
+
+      fineTypesList: {
+        timed: buildFineTypeList('timed'),
+        immediate: buildFineTypeList('immediate')
+      },
+
+      arrearsRules:
+        buildLetterRule('arrearsRules'),
+
+      annualDuesLateFees:
+        buildLetterRule('annualDuesLateFees'),
+
+      specialAssessmentLateFees:
+        buildLetterRule('specialAssessmentLateFees'),
+
+      timingSchedule: {
+        warning1Days:
+          timingRow?.Warning1Days !== undefined
+            ? String(timingRow.Warning1Days)
+            : '30',
+        warning2Days:
+          timingRow?.Warning2Days !== undefined
+            ? String(timingRow.Warning2Days)
+            : '60',
+        collection1Days:
+          timingRow?.Collection1Days !== undefined
+            ? String(timingRow.Collection1Days)
+            : '90',
+        collection2Days:
+          timingRow?.Collection2Days !== undefined
+            ? String(timingRow.Collection2Days)
+            : '120',
+        finalDays:
+          timingRow?.FinalDays !== undefined
+            ? String(timingRow.FinalDays)
+            : '150'
+      }
+    });
+  } catch (err) {
+    console.error(
+      'Error fetching Fines / Late Fees settings:',
+      err
+    );
+
+    res.status(500).json({
+      error:
+        'Failed to fetch Fines / Late Fees settings',
+      details: err.message
+    });
+  }
+});
+
+
+app.put('/api/settings/fines-late-fees', async (req, res) => {
+  try {
+    const {
+      violationFineRules = {},
+      fineTypesList = {},
+      arrearsRules = {},
+      annualDuesLateFees = {},
+      specialAssessmentLateFees = {},
+      timingSchedule = {}
+    } = req.body;
+
+    await db.query(`
+      UPDATE FinesConfig
+      SET
+        RestartDays = ?,
+        FineAmount = ?,
+        TimeStampUpdated = NOW()
+      WHERE FinesConfigID = 1
+    `, [
+      Number(violationFineRules.restartDays || 0),
+      Number(violationFineRules.fineAmount || 0)
+    ]);
+
+    async function saveFineTypeCategory(
+      category,
+      rows
+    ) {
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = rows[i];
+
+        await db.query(`
+          UPDATE FineTypesList
+          SET
+            SortOrder = ?,
+            LetterCode = ?,
+            ViolationType = ?,
+            GLCode = ?,
+            FineAmount = ?,
+            ActiveFlag = ?
+          WHERE FineCategory = ?
+            AND SortOrder = ?
+        `, [
+          i,
+          row[0] || '',
+          row[1] || '',
+          row[2] || '',
+          Number(row[3] || 0),
+          row[4] || 'Y',
+          category,
+          i
+        ]);
+      }
+    }
+
+    await saveFineTypeCategory(
+      'timed',
+      fineTypesList.timed || []
+    );
+
+    await saveFineTypeCategory(
+      'immediate',
+      fineTypesList.immediate || []
+    );
+
+    async function saveLetterRule(
+      ruleType,
+      rule
+    ) {
+      await db.query(`
+        UPDATE LetterRules
+        SET
+          Letter1Amount = ?,
+          Letter1PercentYN = ?,
+          Letter1Percent = ?,
+          Letter1GL = ?,
+          Letter2Amount = ?,
+          Letter2PercentYN = ?,
+          Letter2Percent = ?,
+          Letter2GL = ?,
+          FinalAmount = ?,
+          FinalGL = ?,
+          TimeStampUpdated = NOW()
+        WHERE RuleType = ?
+      `, [
+        Number(rule.letter1Amount || 0),
+        rule.letter1PercentYN || 'N',
+        Number(rule.letter1Percent || 0),
+        rule.letter1GL || '',
+        Number(rule.letter2Amount || 0),
+        rule.letter2PercentYN || 'N',
+        Number(rule.letter2Percent || 0),
+        rule.letter2GL || '',
+        Number(rule.finalAmount || 0),
+        rule.finalGL || '',
+        ruleType
+      ]);
+    }
+
+    await saveLetterRule(
+      'arrearsRules',
+      arrearsRules
+    );
+
+    await saveLetterRule(
+      'annualDuesLateFees',
+      annualDuesLateFees
+    );
+
+    await saveLetterRule(
+      'specialAssessmentLateFees',
+      specialAssessmentLateFees
+    );
+
+    await db.query(`
+      UPDATE TimingSchedule
+      SET
+        Warning1Days = ?,
+        Warning2Days = ?,
+        Collection1Days = ?,
+        Collection2Days = ?,
+        FinalDays = ?,
+        TimeStampUpdated = NOW()
+      WHERE TimingScheduleID = 1
+    `, [
+      Number(timingSchedule.warning1Days || 30),
+      Number(timingSchedule.warning2Days || 60),
+      Number(timingSchedule.collection1Days || 90),
+      Number(timingSchedule.collection2Days || 120),
+      Number(timingSchedule.finalDays || 150)
+    ]);
+
+    res.json({
+      success: true,
+      message:
+        'Fines / Late Fees settings saved successfully'
+    });
+  } catch (err) {
+    console.error(
+      'Error saving Fines / Late Fees settings:',
+      err
+    );
+
+    res.status(500).json({
+      error:
+        'Failed to save Fines / Late Fees settings',
+      details: err.message
+    });
+  }
+});
+
+
+
+
+
+
+
+
+/* ===========================================================
+   SETTINGS: ANNUAL / SPECIAL DUES PROGRAMMING
+   =========================================================== */
+
+app.get('/api/settings/dues-programming', async (req, res) => {
+  try {
+    const [programRows] = await db.query(`
+      SELECT
+        DuesType,
+        AssessmentFrequency,
+        DATE_FORMAT(PaymentDueDate, '%m/%d/%Y') AS PaymentDueDate
+      FROM DuesProgramming
+      WHERE MgtCoClientID = 'MGTCO-001'
+        AND HOALicenseNumber = 'HOA-FL-2024-001'
+        AND ActiveFlag = 'Y'
+    `);
+
+    const [rateRows] = await db.query(`
+      SELECT
+        SectionType,
+        RateType,
+        CurrentRate,
+        NextRate
+      FROM DuesRates
+      ORDER BY DuesRateID
+    `);
+
+    function buildSection(sectionType) {
+      const program =
+        programRows.find(
+          (row) => row.DuesType === sectionType
+        ) || {};
+
+      const rates = {};
+
+      rateRows
+        .filter(
+          (row) => row.SectionType === sectionType
+        )
+        .forEach((row) => {
+          rates[row.RateType] = {
+            currentRate:
+              Number(row.CurrentRate || 0).toFixed(2),
+            nextRate:
+              Number(row.NextRate || 0).toFixed(2)
+          };
+        });
+
+      return {
+        paymentFrequency:
+          program.AssessmentFrequency || 'Annually',
+
+        dueDate:
+          program.PaymentDueDate || '',
+
+        rates
+      };
+    }
+
+    res.json({
+      success: true,
+      annualDues: buildSection('annualDues'),
+      specialAssessment:
+        buildSection('specialAssessment'),
+      activeSection: 'annual-dues'
+    });
+  } catch (err) {
+    console.error(
+      'Error fetching Dues Programming settings:',
+      err
+    );
+
+    res.status(500).json({
+      error:
+        'Failed to fetch Dues Programming settings',
+      details: err.message
+    });
+  }
+});
+
+
+app.put('/api/settings/dues-programming', async (req, res) => {
+  try {
+    const {
+      annualDues = {},
+      specialAssessment = {}
+    } = req.body;
+
+    function sqlDate(mmddyyyy) {
+      if (!mmddyyyy) {
+        return null;
+      }
+
+      const parts = mmddyyyy.split('/');
+
+      if (parts.length !== 3) {
+        return null;
+      }
+
+      return `${parts[2]}-${parts[0]}-${parts[1]}`;
+    }
+
+    async function saveProgrammingRow(
+      duesType,
+      section
+    ) {
+      const [existing] = await db.query(`
+        SELECT DuesProgrammingID
+        FROM DuesProgramming
+        WHERE MgtCoClientID = 'MGTCO-001'
+          AND HOALicenseNumber = 'HOA-FL-2024-001'
+          AND DuesType = ?
+        LIMIT 1
+      `, [duesType]);
+
+      if (existing.length > 0) {
+        await db.query(`
+          UPDATE DuesProgramming
+          SET
+            AssessmentFrequency = ?,
+            PaymentDueDate = ?,
+            ActiveFlag = 'Y',
+            OperatorID = 'USER',
+            TimeStampUpdated = NOW()
+          WHERE DuesProgrammingID = ?
+        `, [
+          section.paymentFrequency || 'Annually',
+          sqlDate(section.dueDate),
+          existing[0].DuesProgrammingID
+        ]);
+      } else {
+        await db.query(`
+          INSERT INTO DuesProgramming (
+            MgtCoClientID,
+            HOALicenseNumber,
+            DuesType,
+            AssessmentFrequency,
+            PaymentDueDate,
+            ActiveFlag,
+            OperatorID
+          )
+          VALUES (?, ?, ?, ?, ?, 'Y', 'USER')
+        `, [
+          'MGTCO-001',
+          'HOA-FL-2024-001',
+          duesType,
+          section.paymentFrequency || 'Annually',
+          sqlDate(section.dueDate)
+        ]);
+      }
+    }
+
+    async function saveRates(
+      sectionType,
+      rates
+    ) {
+      const rateTypes =
+        Object.keys(rates || {});
+
+      if (rateTypes.length === 0) {
+        return;
+      }
+
+      const currentCases = [];
+      const nextCases = [];
+      const params = [];
+
+      for (const rateType of rateTypes) {
+        currentCases.push(
+          'WHEN RateType = ? THEN ?'
+        );
+
+        params.push(
+          rateType,
+          Number(rates[rateType]?.currentRate || 0)
+        );
+      }
+
+      for (const rateType of rateTypes) {
+        nextCases.push(
+          'WHEN RateType = ? THEN ?'
+        );
+
+        params.push(
+          rateType,
+          Number(rates[rateType]?.nextRate || 0)
+        );
+      }
+
+      const placeholders =
+        rateTypes.map(() => '?').join(',');
+
+      params.push(
+        sectionType,
+        ...rateTypes
+      );
+
+      await db.query(`
+        UPDATE DuesRates
+        SET
+          CurrentRate =
+            CASE
+              ${currentCases.join('\n')}
+              ELSE CurrentRate
+            END,
+          NextRate =
+            CASE
+              ${nextCases.join('\n')}
+              ELSE NextRate
+            END
+        WHERE SectionType = ?
+          AND RateType IN (${placeholders})
+      `, params);
+    }
+
+    await saveProgrammingRow(
+      'annualDues',
+      annualDues
+    );
+
+    await saveProgrammingRow(
+      'specialAssessment',
+      specialAssessment
+    );
+
+    await saveRates(
+      'annualDues',
+      annualDues.rates
+    );
+
+    await saveRates(
+      'specialAssessment',
+      specialAssessment.rates
+    );
+
+    res.json({
+      success: true,
+      message:
+        'Dues Programming settings saved successfully'
+    });
+  } catch (err) {
+    console.error(
+      'Error saving Dues Programming settings:',
+      err
+    );
+
+    res.status(500).json({
+      error:
+        'Failed to save Dues Programming settings',
+      details: err.message
+    });
+  }
+});
+
+
+
 /* ===========================================================
    7. SETTINGS: GENERAL SYSTEM PROGRAMMING
    =========================================================== */
