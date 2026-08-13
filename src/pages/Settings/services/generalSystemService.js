@@ -7,14 +7,14 @@
   Future production mode:
     server = Node/Express API
 */
-
+import { API_BASE_URL } from '../../../config/api';
 const PERSISTENCE_MODE = 'server';
 
 const STORAGE_KEY =
   'wmplus-settings-general-system';
 
 const SERVER_URL =
-  'http://localhost:3011/api/settings/system';
+  `${API_BASE_URL}/settings/system`;
 
 export async function loadGeneralSystemSettings() {
   if (PERSISTENCE_MODE === 'server') {

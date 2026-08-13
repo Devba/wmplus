@@ -7,14 +7,14 @@
   Future production mode:
     server = Node/Express API
 */
-
+import { API_BASE_URL } from '../../../config/api';
 const PERSISTENCE_MODE = 'server';
 
 const STORAGE_KEY =
   'wmplus-settings-gl-mapping';
 
 const SERVER_URL =
-  'http://localhost:3011/api/settings/gl-mapping';
+  `${API_BASE_URL}/settings/gl-mapping`;
 
 export async function loadGLMapping() {
   if (PERSISTENCE_MODE === 'server') {
@@ -127,7 +127,8 @@ async function saveGLMappingToServer(data) {
       Accept: 'application/json'
     },
     body: JSON.stringify({
-      glAccounts
+      glAccounts,
+      structuralSave: data.structuralSave === true
     })
   });
 

@@ -7,14 +7,14 @@
   Future production mode:
     server = Node/Express API
 */
-
+import { API_BASE_URL } from '../../../config/api';
 const PERSISTENCE_MODE = 'server';
 
 const STORAGE_KEY =
   'wmplus-settings-banking';
 
 const SERVER_URL =
-  'http://localhost:3011/api/settings/banking';
+  `${API_BASE_URL}/settings/banking`;
 
 export async function loadBankingSettings() {
   if (PERSISTENCE_MODE === 'server') {
@@ -78,9 +78,7 @@ async function loadBankingSettingsFromServer() {
       `Server returned ${response.status}.`
     );
   }
-
   const data = await response.json();
-
   const bankRows = Array.isArray(data.banks)
     ? data.banks.map((bank) => ({
         ...bank,

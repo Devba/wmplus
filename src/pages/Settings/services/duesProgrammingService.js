@@ -7,14 +7,14 @@
   Future production mode:
     server = Node/Express API
 */
-
+import { API_BASE_URL } from '../../../config/api';
 const PERSISTENCE_MODE = 'server';
 
 const STORAGE_KEY =
   'wmplus-settings-dues-programming';
 
 const SERVER_URL =
-  'http://localhost:3011/api/settings/dues-programming';
+  `${API_BASE_URL}/settings/dues-programming`;
 
 export async function loadDuesProgramming() {
   if (PERSISTENCE_MODE === 'server') {

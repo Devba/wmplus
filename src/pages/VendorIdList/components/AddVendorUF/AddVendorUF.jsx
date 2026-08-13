@@ -1,5 +1,18 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './AddVendorUF.css';
+import { API_BASE_URL } from '../../../../config/api';
+
+const VALID_STATE_CODES = new Set([
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
+]);
+
+
+
+
 
 function AddVendorUF({
   mode = 'add',
@@ -8,6 +21,83 @@ function AddVendorUF({
 }) {
   const formRef = useRef(null);
   const isEditMode = mode === 'edit';
+  const [bankOptions, setBankOptions] = useState([]);
+
+  const [glOptions, setGLOptions] = useState([]);
+  const [selectedGLNumber, setSelectedGLNumber] = useState(
+  vendor?.defaultGlNumber || ''
+);
+  
+  const [eCheckYN, setECheckYN] = useState(
+  vendor?.electronicCheckYN || 'N'
+);
+
+
+  useEffect(() => {
+  const loadBankOptions = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/settings/banking`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Banking request failed with status ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      const activeBanks = Array.isArray(data.banks)
+        ? data.banks.filter((bank) => bank.active === 'Y')
+        : [];
+
+      setBankOptions(activeBanks);
+    } catch (error) {
+      console.error(
+        'Unable to load Vendor bank options:',
+        error
+      );
+
+      setBankOptions([]);
+    }
+  };
+
+  loadBankOptions();
+}, []);
+
+
+  useEffect(() => {
+  const loadGLOptions = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/gl-options?screen=CR`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `GL options request failed with status ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      setGLOptions(
+        Array.isArray(data.glAccounts) ? data.glAccounts : []
+      );
+
+    } catch (error) {
+      console.error(
+        'Unable to load Vendor GL options:',
+        error
+      );
+
+      setGLOptions([]);
+    }
+  };
+
+  loadGLOptions();
+}, []); 
 
   const readValue = (id) => {
     const element = formRef.current?.querySelector(`#${id}`);
@@ -20,11 +110,7 @@ function AddVendorUF({
   };
 
   const handleEnterData = () => {
-    const vendorId = isEditMode ? vendor.vendorId : readValue('vdAddVendorID');
-    if (!vendorId) {
-      window.alert('Vendor ID is required.');
-      return;
-    }
+  const vendorId = isEditMode ? vendor.vendorId : '';
     if (!readValue('vdAddVendorName')) {
       window.alert('Vendor Name is required.');
       return;
@@ -87,11 +173,12 @@ function AddVendorUF({
             <div className="vuf-form-group span-2">
               <label htmlFor="vdAddVendorName">Vendor Name *</label>
               <input
-                id="vdAddVendorName"
-                type="text"
-                placeholder="Enter vendor name"
-                defaultValue={vendor?.vendorName || ''}
-              />
+              id="vdAddVendorName"
+              type="text"
+              placeholder="Enter vendor name"
+              defaultValue={vendor?.vendorName || ''}
+              autoComplete="off"
+            />
             </div>
             <div className="vuf-form-group">
               <label htmlFor="vdAddActive">Status</label>
@@ -121,7 +208,7 @@ function AddVendorUF({
               <input
                 id="vdAddAddress"
                 type="text"
-                placeholder="123 main st"
+                autoComplete="off"
                 defaultValue={vendor?.streetAddress || ''}
               />
             </div>
@@ -130,24 +217,107 @@ function AddVendorUF({
               <input
                 id="vdAddCity"
                 type="text"
-                defaultValue={vendor?.city || 'Miami'}
+                defaultValue={vendor?.city || ''}
               />
             </div>
             <div className="vuf-form-group">
               <label htmlFor="vdAddState">State</label>
               <input
-                id="vdAddState"
-                type="text"
-                defaultValue={vendor?.state || 'FL'}
-              />
+  id="vdAddState"
+  type="text"
+  maxLength={2}
+  defaultValue={vendor?.state || ''}
+
+  onBlur={(event) => {
+    const value = event.target.value.trim();
+
+    if (value === '') return;
+
+    const stateCode = value.toUpperCase();
+
+if (!VALID_STATE_CODES.has(stateCode)) {
+      window.alert(
+        'State must contain exactly 2 letters.'
+      );
+      event.target.value = '';
+      event.target.focus();
+      return;
+    }
+
+    event.target.value = stateCode;
+  }}
+
+  onKeyDown={(event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+
+      const value = event.currentTarget.value.trim();
+
+      if (value === '') {
+        event.currentTarget.blur();
+        return;
+      }
+
+      const stateCode = value.toUpperCase();
+
+if (!VALID_STATE_CODES.has(stateCode)) {
+        window.alert(
+          'State must contain exactly 2 letters.'
+        );
+        event.currentTarget.value = '';
+        event.currentTarget.focus();
+        return;
+      }
+
+      event.target.value = stateCode;
+      event.currentTarget.blur();
+    }
+  }}
+/>
             </div>
             <div className="vuf-form-group">
               <label htmlFor="vdAddZip">Zip Code</label>
               <input
-                id="vdAddZip"
-                type="text"
-                defaultValue={vendor?.zip || ''}
-              />
+  id="vdAddZip"
+  type="text"
+  maxLength={10}
+  defaultValue={vendor?.zip || ''}
+  onBlur={(event) => {
+    const value = event.target.value.trim();
+
+    if (
+      value !== '' &&
+      !/^\d{5}(-\d{4})?$/.test(value)
+    ) {
+      window.alert(
+        'Zip Code must be 5 digits or ZIP+4 (12345-6789).'
+      );
+      event.target.value = '';
+      event.target.focus();
+    }
+  }}
+  onKeyDown={(event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+
+      const value = event.currentTarget.value.trim();
+
+      if (
+        value !== '' &&
+        !/^\d{5}(-\d{4})?$/.test(value)
+      ) {
+        window.alert(
+          'Zip Code must be 5 digits or ZIP+4 (12345-6789).'
+        );
+        event.currentTarget.value = '';
+        event.currentTarget.focus();
+        return;
+      }
+
+      event.currentTarget.blur();
+    }
+  }}
+/>
             </div>
           </div>
         </div>
@@ -161,18 +331,61 @@ function AddVendorUF({
               <input
                 id="vdAddContactName"
                 type="text"
-                placeholder="John Doe"
+                
                 defaultValue={vendor?.contactName || ''}
               />
             </div>
             <div className="vuf-form-group">
               <label htmlFor="vdAddPhone">Phone Number</label>
               <input
-                id="vdAddPhone"
-                type="text"
-                placeholder="(305) 555-0199"
-                defaultValue={vendor?.phone || ''}
-              />
+  id="vdAddPhone"
+  type="text"
+ 
+  placeholder="(305) 555-0199"
+  defaultValue={vendor?.phone || ''}
+
+  onBlur={(event) => {
+    const value = event.target.value.trim();
+
+    if (value === '') return;
+
+    const digits = value.replace(/\D/g, '');
+
+    if (digits.length !== 10) {
+      window.alert(
+        'Phone Number must contain exactly 10 digits.'
+      );
+      event.target.value = '';
+      event.target.focus();
+    }
+  }}
+
+  onKeyDown={(event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+
+      const value = event.currentTarget.value.trim();
+
+      if (value === '') {
+        event.currentTarget.blur();
+        return;
+      }
+
+      const digits = value.replace(/\D/g, '');
+
+      if (digits.length !== 10) {
+        window.alert(
+          'Phone Number must contain exactly 10 digits.'
+        );
+        event.currentTarget.value = '';
+        event.currentTarget.focus();
+        return;
+      }
+
+      event.currentTarget.blur();
+    }
+    }}
+     />
             </div>
             <div className="vuf-form-group span-2">
               <label htmlFor="vdAddEmail">Email Address</label>
@@ -186,11 +399,54 @@ function AddVendorUF({
             <div className="vuf-form-group">
               <label htmlFor="vdAddTaxID">Tax ID / SSN</label>
               <input
-                id="vdAddTaxID"
-                type="text"
-                placeholder="XX-XXXXXXX"
-                defaultValue={vendor?.taxId || ''}
-              />
+               
+  id="vdAddTaxID"
+  type="text"
+  placeholder="XX-XXXXXXX"
+  defaultValue={vendor?.taxId || ''}
+
+  onBlur={(event) => {
+    const value = event.target.value.trim();
+
+    if (value === '') return;
+
+    const digits = value.replace(/\D/g, '');
+
+    if (digits.length !== 9) {
+      window.alert(
+        'Tax ID / SSN must contain exactly 9 digits.'
+      );
+      event.target.value = '';
+      event.target.focus();
+    }
+  }}
+
+  onKeyDown={(event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+
+      const value = event.currentTarget.value.trim();
+
+      if (value === '') {
+        event.currentTarget.blur();
+        return;
+      }
+
+      const digits = value.replace(/\D/g, '');
+
+      if (digits.length !== 9) {
+        window.alert(
+          'Tax ID / SSN must contain exactly 9 digits.'
+        );
+        event.currentTarget.value = '';
+        event.currentTarget.focus();
+        return;
+      }
+
+      event.currentTarget.blur();
+    }
+  }}
+/>
             </div>
             <div className="vuf-form-group">
               <label htmlFor="vdAddVendorType">Vendor Type</label>
@@ -198,7 +454,7 @@ function AddVendorUF({
                 id="vdAddVendorType"
                 type="text"
                 placeholder="e.g. Landscaping"
-                defaultValue={vendor?.vendorType || 'General'}
+                defaultValue={vendor?.vendorType || ''}
               />
             </div>
           </div>
@@ -210,20 +466,78 @@ function AddVendorUF({
           <div className="vuf-card-body vuf-form-grid">
             <div className="vuf-form-group">
               <label htmlFor="vdAddECheck">E-Check Y/N</label>
-              <select id="vdAddECheck" defaultValue={vendor?.electronicCheckYN || 'N'}>
-                <option value="Y">Yes</option>
-                <option value="N">No</option>
-              </select>
+              <select
+              id="vdAddECheck"
+              value={eCheckYN}
+              onChange={(event) => setECheckYN(event.target.value)}
+            >
+              <option value="Y">Yes</option>
+              <option value="N">No</option>
+            </select>
             </div>
             <div className="vuf-form-group">
               <label htmlFor="vdAddECheckAmount">E-Check Amount ($)</label>
               <input
-                id="vdAddECheckAmount"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                defaultValue={vendor?.electronicCheckAmount || ''}
-              />
+  id="vdAddECheckAmount"
+  type="number"
+  step="0.01"
+  min="0"
+  placeholder="0.00"
+  defaultValue={vendor?.electronicCheckAmount || ''}
+  disabled={eCheckYN !== 'Y'}
+
+  onBlur={(event) => {
+    const rawValue = event.target.value;
+
+    if (rawValue === '') return;
+
+    const value = Number(rawValue);
+    const decimalPart = rawValue.split('.')[1];
+
+    if (
+      !Number.isFinite(value) ||
+      value < 0 ||
+      (decimalPart && decimalPart.length > 2)
+    ) {
+      window.alert(
+        'E-Check Amount must be a valid amount with no more than 2 decimal places.'
+      );
+      event.target.value = '';
+      event.target.focus();
+      return;
+    }
+
+    event.target.value = value.toFixed(2);
+  }}
+
+  onKeyDown={(event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+
+      const rawValue = event.currentTarget.value;
+      if (rawValue === '') return;
+
+      const value = Number(rawValue);
+      const decimalPart = rawValue.split('.')[1];
+
+      if (
+        !Number.isFinite(value) ||
+        value < 0 ||
+        (decimalPart && decimalPart.length > 2)
+      ) {
+        window.alert(
+          'E-Check Amount must be a valid amount with no more than 2 decimal places.'
+        );
+        event.currentTarget.value = '';
+        event.currentTarget.focus();
+        return;
+      }
+
+      event.currentTarget.value = value.toFixed(2);
+      event.currentTarget.blur();
+    }
+    }}
+    />
             </div>
             <div className="vuf-form-group">
               <label htmlFor="vdAddECheckStartMonth">Start Month (1-12)</label>
@@ -234,28 +548,123 @@ function AddVendorUF({
                 max="12"
                 placeholder="1"
                 defaultValue={vendor?.startMonth || ''}
+                disabled={eCheckYN !== 'Y'}
+                onBlur={(event) => {
+                const value = Number(event.target.value);
+
+                if (
+                  event.target.value !== '' &&
+                  (!Number.isInteger(value) || value < 1 || value > 12)
+                ) {
+                  window.alert('Start Month must be a whole number from 1 through 12.');
+                  event.target.value = '';
+                  event.target.focus();
+                }
+              }}
+
+              onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+
+                const value = Number(event.currentTarget.value);
+
+                if (
+                  event.currentTarget.value !== '' &&
+                  (!Number.isInteger(value) || value < 1 || value > 12)
+                ) {
+                  window.alert('Start Month must be a whole number from 1 through 12.');
+                  event.currentTarget.value = '';
+                  event.currentTarget.focus();
+                  return;
+                }
+
+                event.currentTarget.blur();
+              }
+            }}
+
               />
+
+              
+
             </div>
             <div className="vuf-form-group">
-              <label htmlFor="vdAddECheckStartDay">Start Day (1-31)</label>
+              <label htmlFor="vdAddECheckStartDay">Start Day (1-28)</label>
               <input
-                id="vdAddECheckStartDay"
-                type="number"
-                min="1"
-                max="31"
-                placeholder="1"
-                defaultValue={vendor?.startDay || ''}
-              />
+  id="vdAddECheckStartDay"
+  type="number"
+  min="1"
+  max="28"
+  placeholder="1"
+  defaultValue={vendor?.startDay || ''}
+  disabled={eCheckYN !== 'Y'}
+
+  onBlur={(event) => {
+    const value = Number(event.target.value);
+
+    if (
+      event.target.value !== '' &&
+      (!Number.isInteger(value) || value < 1 || value > 28)
+    ) {
+      window.alert(
+        'Start Day must be a whole number from 1 through 28.'
+      );
+      event.target.value = '';
+      event.target.focus();
+    }
+  }}
+
+      onKeyDown={(event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+
+      const value = Number(event.currentTarget.value);
+
+      if (
+        event.currentTarget.value !== '' &&
+        (!Number.isInteger(value) || value < 1 || value > 28)
+      ) {
+        window.alert(
+          'Start Day must be a whole number from 1 through 28.'
+        );
+        event.currentTarget.value = '';
+        event.currentTarget.focus();
+        return;
+      }
+
+      event.currentTarget.blur();
+    }
+  }}
+/>
             </div>
+
+
             <div className="vuf-form-group span-2">
-              <label htmlFor="vdAddBankAccount">Bank Account Name</label>
-              <input
-                id="vdAddBankAccount"
-                type="text"
-                placeholder="Operating Bank"
-                defaultValue={vendor?.bankAccount || ''}
-              />
-            </div>
+  <label htmlFor="vdAddBankAccount">Bank Account</label>
+
+  <select
+    id="vdAddBankAccount"
+    defaultValue={vendor?.bankAccount || ''}
+    disabled={eCheckYN !== 'Y'}
+  >
+    <option value="">
+      -- Select Bank Account --
+    </option>
+
+    {bankOptions.map((bank) => {
+      const displayText =
+        `${bank.bankName} - ${bank.bankType} - ${bank.bankId}`;
+
+      return (
+        <option
+          key={bank.id}
+          value={bank.bankId}
+        >
+          {displayText}
+        </option>
+      );
+    })}
+  </select>
+</div>
             <div className="vuf-form-group span-2">
               <label htmlFor="vdAddCheckNotation">Default Check Notation</label>
               <input
@@ -272,24 +681,51 @@ function AddVendorUF({
         <div className="vuf-card span-2">
           <div className="vuf-card-header">GL Configuration & Notes</div>
           <div className="vuf-card-body vuf-form-grid">
+            
             <div className="vuf-form-group">
-              <label htmlFor="vdAddGLNumber">Default GL Number</label>
-              <input
-                id="vdAddGLNumber"
-                type="number"
-                placeholder="5010"
-                defaultValue={vendor?.defaultGlNumber || ''}
-              />
-            </div>
-            <div className="vuf-form-group span-2">
-              <label htmlFor="vdAddGLAccountName">Default GL Account Name</label>
-              <input
-                id="vdAddGLAccountName"
-                type="text"
-                placeholder="Landscaping Maintenance"
-                defaultValue={vendor?.defaultGlName || ''}
-              />
-            </div>
+  <label htmlFor="vdAddGLNumber">Default GL Number</label>
+  <input
+    id="vdAddGLNumber"
+    type="text"
+    value={selectedGLNumber}
+    readOnly
+  />
+</div>
+
+<div className="vuf-form-group span-2">
+  <label htmlFor="vdAddGLAccountName">Default GL Account Name</label>
+
+  <select
+    id="vdAddGLAccountName"
+    defaultValue={vendor?.defaultGlName || ''}
+    disabled={eCheckYN !== 'Y'}
+    onChange={(event) => {
+      const selectedName = event.target.value;
+
+      const selectedOption = glOptions.find(
+        (gl) => gl.glName === selectedName
+      );
+
+      setSelectedGLNumber(
+        selectedOption?.glNumber || ''
+      );
+    }}
+  >
+    <option value="">
+      -- Select GL Account --
+    </option>
+
+    {glOptions.map((gl) => (
+      <option
+        key={gl.id}
+        value={gl.glName}
+      >
+        {gl.glName}
+      </option>
+    ))}
+  </select>
+</div>
+
             <div className="vuf-form-group span-3">
               <label htmlFor="vdAddNotes">Vendor Notes</label>
               <textarea

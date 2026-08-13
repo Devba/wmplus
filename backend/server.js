@@ -326,7 +326,13 @@ app.get('/api/vendors', async (req, res) => {
         ActiveFlag as active_flag
       FROM VendorMaster
       WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
-      ORDER BY VendorName ASC
+      ORDER BY
+        CASE
+          WHEN VendorID REGEXP '^[0-9]{1,4}$' THEN 0
+          ELSE 1
+        END ASC,
+        CAST(VendorID AS UNSIGNED) ASC,
+        VendorName ASC
     `);
     res.json(rows);
   } catch (err) {
@@ -338,7 +344,47 @@ app.get('/api/vendors', async (req, res) => {
 app.post('/api/vendors', async (req, res) => {
   try {
     const v = req.body;
-    const vendorId = v.vendor_id || `VEND-${Date.now().toString().slice(-4)}`;
+    const [[settingsRow]] = await db.query(`
+  SELECT VendorStartingAcct
+  FROM SystemSettings
+  WHERE SystemSettingsID = 1
+  LIMIT 1
+`);
+
+const startingVendorNumber = Math.max(
+  1,
+  parseInt(settingsRow?.VendorStartingAcct, 10) || 1
+);
+
+const [existingVendorRows] = await db.query(`
+  SELECT VendorID
+  FROM VendorMaster
+  WHERE VendorID REGEXP '^[0-9]{1,4}$'
+`);
+
+const usedVendorNumbers = new Set(
+  existingVendorRows.map((row) =>
+    parseInt(row.VendorID, 10)
+  )
+);
+
+let nextVendorNumber = startingVendorNumber;
+
+while (
+  nextVendorNumber <= 9999 &&
+  usedVendorNumbers.has(nextVendorNumber)
+) {
+  nextVendorNumber += 1;
+}
+
+if (nextVendorNumber > 9999) {
+  return res.status(409).json({
+    error: 'No available Vendor ID numbers remain.'
+  });
+}
+
+const vendorId =
+  String(nextVendorNumber).padStart(4, '0');
     await db.query(`
       INSERT INTO VendorMaster (
         VendorID, VendorName, CareOfAddressLine, AddressLine1, AddressLine2, City, StateCode, ZipCode,
@@ -488,6 +534,7 @@ app.get('/api/check-register', async (req, res) => {
         cr.CheckNotation AS note,
         cr.BankAccount AS bank_account,
         cr.BankAccountID AS bank_account_id,
+        cr.CheckAllowedYN AS check_allowed,
 
         CONCAT(
           ba.BankName,
@@ -1398,6 +1445,116 @@ app.put('/api/settings/banking', async (req, res) => {
 
 
 /* ===========================================================
+   VOID TRANSACTION
+   Check Register persistence
+   =========================================================== */
+
+app.post('/api/void/execute', async (req, res) => {
+  try {
+    const transactionNumber =
+      req.body?.payload?.transaction_no;
+
+    const page =
+      req.body?.payload?.page || '';
+
+    if (!transactionNumber) {
+      return res.status(400).json({
+        ok: false,
+        status: {
+          message: 'Transaction # is required.'
+        }
+      });
+    }
+
+    if (page !== 'CR') {
+      return res.status(400).json({
+        ok: false,
+        status: {
+          message:
+            'Only Check Register void is enabled at this time.'
+        }
+      });
+    }
+
+    const [rows] = await db.query(`
+      SELECT
+        CheckTransactionNumber,
+        Status,
+        DateCheckCleared,
+        MonthCleared
+      FROM CheckRegister
+      WHERE CheckTransactionNumber = ?
+      LIMIT 1
+    `, [transactionNumber]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        status: {
+          message: 'Check transaction not found.'
+        }
+      });
+    }
+
+    const check = rows[0];
+
+    if (
+      check.Status === 'Cleared' ||
+      check.DateCheckCleared !== null ||
+      check.MonthCleared !== null
+    ) {
+      return res.status(400).json({
+        ok: false,
+        status: {
+          message:
+            'This check already cleared the bank and cannot be voided.'
+        }
+      });
+    }
+
+    if (check.Status === 'Voided') {
+      return res.status(400).json({
+        ok: false,
+        status: {
+          message: 'Transaction already voided.'
+        }
+      });
+    }
+
+    await db.query(`
+      UPDATE CheckRegister
+      SET
+        Status = 'Voided',
+        DateCheckCleared = NULL,
+        MonthCleared = NULL,
+        TimeStampUpdated = NOW()
+      WHERE CheckTransactionNumber = ?
+    `, [transactionNumber]);
+
+    return res.json({
+      ok: true,
+      status: {
+        message: 'VOID successful.'
+      }
+    });
+  } catch (err) {
+    console.error(
+      'Error voiding Check Register transaction:',
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      status: {
+        message: 'Unable to void check.'
+      },
+      details: err.message
+    });
+  }
+});
+
+
+/* ===========================================================
    SETTINGS: FINES / LATE FEES PROGRAMMING
    =========================================================== */
 
@@ -2241,7 +2398,50 @@ app.put('/api/settings/fines', async (req, res) => {
 
 app.get('/api/settings/gl-mapping', async (req, res) => {
   try {
-    const [rows] = await db.query(`SELECT * FROM GLAccounts WHERE ActiveFlag='Y' ORDER BY SortOrder ASC`);
+     const [rows] = await db.query(`
+  SELECT
+    child.*
+  FROM GLAccounts child
+  LEFT JOIN GLAccounts parent
+    ON child.PC = 'C'
+   AND child.ParentGL = parent.GLNumber
+   AND parent.PC = 'P'
+   AND parent.ActiveFlag = 'Y'
+  WHERE child.ActiveFlag = 'Y'
+  ORDER BY
+  CASE
+    /* Normal child: use its parent's GL# as the section anchor */
+    WHEN child.PC = 'C'
+         AND TRIM(child.ParentGL) <> ''
+    THEN CAST(
+      TRIM(SUBSTRING_INDEX(child.ParentGL, '-', 1))
+      AS UNSIGNED
+    )
+
+    /* Top-level reserved range: place it at the END of its range */
+    WHEN child.PC = 'P'
+         AND child.GLNumber LIKE '%-%'
+    THEN CAST(
+      TRIM(SUBSTRING_INDEX(child.GLNumber, '-', -1))
+      AS UNSIGNED
+    )
+
+    /* Normal parent anchor: order by its own GL# */
+    ELSE CAST(
+      TRIM(SUBSTRING_INDEX(child.GLNumber, '-', 1))
+      AS UNSIGNED
+    )
+  END ASC,
+
+  CASE
+    WHEN child.PC = 'P' THEN 0
+    WHEN UPPER(child.GLName) LIKE '%FUTURE%' THEN 2
+    ELSE 1
+  END ASC,
+
+  child.SortOrder ASC,
+  child.GLAccountID ASC
+`);
     const mapped = rows.map(r => ({
       id: r.GLAccountID,
       glNumber: r.GLNumber,
@@ -2274,35 +2474,54 @@ app.get('/api/settings/gl-mapping', async (req, res) => {
 });
 
 app.put('/api/settings/gl-mapping', async (req, res) => {
-  try {
-    const { glAccounts } = req.body;
-    if (Array.isArray(glAccounts)) {
+  const { glAccounts, structuralSave } = req.body;
+
+  if (!Array.isArray(glAccounts)) {
+    return res.status(400).json({
+      error: 'glAccounts must be an array'
+    });
+  }
+
+  // -----------------------------------------------------------
+  // STRUCTURAL SAVE
+  // Add / Delete / Move Up / Move Down / Move To Parent.
+  // The array order received from React is the source of truth.
+  // -----------------------------------------------------------
+  if (structuralSave === true) {
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const submittedIds = [];
+
       for (const [idx, r] of glAccounts.entries()) {
         if (r.id) {
-          await db.query(`
+          await connection.query(`
             UPDATE GLAccounts SET
-            GLNumber=?,
-            GLName=?,
-            SourceTable=?,
-            Description=?,
-            BankType=?,
-            BankID=?,
-            PC=?,
-            ParentGL=?,
-            ConsolidatedParentGL=?,
-            DC=?,
-            AR=?,
-            EffectiveDate=?,
-            LastEditedBy=?,
-            SystemLocked=?,
-            UseInCR=?,
-            UseInDP=?,
-            UseInAPR=?,
-            UseInBDC=?,
-            UseInXFER=?,
-            SortOrder=?,
-            TimeStampUpdated=NOW()
-          WHERE GLAccountID=?
+              GLNumber=?,
+              GLName=?,
+              SourceTable=?,
+              Description=?,
+              BankType=?,
+              BankID=?,
+              PC=?,
+              ParentGL=?,
+              ConsolidatedParentGL=?,
+              DC=?,
+              AR=?,
+              EffectiveDate=?,
+              LastEditedBy=?,
+              SystemLocked=?,
+              ActiveFlag='Y',
+              SortOrder=?,
+              UseInCR=?,
+              UseInDP=?,
+              UseInAPR=?,
+              UseInBDC=?,
+              UseInXFER=?,
+              TimeStampUpdated=NOW()
+            WHERE GLAccountID=?
           `, [
             r.glNumber || '',
             r.glName || '',
@@ -2318,21 +2537,232 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
             r.effectiveDate || '',
             r.lastEditedBy || 'SYSTEM',
             r.systemLocked ? 1 : 0,
+            idx,
             r.useInCR || 'N',
             r.useInDP || 'N',
             r.useInAPR || 'N',
             r.useInBDC || 'N',
-            r.useInXFER || 'N',
-            idx,
+            r.useInXFER || r.useInXfer || 'N',
             r.id
           ]);
+
+          submittedIds.push(Number(r.id));
+        } else {
+          const [result] = await connection.query(`
+            INSERT INTO GLAccounts (
+              GLNumber,
+              GLName,
+              SourceTable,
+              Description,
+              BankType,
+              BankID,
+              PC,
+              ParentGL,
+              ConsolidatedParentGL,
+              DC,
+              AR,
+              EffectiveDate,
+              CreatedBy,
+              CreatedDate,
+              LastEditedBy,
+              SystemLocked,
+              ActiveFlag,
+              SortOrder,
+              UseInCR,
+              UseInDP,
+              UseInAPR,
+              UseInBDC,
+              UseInXFER
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, 'Y', ?, ?, ?, ?, ?, ?
+            )
+          `, [
+            r.glNumber || '',
+            r.glName || '',
+            r.sourceTable || '',
+            r.description || '',
+            r.bankType || '',
+            r.bankId || '',
+            r.pc || 'C',
+            r.parentGl || '',
+            r.consolidatedParentGl || '',
+            r.dc || 'D',
+            r.ar || 'A',
+            r.effectiveDate || '',
+            r.createdBy || 'USER',
+            r.createdDate || '',
+            r.lastEditedBy || 'USER',
+            r.systemLocked ? 1 : 0,
+            idx,
+            r.useInCR || 'N',
+            r.useInDP || 'N',
+            r.useInAPR || 'N',
+            r.useInBDC || 'N',
+            r.useInXFER || r.useInXfer || 'N'
+          ]);
+
+          submittedIds.push(Number(result.insertId));
         }
       }
+
+      // A structural save contains the complete active mapping.
+      // Any unlocked active row omitted from that complete array
+      // was deleted by the user and is retired rather than erased.
+      if (submittedIds.length > 0) {
+        const placeholders = submittedIds.map(() => '?').join(',');
+
+        await connection.query(`
+          UPDATE GLAccounts
+          SET ActiveFlag='N',
+              TimeStampUpdated=NOW()
+          WHERE ActiveFlag='Y'
+            AND SystemLocked=0
+            AND GLAccountID NOT IN (${placeholders})
+        `, submittedIds);
+      }
+
+      await connection.commit();
+
+      return res.json({
+        success: true,
+        message: 'GL Accounts structure updated successfully'
+      });
+    } catch (err) {
+      await connection.rollback();
+      console.error('Error updating GL mapping structure:', err);
+
+      return res.status(500).json({
+        error: 'Failed to update GL mapping structure',
+        details: err.message
+      });
+    } finally {
+      connection.release();
     }
-    res.json({ success: true, message: 'GL Accounts updated successfully' });
+  }
+
+  // -----------------------------------------------------------
+  // SINGLE-ROW SAVE
+  // Ordinary field edit. SortOrder is intentionally untouched.
+  // -----------------------------------------------------------
+  try {
+    for (const r of glAccounts) {
+      if (!r.id) {
+        // Fast new-row save: insert only this P or C row.
+        // P display order is calculated by the GET query from GLNumber.
+        // C rows receive the next SortOrder within their ParentGL group.
+        const [sortRows] = await db.query(
+          r.pc === 'C' && String(r.parentGl || '').trim() !== ''
+            ? `SELECT COALESCE(MAX(SortOrder), -1) + 1 AS nextSortOrder
+                 FROM GLAccounts
+                WHERE ActiveFlag='Y' AND PC='C' AND ParentGL=?`
+            : `SELECT COALESCE(MAX(SortOrder), -1) + 1 AS nextSortOrder
+                 FROM GLAccounts
+                WHERE ActiveFlag='Y' AND PC='P'`,
+          r.pc === 'C' && String(r.parentGl || '').trim() !== ''
+            ? [r.parentGl]
+            : []
+        );
+
+        const nextSortOrder = Number(sortRows[0]?.nextSortOrder) || 0;
+
+        await db.query(`
+          INSERT INTO GLAccounts (
+            GLNumber, GLName, SourceTable, Description, BankType, BankID,
+            PC, ParentGL, ConsolidatedParentGL, DC, AR, EffectiveDate,
+            CreatedBy, CreatedDate, LastEditedBy, SystemLocked, ActiveFlag,
+            SortOrder, UseInCR, UseInDP, UseInAPR, UseInBDC, UseInXFER
+          ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Y',
+            ?, ?, ?, ?, ?, ?
+          )
+        `, [
+          r.glNumber || '',
+          r.glName || '',
+          r.sourceTable || '',
+          r.description || '',
+          r.bankType || '',
+          r.bankId || '',
+          r.pc || 'C',
+          r.parentGl || '',
+          r.consolidatedParentGl || '',
+          r.dc || 'D',
+          r.ar || 'A',
+          r.effectiveDate || '',
+          r.createdBy || 'USER',
+          r.createdDate || '',
+          r.lastEditedBy || 'USER',
+          r.systemLocked ? 1 : 0,
+          nextSortOrder,
+          r.useInCR || 'N',
+          r.useInDP || 'N',
+          r.useInAPR || 'N',
+          r.useInBDC || 'N',
+          r.useInXFER || r.useInXfer || 'N'
+        ]);
+
+        continue;
+      }
+
+      await db.query(`
+        UPDATE GLAccounts SET
+          GLNumber=?,
+          GLName=?,
+          SourceTable=?,
+          Description=?,
+          BankType=?,
+          BankID=?,
+          PC=?,
+          ParentGL=?,
+          ConsolidatedParentGL=?,
+          DC=?,
+          AR=?,
+          EffectiveDate=?,
+          LastEditedBy=?,
+          SystemLocked=?,
+          UseInCR=?,
+          UseInDP=?,
+          UseInAPR=?,
+          UseInBDC=?,
+          UseInXFER=?,
+          TimeStampUpdated=NOW()
+        WHERE GLAccountID=?
+      `, [
+        r.glNumber || '',
+        r.glName || '',
+        r.sourceTable || '',
+        r.description || '',
+        r.bankType || '',
+        r.bankId || '',
+        r.pc || 'P',
+        r.parentGl || '',
+        r.consolidatedParentGl || '',
+        r.dc || 'D',
+        r.ar || 'A',
+        r.effectiveDate || '',
+        r.lastEditedBy || 'SYSTEM',
+        r.systemLocked ? 1 : 0,
+        r.useInCR || 'N',
+        r.useInDP || 'N',
+        r.useInAPR || 'N',
+        r.useInBDC || 'N',
+        r.useInXFER || r.useInXfer || 'N',
+        r.id
+      ]);
+    }
+
+    return res.json({
+      success: true,
+      message: 'GL Account updated successfully'
+    });
   } catch (err) {
     console.error('Error updating GL mapping:', err);
-    res.status(500).json({ error: 'Failed to update GL mapping', details: err.message });
+
+    return res.status(500).json({
+      error: 'Failed to update GL mapping',
+      details: err.message
+    });
   }
 });
 

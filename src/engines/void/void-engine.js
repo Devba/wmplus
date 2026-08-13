@@ -8,8 +8,8 @@
 // =====================================================
 
 import { closeOverlay } from '../overlay';
-
-const TEMP_REACT_TEST_MODE = true;
+import { API_BASE_URL } from '../../config/api';
+const TEMP_REACT_TEST_MODE = false;
 
 export function applyVoidStamp(tr, stampFields) {
   const cells = tr.querySelectorAll('td, .apr-cell');
@@ -108,7 +108,7 @@ export async function executeVoid(tr, config) {
 
     try {
       response = await fetch(
-        'http://localhost:3011/api/void/execute',
+        `${API_BASE_URL}/void/execute`,
         {
           method: 'POST',
           headers: {

@@ -2877,7 +2877,6 @@ function GLMapping({
     while (
       insertAt < nextRows.length &&
       nextRows[insertAt].pc === 'C' &&
-      !isRangeRow(nextRows[insertAt]) &&
       String(nextRows[insertAt].parentGl) === String(parentGl)
     ) {
       insertAt += 1;
@@ -2888,6 +2887,7 @@ function GLMapping({
         row.pc === 'P' &&
         String(row.glNumber) === String(parentGl)
     );
+
 
     nextRows.splice(insertAt, 0, {
       glNumber: '',
@@ -3115,92 +3115,148 @@ function GLMapping({
   }
 
   async function saveCurrentSettings() {
-  if (!validateEditedRow()) {
-    return false;
-  }
+    if (!validateEditedRow()) {
+      return false;
+    }
 
-  setIsSaving(true);
-  setSaveError('');
-  setSaveMessage('');
+    setIsSaving(true);
+    setSaveError('');
+    setSaveMessage('');
 
-  try {
-    const now = todayString();
+    try {
+      const now = todayString();
 
-    // -----------------------------------------
-    // NORMAL SINGLE-ROW EDIT
-    // -----------------------------------------
-    if (editingRowIndex !== null) {
-      const editedRow = {
-        ...currentRows[editingRowIndex],
-        effectiveDate: now,
-        lastEditedBy: 'USER',
-        createdBy:
-          currentRows[editingRowIndex].createdBy ||
-          'USER',
-        createdDate:
-          currentRows[editingRowIndex].createdDate ||
-          now
-      };
+      // -------------------------------------------------
+      // ROW EDIT / NEW ROW
+      // Existing row edits stay fast: save one row only.
+      // New rows are structural changes: save the complete
+      // ordered mapping so SortOrder matches the screen.
+      // -------------------------------------------------
+      if (editingRowIndex !== null) {
+        const rowBeingSaved = currentRows[editingRowIndex];
+        const isNewRow = rowBeingSaved?.isNew === true;
 
-      delete editedRow.isNew;
+        const editedRow = {
+          ...rowBeingSaved,
+          effectiveDate: now,
+          lastEditedBy: 'USER',
+          createdBy: rowBeingSaved?.createdBy || 'USER',
+          createdDate: rowBeingSaved?.createdDate || now
+        };
 
-      const saveData = {
-        expenseRows:
-          activeSection === 'expense'
-            ? [editedRow]
-            : [],
-        revenueRows:
-          activeSection === 'revenue'
-            ? [editedRow]
-            : [],
-        activeSection
-      };
+        delete editedRow.isNew;
+        delete editedRow.insertAfterId;
+        delete editedRow.sortOrder;
 
-      await saveGLMapping(saveData);
+        const updatedRows = [...currentRows];
+        updatedRows[editingRowIndex] = editedRow;
 
-      const updatedRows = [...currentRows];
-      updatedRows[editingRowIndex] = editedRow;
+        if (isNewRow) {
+          // New P or C rows are saved individually.
+          // The server assigns the new row's SortOrder; the GET query
+          // then places P rows numerically and C rows under ParentGL.
+          const saveData = {
+            expenseRows:
+              activeSection === 'expense'
+                ? [editedRow]
+                : [],
+            revenueRows:
+              activeSection === 'revenue'
+                ? [editedRow]
+                : [],
+            activeSection,
+            structuralSave: false
+          };
 
-      if (activeSection === 'expense') {
-        setExpenseRows(updatedRows);
-      } else {
-        setRevenueRows(updatedRows);
+          await saveGLMapping(saveData);
+
+          // Reload once so the inserted row receives its database ID
+          // and appears in the server-calculated hierarchy/order.
+          const savedData = await loadGLMapping();
+
+          setExpenseRows(
+            Array.isArray(savedData?.expenseRows)
+              ? cloneRows(savedData.expenseRows)
+              : cloneRows(DEFAULT_EXPENSE_ROWS)
+          );
+          setRevenueRows(
+            Array.isArray(savedData?.revenueRows)
+              ? cloneRows(savedData.revenueRows)
+              : cloneRows(DEFAULT_REVENUE_ROWS)
+          );
+        } else {
+          const saveData = {
+            expenseRows:
+              activeSection === 'expense'
+                ? [editedRow]
+                : [],
+            revenueRows:
+              activeSection === 'revenue'
+                ? [editedRow]
+                : [],
+            activeSection,
+            structuralSave: false
+          };
+
+          await saveGLMapping(saveData);
+
+          if (activeSection === 'expense') {
+            setExpenseRows(updatedRows);
+          } else {
+            setRevenueRows(updatedRows);
+          }
+        }
       }
+
+      // -------------------------------------------------
+      // STRUCTURAL CHANGES
+      // Move Up / Move Down / Move To Parent / Delete.
+      // The ordered React arrays are the source of truth.
+      // -------------------------------------------------
+      else {
+        const completeData = {
+          expenseRows,
+          revenueRows,
+          activeSection,
+          structuralSave: true
+        };
+
+        await saveGLMapping(completeData);
+
+        const savedData = await loadGLMapping();
+
+        setExpenseRows(
+          Array.isArray(savedData?.expenseRows)
+            ? cloneRows(savedData.expenseRows)
+            : cloneRows(DEFAULT_EXPENSE_ROWS)
+        );
+        setRevenueRows(
+          Array.isArray(savedData?.revenueRows)
+            ? cloneRows(savedData.revenueRows)
+            : cloneRows(DEFAULT_REVENUE_ROWS)
+        );
+      }
+
+      setEditingRowIndex(null);
+      setEditSnapshot(null);
+      setHasUnsavedChanges(false);
+      setSaveMessage('Changes saved.');
+
+      return true;
+    } catch (error) {
+      console.error(error);
+
+      setSaveError(
+        error.message ||
+        'Unable to save GL Mapping settings.'
+      );
+
+      return false;
+    } finally {
+      setIsSaving(false);
     }
-
-    // -----------------------------------------
-    // OTHER TABLE-WIDE CHANGES
-    // Move Up / Move Down / etc.
-    // -----------------------------------------
-    else {
-      const completeData = {
-        expenseRows,
-        revenueRows,
-        activeSection
-      };
-
-      await saveGLMapping(completeData);
-    }
-
-    setEditingRowIndex(null);
-    setEditSnapshot(null);
-    setHasUnsavedChanges(false);
-    setSaveMessage('Changes saved.');
-
-    return true;
-  } catch (error) {
-    console.error(error);
-
-    setSaveError(
-      error.message ||
-      'Unable to save GL Mapping settings.'
-    );
-
-    return false;
-  } finally {
-    setIsSaving(false);
   }
-}
+
   async function restoreLastSavedData() {
     const savedData = await loadGLMapping();
 
@@ -3419,11 +3475,15 @@ function GLMapping({
               id="btnGLMapSave"
               onClick={saveCurrentSettings}
               disabled={isLoading || isSaving}
+              style={{
+                backgroundColor: hasUnsavedChanges ? 'red' : '',
+                color: hasUnsavedChanges ? 'white' : ''
+              }}
             >
               {isSaving
                 ? 'Saving...'
-                : saveMessage
-                  ? 'Changes Saved'
+                : hasUnsavedChanges
+                  ? 'SAVE CHANGES'
                   : 'Save'}
             </button>
 
