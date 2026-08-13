@@ -636,6 +636,95 @@ app.post('/api/check-register', async (req, res) => {
 });
 
 /* ===========================================================
+   3b. MODIFY GL# — CHECK / DEPOSIT REGISTER TRANSACTION
+   Updates the GL number + GL account/classification on an
+   existing transaction. Coordinated with frontend contract:
+   payload: page, transactionNo, oldGLNo, oldGLClassification,
+            newGLNo, newGLClassification
+   =========================================================== */
+
+app.post('/api/modify-gl/submit', async (req, res) => {
+  try {
+    const {
+      page = 'CR',
+      transactionNo = '',
+      newGLNo = '',
+      newGLClassification = ''
+    } = req.body || {};
+
+    if (!transactionNo) {
+      return res.status(400).json({
+        success: false,
+        message: 'transactionNo is required'
+      });
+    }
+
+    if (!newGLNo && !newGLClassification) {
+      return res.status(400).json({
+        success: false,
+        message: 'newGLNo or newGLClassification is required'
+      });
+    }
+
+    const pageKey = String(page || 'CR').toUpperCase().trim();
+    const newGlNoStr = String(newGLNo || '').trim();
+    const newClassStr = String(newGLClassification || '').trim();
+
+    let affectedRows = 0;
+
+    if (pageKey === 'CR') {
+      const [result] = await db.query(`
+        UPDATE CheckRegister
+        SET
+          GLNumber = ?,
+          GLAccountName = ?,
+          TimeStampUpdated = NOW()
+        WHERE CheckTransactionNumber = ?
+      `, [newGlNoStr, newClassStr, transactionNo]);
+      affectedRows = result.affectedRows;
+    } else if (pageKey === 'DP') {
+      const [result] = await db.query(`
+        UPDATE DepositRegister
+        SET
+          GLNumber = ?,
+          GLAccountName = ?,
+          TimeStampUpdated = NOW()
+        WHERE DepositTransactionNumber = ?
+      `, [newGlNoStr, newClassStr, transactionNo]);
+      affectedRows = result.affectedRows;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: `Unsupported page: ${pageKey}. Use CR or DP.`
+      });
+    }
+
+    if (affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No transaction found with transactionNo: ${transactionNo}`
+      });
+    }
+
+    res.json({
+      success: true,
+      page: pageKey,
+      transactionNo,
+      newGLNo: newGlNoStr,
+      newGLClassification: newClassStr,
+      affectedRows
+    });
+  } catch (err) {
+    console.error('Error modifying GL for transaction:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to modify GL',
+      details: err.message
+    });
+  }
+});
+
+/* ===========================================================
    4. DEPOSIT REGISTER (DepositRegister) & ACID TRANSACTION POSTING
    =========================================================== */
 
@@ -1679,7 +1768,11 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
 
 app.get('/api/gl-options', async (req, res) => {
   try {
-    const screen = String(req.query.screen || '').toUpperCase().trim();
+    // 'screen' is the standard param. 'page' is accepted temporarily
+    // for backward compatibility with older frontend calls.
+    const screen = String(
+      req.query.screen || req.query.page || ''
+    ).toUpperCase().trim();
     const bankId = req.query.bankId ? String(req.query.bankId).trim() : '';
 
     const flagByScreen = {
