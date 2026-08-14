@@ -1,22 +1,14 @@
 # Rules for AI Agents
 
-## Critical Rules
+## Allowed tools
+- **Read/Search**: read, glob, grep, webfetch, skill
+- **Edit**: write, edit (one change at a time; read the file first)
+- **Run**: bash (for quick checks/commands)
+- **Plan**: todowrite, question, task
 
-1. **ONLY use these tools**: bash, edit, glob, grep, read, question, task, todowrite, webfetch, write
-2. **NEVER call**: unknown, invalid, or any other tool not in the list above
-3. **Do one operation at a time** when editing files - don't batch multiple edits in parallel
-4. **Verify tool calls** before executing - if unsure, use bash to check first
-
-## File Editing Guidelines
-
-- Read the file first before editing
-- Make one change at a time
-- After editing, verify with a quick check
-- Don't try to do 5+ edits in a single response
-
-## General Guidelines
-
-- Be concise in responses
-- Don't repeat the same operations
-- If something fails, analyze and fix before retrying
-- Prefer bash for quick checks over reading full files
+## Workflow
+1. Read a file before editing it.
+2. Make one change at a time and verify after each edit.
+3. Prefer grep/glob over bash for searches.
+4. If something fails, analyze the error before retrying.
+5. Be concise; don't repeat the same operations.
