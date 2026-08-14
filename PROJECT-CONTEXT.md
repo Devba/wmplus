@@ -82,6 +82,19 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
 3. Trabajar en una rama; siempre `git pull` antes de empezar y coordinar pushes.
 4. Consultar/acceder al VPS vía SSH (puerto 44) si se necesita desplegar o inspeccionar.
 
+## 9. Estrategia de trabajo actual (2026-08-14)
+
+- **Frontend (Hal) trabaja solo en su rama.** Backend se mantiene en **modo observación**:
+  - Revisar los pushes de Hal en `feature/register-entry-wiring` cuando ocurran.
+  - **No tocar su trabajo** ni hacer merges prematuros mientras no haya urgencia.
+- **Cuándo intervenir (reglas de alerta):**
+  1. Un push de Hal que toque `backend/server.js` sin coordinar (rompe el acuerdo de responsabilidades) → revisar y avisar.
+  2. Hal anuncie **despliegue al VPS** o un merge grande → integrar ANTES ambos `server.js`:
+     - Backend actual (VPS/BravoFrontend) tiene: `modify-gl/submit`, `gl-options`, `useIn*`, `gl-mapping`.
+     - Rama de Hal tiene: `void/execute`, `dues-programming`, `fines-late-fees`, vendor IDs.
+     - Sin integrar, un despliegue con solo una de las versiones **pierde endpoints del otro lado**.
+- **Pendientes tras cualquier merge:** probar CR Modify GL# end-to-end (Hal lo hará tras mergear `BravoFrontend` a su rama).
+
 ---
 
 *(Este documento se actualiza conforme cambian los contratos, el despliegue y las decisiones. Mantener al día.)*
