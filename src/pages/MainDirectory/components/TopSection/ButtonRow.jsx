@@ -186,6 +186,17 @@ function ButtonRow({
           return;
         }
 
+        if (data.mode === 'answer') {
+          Swal.fire({
+            icon: 'info',
+            title: '🤖 Resultado IA',
+            html: `<div style="font-size:1.3rem;margin:8px 0;"><strong>${data.answer || 'Sin resultado'}</strong></div>`,
+            confirmButtonText: 'Cerrar',
+            confirmButtonColor: '#2b579a'
+          });
+          return;
+        }
+
         if (onAiFilter) {
           onAiFilter(data.residents || null, prompt);
         }

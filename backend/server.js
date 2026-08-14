@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const { spawn } = require('child_process');
 const db = require('./db');
 require('dotenv').config();
 
@@ -1043,60 +1044,72 @@ app.post('/api/ai-filter', async (req, res) => {
       return res.status(400).json({ error: 'Prompt string is required' });
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY || '';
-    const model = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
+    const opencodeCliPath = process.env.OPENCODE_CLI_PATH || '/home/alvaro/Documents/Default Project/tg-opencode-bridge/node_modules/opencode-ai/bin/opencode.exe';
+    const opencodeModel = process.env.OPENCODE_AI_MODEL || 'opencode-go/deepseek-v4-flash';
 
-    const systemMessage = `You are a database AI query parser. Translate natural language queries into a SQL WHERE clause compatible with the following MySQL database table schema for the "ResidentMaster" table. Do not make assumptions about data not defined in the schema.
+    const systemMessage = `You are a database AI query engine for an HOA (homeowners association) management system. Translate natural language queries into safe SQL against the MySQL database.
 
-Table: ResidentMaster
-Schema Fields:
-- ResidentAccountID (VARCHAR, Primary Key - Unique resident account identifier e.g., "RES-001")
-- LastName (VARCHAR - Last name of the resident e.g., "Mitchell")
-- FirstName (VARCHAR - First name of the resident e.g., "James")
-- ResidenceAddress (VARCHAR - Street address of the resident's home/residence e.g., "8901 Palm Vista Cir")
-- City (VARCHAR - City where the resident lives e.g., "Miami")
-- StateCode (VARCHAR - 2-letter state code of the resident e.g., "FL", "NY", "CA", "TX")
-- ZipCode (VARCHAR - Zip or postal code of the resident e.g., "33156")
-- AnnualDuesRate (DECIMAL - Annual dues rate code or amount due per year e.g., 3600.00)
-- EmailAddress (VARCHAR - Email address of the resident e.g., "james@email.com")
-- PrimaryPhone (VARCHAR - Primary phone number of the resident e.g., "305-555-3001")
-- ActiveResidentFlag (VARCHAR - Active/Inactive resident flag: "Y" for Active or "N" for Inactive)
-- AnnualDuesBalance (DECIMAL - Outstanding dues balance or debt. A positive value means the resident owes money/debt, e.g. 150.00)
+Tables and columns:
+
+ResidentMaster (one row per resident/account):
+- ResidentAccountID (VARCHAR, PK, e.g. "RES-001")
+- FirstName, MiddleName, LastName, DisplayName
+- ResidenceAddress, BillingAddress, City, StateCode, ZipCode
+- PrimaryPhone, PrimaryCell, SecondaryCell, EmailAddress
+- MoveInDate, MoveOutDate (DATE)
+- ResidentType, OwnerFlag, ActiveResidentFlag ('Y'/'N'), Status
+- AnnualDuesRate, AnnualDues, AnnualDuesPaidYTD, AnnualDuesBalance (DECIMAL)
+- SpecialAssessmentRate, SpecialAssessmentDues, SpecialAssessmentPaidYTD, SpecialAssessmentBalance (DECIMAL)
+- FinesFeesBalance, PriorYearCredit (DECIMAL)
+- DeletedFlag ('N' = not deleted)
+
+ViolationRegister (one row per violation/fine issued to a resident):
+- ResidentAccountID (FK to ResidentMaster), ResidentName, Address
+- ViolationDescription, WarningOrFineFlag ('Fine' or 'Warning'), FineAmount (DECIMAL)
+- InspectionDate, LetterIssueDate, InvoiceStatus, InvoiceBalance
 
 Rules:
-1. Output ONLY a raw JSON object with a single "whereClause" string key.
-2. The "whereClause" must be a valid SQL expression that can be appended directly to "SELECT * FROM ResidentMaster WHERE ".
-3. Translate "estado de [Nombre]" (e.g., "estado de florida") to StateCode = 'FL'.
-4. Translate "estado activo" or "activo" to ActiveResidentFlag = 'Y'. Translate "estado inactivo" or "inactivo" to ActiveResidentFlag = 'N'.
-5. Use LIKE for substring matches (e.g. EmailAddress LIKE '%mitchell%' or PrimaryPhone LIKE '%305%').
-6. Use LIKE 'prefix%' for starting letters (e.g. LastName LIKE 'C%').
-7. Use standard comparison operators (=, !=, <, >, <=, >=).
-8. For "mayores deudores" or similar ordering requests, you can append "ORDER BY AnnualDuesBalance DESC" or similar to the whereClause, but it MUST still be valid SQL syntactically (e.g., "AnnualDuesBalance > 0 ORDER BY AnnualDuesBalance DESC LIMIT 10").
-9. Do not include markdown formatting, code blocks, or comments in your response.
+1. Output ONLY a raw JSON object, no markdown, no code fences, no comments.
+2. Filter queries (list/filter residents in the table) use:
+   {"mode":"filter","whereClause":"<SQL WHERE expression>","orderBy":"<optional ORDER BY clause>","limit":<optional integer>}
+   The whereClause is appended directly to "SELECT * FROM ResidentMaster WHERE ".
+3. Count/aggregate queries (how many, counts, totals) use:
+   {"mode":"answer","answerSql":"<single aggregate SELECT>","answerLabel":"<short human label in Spanish>"}
+   answerSql must be a SELECT that returns a single row (COUNT(*), COUNT(DISTINCT ...), SUM(...), etc.).
+4. "activo/activos/inactivos" -> ActiveResidentFlag='Y'/'N'. Always add DeletedFlag='N' to ResidentMaster filters.
+5. "estado de florida" -> StateCode='FL'. Use LIKE for partial text (EmailAddress LIKE '%x%', PrimaryPhone LIKE '%305%'). Starting letters -> LastName LIKE 'A%'.
+6. Real debt = AnnualDuesBalance>0 OR SpecialAssessmentBalance>0. "deudores/mayores deudores" -> that plus ORDER BY (AnnualDuesBalance+SpecialAssessmentBalance) DESC, LIMIT 10 when asked for "los 10".
+7. Fines/violations ("multas", "multa", "violaciones", "fines"): to list residents with fines use
+   ResidentAccountID IN (SELECT ResidentAccountID FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0)
+   For counts ("cuantos han tenido multas") use SELECT COUNT(DISTINCT ResidentAccountID) FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0.
+8. "cuantos residentes hay" -> SELECT COUNT(*) FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N'.
+9. Never use destructive keywords (DROP, DELETE, UPDATE, INSERT, ALTER, TRUNCATE, GRANT, REVOKE, UNION, CREATE, EXEC) and no semicolons.
 
-Output Example:
-{"whereClause":"StateCode = 'FL' AND AnnualDuesRate > 1000"}`;
+Examples:
+Input: "residentes de florida activos" -> {"mode":"filter","whereClause":"StateCode='FL' AND ActiveResidentFlag='Y' AND DeletedFlag='N'"}
+Input: "cuantos residentes tienen deudas" -> {"mode":"answer","answerSql":"SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND (AnnualDuesBalance>0 OR SpecialAssessmentBalance>0)","answerLabel":"Residentes con deuda"}
+Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesBalance>0 OR SpecialAssessmentBalance>0) AND DeletedFlag='N'","orderBy":"(AnnualDuesBalance+SpecialAssessmentBalance) DESC","limit":10}`;
 
     function conditionsToSql(conditions) {
       if (!conditions || conditions.length === 0) return '1=1';
       return conditions.map(c => {
+        if (c.raw) return c.raw;
         const escapedValue = String(c.value).replace(/'/g, "''");
         if (c.operator === 'contains') {
           return `${c.field} LIKE '%${escapedValue}%'`;
         }
-        const isNumeric = !isNaN(c.value) && (c.field === 'AnnualDuesRate' || c.field === 'AnnualDuesBalance');
+        if (c.operator === 'like') {
+          return `${c.field} LIKE '${escapedValue}'`;
+        }
+        const isNumeric = !isNaN(c.value) && (c.field === 'AnnualDuesRate' || c.field === 'AnnualDuesBalance' || c.field === 'SpecialAssessmentBalance');
         const quote = isNumeric ? '' : "'";
         return `${c.field} ${c.operator} ${quote}${escapedValue}${quote}`;
       }).join(' AND ');
     }
 
-    let whereClause = '1=1';
-    let source = 'openrouter';
-
-    if (!apiKey) {
-      console.warn('[AI Filter] OPENROUTER_API_KEY not set. Using enhanced local fallback parser.');
-      let conditions = [];
-      const lower = prompt.toLowerCase().trim();
+    function buildFallbackResult(promptText) {
+      const lower = promptText.toLowerCase().trim();
+      const cleanPrompt = promptText.replace(/["']/g, '').trim();
 
       const FULL_STATES = {
         'florida': 'FL', 'california': 'CA', 'new york': 'NY', 'texas': 'TX',
@@ -1112,27 +1125,73 @@ Output Example:
         'atlanta', 'chicago', 'charlotte', 'las vegas', 'phoenix', 'denver', 'seattle'
       ];
 
-      const cleanPrompt = prompt.replace(/["']/g, '').trim();
+      const isCount = /\b(cu[áa]ntos?|cu[áa]ntas?|how many|total de|n[úu]mero de)\b/.test(lower);
+      const isDebt = /deudor|deuda|deben|debt/.test(lower);
+      const isFine = /multa|violaci|fine|infracci/.test(lower);
 
-      // 1. Last Name check ("last name = Chen", "apellido Chen", "last name Chen", "apellido = Chen")
+      // ANSWER MODE: count/aggregate questions
+      if (isCount) {
+        if (isFine) {
+          return {
+            mode: 'answer',
+            answerSql: "SELECT COUNT(DISTINCT ResidentAccountID) AS total FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0",
+            answerLabel: 'Residentes con multas'
+          };
+        }
+        if (isDebt) {
+          return {
+            mode: 'answer',
+            answerSql: "SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND (AnnualDuesBalance>0 OR SpecialAssessmentBalance>0)",
+            answerLabel: 'Residentes con deuda'
+          };
+        }
+        return {
+          mode: 'answer',
+          answerSql: "SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N'",
+          answerLabel: 'Residentes'
+        };
+      }
+
+      // FILTER MODE
+      const conditions = [];
+
+      // Fines / violations
+      if (isFine) {
+        conditions.push({ raw: "ResidentAccountID IN (SELECT ResidentAccountID FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0)" });
+      }
+
+      // Debt (real debt = dues + special assessment)
+      if (isDebt) {
+        conditions.push({ raw: "(AnnualDuesBalance>0 OR SpecialAssessmentBalance>0) AND ActiveResidentFlag='Y' AND DeletedFlag='N'" });
+      }
+
+      // Names starting with a letter ("nombres que empiecen con a", "empiezan con la letra m")
+      const startsWithMatch = lower.match(/(?:empiezan?|empiecen|empieza|empieze|comiencen?|empezando|inician?)\s+(?:con\s+)?(?:la\s+letra\s+)?["']?([a-z])/i);
+      const matchedStartsWith = !!(startsWithMatch && startsWithMatch[1]);
+      if (matchedStartsWith) {
+        const letter = startsWithMatch[1].toUpperCase();
+        conditions.push({ raw: `(LastName LIKE '${letter}%' OR FirstName LIKE '${letter}%' OR DisplayName LIKE '${letter}%')` });
+      }
+
+      // Last Name check ("last name = Chen", "apellido Chen")
       const lastNameMatch = cleanPrompt.match(/(?:last\s*name|apellido)\s*(?:=|is|igual a|:)?\s*([a-zA-Z\s]+)/i);
-      if (lastNameMatch && lastNameMatch[1]) {
+      if (!matchedStartsWith && lastNameMatch && lastNameMatch[1]) {
         const val = lastNameMatch[1].trim();
         if (val) {
           conditions.push({ field: 'LastName', operator: '=', value: val });
         }
       }
 
-      // 2. First Name check ("first name = James", "nombre James", "first name James")
+      // First Name check ("first name = James", "nombre James")
       const firstNameMatch = cleanPrompt.match(/(?:first\s*name|nombre)\s*(?:=|is|igual a|:)?\s*([a-zA-Z\s]+)/i);
-      if (firstNameMatch && firstNameMatch[1] && !cleanPrompt.toLowerCase().includes('last name')) {
+      if (!matchedStartsWith && firstNameMatch && firstNameMatch[1] && !cleanPrompt.toLowerCase().includes('last name')) {
         const val = firstNameMatch[1].trim();
         if (val) {
           conditions.push({ field: 'FirstName', operator: '=', value: val });
         }
       }
 
-      // 3. Account Number check ("acctNo = RES-001", "account = RES-001", "cuenta RES-001")
+      // Account Number check ("acctNo = RES-001", "cuenta RES-001")
       const acctMatch = cleanPrompt.match(/(?:acct|account|cuenta|res)\s*(?:no|number|#)?\s*(?:=|is|igual a|:)?\s*(RES-?\d+|\d+)/i);
       if (acctMatch && acctMatch[1]) {
         let val = acctMatch[1].trim();
@@ -1140,7 +1199,7 @@ Output Example:
         conditions.push({ field: 'ResidentAccountID', operator: '=', value: val.toUpperCase() });
       }
 
-      // 4. Phone Number check ("phone = 305-555-3001", "telefono 305")
+      // Phone Number check ("phone = 305-555-3001", "telefono 305")
       const phoneMatch = cleanPrompt.match(/(?:phone|telefono|cell|celular)\s*(?:=|is|igual a|:)?\s*([\d\-\(\)\s]+)/i);
       if (phoneMatch && phoneMatch[1]) {
         const val = phoneMatch[1].trim();
@@ -1149,7 +1208,7 @@ Output Example:
         }
       }
 
-      // 5. Email check ("email = mitchell", "correo mitchell@example.com")
+      // Email check ("email = mitchell", "correo mitchell@example.com")
       const emailMatch = cleanPrompt.match(/(?:email|correo)\s*(?:=|is|igual a|:)?\s*([a-zA-Z0-9\.\@\_]+)/i);
       if (emailMatch && emailMatch[1]) {
         const val = emailMatch[1].trim();
@@ -1158,7 +1217,7 @@ Output Example:
         }
       }
 
-      // 6. State check
+      // State check
       let stateMatched = false;
       for (const [name, code] of Object.entries(FULL_STATES)) {
         if (lower.includes(name)) {
@@ -1177,7 +1236,7 @@ Output Example:
         }
       }
 
-      // 7. City check
+      // City check
       for (const c of KNOWN_CITIES) {
         if (lower.includes(c)) {
           const capitalized = c.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -1186,14 +1245,14 @@ Output Example:
         }
       }
 
-      // 8. Status check
+      // Status check
       if (lower.includes('inactivo') || lower.includes('inactivos') || lower.includes('inactive')) {
         conditions.push({ field: 'ActiveResidentFlag', operator: '=', value: 'N' });
       } else if (lower.includes('activo') || lower.includes('activos') || lower.includes('active')) {
         conditions.push({ field: 'ActiveResidentFlag', operator: '=', value: 'Y' });
       }
 
-      // 9. Annual Dues check
+      // Annual Dues rate check
       if (lower.includes('dues') || lower.includes('rate') || lower.includes('cuota') || lower.includes('annual')) {
         if (lower.includes('mayor que') || lower.includes('>') || lower.includes('greater')) {
           const match = lower.match(/\d+(\.\d+)?/);
@@ -1202,62 +1261,123 @@ Output Example:
         }
       }
 
-      // 10. Debtors check ("deudores", "deuda", "deben")
-      if (lower.includes('deudor') || lower.includes('deudores') || lower.includes('deuda') || lower.includes('deben') || lower.includes('debt')) {
-        conditions.push({ field: 'AnnualDuesBalance', operator: '>', value: 0 });
+      let whereClause = conditionsToSql(conditions);
+      if (whereClause === '1=1') whereClause = '1=1';
+      let orderBy = '';
+      let limit = null;
+
+      // Ordering for debtors
+      if (isDebt) {
+        orderBy = '(AnnualDuesBalance+SpecialAssessmentBalance) DESC';
+        if (lower.includes('10') || lower.includes('diez')) limit = 10;
       }
 
-      whereClause = conditionsToSql(conditions);
-      // For debtors in fallback, also add ordering
-      if (lower.includes('deudor') || lower.includes('deudores') || lower.includes('deuda') || lower.includes('deben') || lower.includes('debt')) {
-        whereClause += ' ORDER BY AnnualDuesBalance DESC';
-        if (lower.includes('10') || lower.includes('diez')) {
-          whereClause += ' LIMIT 10';
-        }
-      }
+      return { mode: 'filter', whereClause, orderBy, limit, answerSql: '', answerLabel: '' };
+    }
 
-      source = 'fallback';
-    } else {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost:3011',
-          'X-Title': 'WM Plus Management'
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: [
-            { role: 'system', content: systemMessage },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.1
-        })
+    function runOpencodeTranslate(promptText) {
+      return new Promise((resolve, reject) => {
+        const fullPrompt = `${systemMessage}\n\nUser query: ${promptText}\n\nOutput ONLY the raw JSON described above. No markdown, no extra text.`;
+        const args = ['run', '--title', 'wmplus-ai-query', '-m', opencodeModel, fullPrompt];
+        const proc = spawn(opencodeCliPath, args, {
+          cwd: __dirname,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true
+        });
+        let stdout = '';
+        let stderr = '';
+        const timer = setTimeout(() => {
+          proc.kill('SIGTERM');
+        }, 90000);
+        proc.stdout.on('data', (d) => { stdout += d; });
+        proc.stderr.on('data', (d) => { stderr += d; });
+        proc.on('error', (err) => { clearTimeout(timer); reject(err); });
+        proc.on('close', (code, signal) => {
+          clearTimeout(timer);
+          if (code !== 0) {
+            return reject(new Error(`opencode run exited code ${code}${signal ? ' signal ' + signal : ''}: ${stderr.slice(0, 300)}`));
+          }
+          resolve(stdout);
+        });
       });
+    }
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('[OpenRouter API Error]', errText);
-        return res.status(502).json({ error: 'Failed to communicate with OpenRouter API', details: errText });
+    function extractJsonObject(text) {
+      const cleaned = String(text).replace(/```json/gi, '').replace(/```/g, '').trim();
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start === -1 || end <= start) return null;
+      try { return JSON.parse(cleaned.slice(start, end + 1)); } catch (e) { return null; }
+    }
+
+    let result = null;
+    let source = 'fallback';
+
+    try {
+      const stdout = await runOpencodeTranslate(prompt);
+      const parsed = extractJsonObject(stdout);
+      if (parsed && (parsed.whereClause || parsed.answerSql || parsed.mode)) {
+        result = {
+          mode: parsed.mode === 'answer' ? 'answer' : 'filter',
+          whereClause: parsed.whereClause || '1=1',
+          orderBy: parsed.orderBy || '',
+          limit: parsed.limit || null,
+          answerSql: parsed.answerSql || '',
+          answerLabel: parsed.answerLabel || 'Resultado'
+        };
+        source = 'opencode';
+      } else {
+        console.warn('[AI Filter] opencode run no devolvió un JSON válido. Usando fallback local.');
       }
+    } catch (err) {
+      console.warn('[AI Filter] opencode run falló, usando fallback local:', err.message);
+    }
 
-      const data = await response.json();
-      const rawContent = data.choices?.[0]?.message?.content || '{}';
-      const cleanedJson = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanedJson);
-      whereClause = parsed.whereClause || '1=1';
+    if (!result) {
+      result = buildFallbackResult(prompt);
+      source = 'fallback';
     }
 
     // Safety check: prevent destructive keywords
     const unsafeSqlPattern = /\b(drop|delete|update|insert|alter|replace|truncate|grant|revoke|union|create|exec)\b|;/i;
+
+    const mode = result.mode === 'answer' ? 'answer' : 'filter';
+
+    // ANSWER MODE: run a safe aggregate SELECT and return a human-readable value
+    if (mode === 'answer') {
+      const trimmed = (result.answerSql || '').trim();
+      if (!/^select\s/i.test(trimmed) || unsafeSqlPattern.test(trimmed)) {
+        console.error('[AI Filter Security] Unsafe aggregate SQL detected:', result.answerSql);
+        return res.status(400).json({ error: 'Unsafe aggregate SQL query detected by security layer' });
+      }
+      console.log(`[AI Filter SQL] Executing ${source} answer: ${trimmed}`);
+      const [rows] = await db.readOnlyPool.query(trimmed);
+      const row = rows && rows[0] ? rows[0] : {};
+      const values = Object.values(row);
+      const value = values[0] != null && values[0] !== '' ? values[0] : '0';
+      return res.json({
+        success: true,
+        mode,
+        answer: `${result.answerLabel}: ${value}`,
+        answerLabel: result.answerLabel,
+        answerValue: value,
+        answerSql: trimmed,
+        source
+      });
+    }
+
+    const whereClause = result.whereClause || '1=1';
     if (unsafeSqlPattern.test(whereClause)) {
       console.error('[AI Filter Security] Unsafe SQL detected:', whereClause);
       return res.status(400).json({ error: 'Unsafe SQL query detected by security layer' });
     }
 
-    console.log(`[AI Filter SQL] Executing query via ${source}: SELECT * FROM ResidentMaster WHERE ${whereClause}`);
-    const [rows] = await db.readOnlyPool.query(`SELECT * FROM ResidentMaster WHERE ${whereClause}`);
+    const orderByClause = result.orderBy ? ` ORDER BY ${String(result.orderBy).replace(/^order\s+by\s+/i, '').trim()}` : '';
+    const limitClause = result.limit ? ` LIMIT ${parseInt(result.limit, 10)}` : '';
+    const fullQuery = `SELECT * FROM ResidentMaster WHERE ${whereClause}${orderByClause}${limitClause}`;
+
+    console.log(`[AI Filter SQL] Executing query via ${source}: ${fullQuery}`);
+    const [rows] = await db.readOnlyPool.query(fullQuery);
 
     // Map database keys to frontend schema format
     const mappedResidents = rows.map(r => ({
@@ -1302,6 +1422,7 @@ Output Example:
 
     return res.json({
       success: true,
+      mode: 'filter',
       residents: mappedResidents,
       whereClause,
       source

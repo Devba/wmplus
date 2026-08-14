@@ -7,7 +7,13 @@ const prompts = [
   "residentes de florida",
   "dues rate mayor que 1000",
   "los residentes que deben",
-  "residentes inactivos en california"
+  "residentes inactivos en california",
+  "cuantos residentes tienen deudas",
+  "cuantos residentes hay",
+  "cuantos han tenido multas",
+  "residentes con multas",
+  "residentes que empiecen con la letra a",
+  "apellido Mitchell"
 ];
 
 function sendPrompt(prompt) {
@@ -52,6 +58,19 @@ async function runTests() {
       if (!result.success) {
         console.error(`❌ Request failed:`, result.error || result);
         passed = false;
+        continue;
+      }
+
+      if (result.mode === 'answer') {
+        console.log(`Generated Answer:    "${result.answer}"`);
+        console.log(`Parser Source:       [${result.source}]`);
+        console.log(`Aggregate SQL:       "${result.answerSql}"`);
+        if (!result.answer || result.answerValue === undefined) {
+          console.error(`❌ FAIL: answer mode missing answer text/value!`);
+          passed = false;
+        } else {
+          console.log(`✅ Answer mode response verified.`);
+        }
         continue;
       }
 
