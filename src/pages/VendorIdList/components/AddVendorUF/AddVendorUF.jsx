@@ -469,7 +469,27 @@ if (!VALID_STATE_CODES.has(stateCode)) {
               <select
               id="vdAddECheck"
               value={eCheckYN}
-              onChange={(event) => setECheckYN(event.target.value)}
+              onChange={(event) => {
+              const nextValue = event.target.value;
+
+              setECheckYN(nextValue);
+
+              if (nextValue === 'Y') {
+                const startMonth =
+                  formRef.current?.querySelector('#vdAddECheckStartMonth');
+
+                const startDay =
+                  formRef.current?.querySelector('#vdAddECheckStartDay');
+
+                if (startMonth && !startMonth.value) {
+                  startMonth.value = '1';
+                }
+
+                if (startDay && !startDay.value) {
+                  startDay.value = '1';
+                }
+              }
+            }}
             >
               <option value="Y">Yes</option>
               <option value="N">No</option>

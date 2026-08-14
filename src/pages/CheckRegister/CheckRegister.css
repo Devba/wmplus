@@ -356,6 +356,59 @@
   white-space: normal;
 }
 
+/* Freeze CHECK# column */
+
+.checkreg-table thead th:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 8;
+  background: #003b6f;
+}
+
+.checkreg-table tbody td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: #ffffff;
+}
+
+
+/* Freeze PAYEE NAME column */
+
+.checkreg-table thead th:nth-child(2) {
+  position: sticky;
+  left: 75px;
+  z-index: 8;
+  background: #003b6f;
+}
+
+.checkreg-table tbody td:nth-child(2) {
+  position: sticky;
+  left: 75px;
+  z-index: 4;
+  background: #ffffff;
+}
+
+.checkreg-table tbody tr.is-selected td:nth-child(1),
+.checkreg-table tbody tr.is-selected td:nth-child(2) {
+  background: #dbeafe !important;
+  /* border-top: 2px solid #60a5fa !important;
+  border-bottom: 2px solid #3b82f6 !important; */
+}
+
+
+
+
+.checkreg-table tbody tr.is-selected td:nth-child(1),
+.checkreg-table tbody tr.is-selected td:nth-child(2) {
+  background: #dbeafe !important;
+}
+
+.checkreg-table tbody tr:hover td:nth-child(1),
+.checkreg-table tbody tr:hover td:nth-child(2) {
+  background: #f3f8ff;
+}
+
 .checkreg-table tbody td {
   padding: 2px 6px;
   line-height: 1;
@@ -548,10 +601,36 @@
     background: #dbeafe !important;
 }
 
-.checkreg-table tbody tr.is-selected {
+/* .checkreg-table tbody tr.is-selected {
     outline: 2px solid #60a5fa;
     outline-offset: -2px;
+} */
+
+.checkreg-table tbody tr.is-selected {
+  outline: none;
 }
+
+.checkreg-table tbody tr.is-selected td {
+  background: #dbeafe !important;
+  box-shadow:
+    inset 0 1px 0 #60a5fa,
+    inset 0 -1px 0 #60a5fa;
+}
+
+.checkreg-table tbody tr.is-selected td:first-child {
+  box-shadow:
+    inset 1px 0 0 #60a5fa,
+    inset 0 1px 0 #60a5fa,
+    inset 0 -1px 0 #60a5fa;
+}
+
+.checkreg-table tbody tr.is-selected td:last-child {
+  box-shadow:
+    inset -1px 0 0 #60a5fa,
+    inset 0 1px 0 #60a5fa,
+    inset 0 -1px 0 #60a5fa;
+}
+
 
 .checkreg-table tbody tr:hover td {
     background: #f3f8ff;

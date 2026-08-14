@@ -80,11 +80,6 @@
 
 
 
-/* ===========================================================
-   VID - BUTTON ROW
-   R&R FROM MD
-   =========================================================== */
-
 .vid-button-row {
   display: flex;
   align-items: center;
@@ -93,40 +88,32 @@
   background: #ffffff;
 }
 
-/* .vid-btn-yellow {
-    background: #ffff00;
-    color: #000;
-    font-weight: bold;
-} */
-
-
-
-
+.vid-btn-yellow {
+  background: #ffff00;
+  color: #000;
+  font-weight: bold;
+}
 
 .vid-button-row button {
-    height: 38px;
-    min-width: 150px;
-    padding: 0 12px;
+  height: 46px;
+  min-width: 150px;
+  padding: 0 12px;
 
-    background: #b8d98a;
-    border: 1px solid #6f8f55;
-    box-shadow: 1px 1px 0 #8c8c8c;
+  background: #b8d98a;
+  border: 1px solid #6f8f55;
+  box-shadow: 1px 1px 0 #8c8c8c;
 
-    font-size: 14px;
-    font-weight: 700;
-    color: #000000;
+  font-size: 14px;
+  font-weight: 700;
+  color: #000000;
 
-    white-space: nowrap;
-}
+  white-space: normal;
+  line-height: 1.1;
+  text-align: center;
+  }
 
 .vid-button-row .btn-green {
   color: #008000;
-}
-
-.vid-button-row button.vid-btn-yellow {
-  background: #ffff00;
-  color: #000000;
-  font-weight: 700;
 }
 
 .vid-button-row .btn-blue {
@@ -274,15 +261,25 @@
 .vid-table thead th:first-child {
   position: sticky;
   left: 0;
-  z-index: 6;
+  z-index: 7;
+  background: #003b6f;
 }
 
 .vid-table tbody td:first-child {
   position: sticky;
   left: 0;
   z-index: 4;
-  background: inherit;
+  background: #ffffff;
 }
+
+.vid-table tbody tr:nth-child(even) td:first-child {
+  background: #f7f7f7;
+}
+
+.vid-table tbody tr.is-selected td:first-child {
+  background: #dbeafe;
+}
+
 
 /* Left-side fade indicator */
 .vid-table-container::before {
@@ -513,4 +510,4 @@
 }
 .vid-btn-red:hover {
   background-color: #dc2626 !important;
-}
+}

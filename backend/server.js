@@ -535,7 +535,7 @@ app.get('/api/check-register', async (req, res) => {
         cr.BankAccount AS bank_account,
         cr.BankAccountID AS bank_account_id,
         cr.CheckAllowedYN AS check_allowed,
-
+        cr.EscrowFlag AS escrow_flag,
         CONCAT(
           ba.BankName,
           ' - ',
@@ -563,9 +563,9 @@ app.get('/api/check-register', async (req, res) => {
       WHERE cr.DeletedFlag IS NULL
          OR cr.DeletedFlag != 'Y'
 
-      ORDER BY
-         cr.DateCheckIssued ASC,
-         cr.CheckNumber ASC
+
+  ORDER BY
+  cr.CheckTransactionNumber ASC
     `);
 
     res.json(rows);
@@ -686,15 +686,15 @@ app.post('/api/check-register', async (req, res) => {
       INSERT INTO CheckRegister (
         CheckTransactionNumber, CheckNumber, GLAccountName, Amount, DateCheckIssued,
         DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
-        VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, Status,
-        DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+        VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, CheckAllowedYN, EscrowFlag, Status,
+DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       txnNum,
       c.check_number || '',
       c.gl_name || '',
       amount,
-      c.date_issued || new Date().toISOString().slice(0, 10),
+      c.date_issued || null,
       c.date_cleared || null,
       c.month_cleared || null,
       c.gl_number || 5000,
@@ -704,7 +704,9 @@ app.post('/api/check-register', async (req, res) => {
       c.invoice_amount || amount,
       c.note || '',
       c.bank_account || 'Operating 101',
-      bankAccountId
+      bankAccountId,
+      c.check_allowed || 'Y',
+      c.escrow_flag || 'N'
     ]);
 
     // Real-time Bank Cash Flow update (decrease balance)

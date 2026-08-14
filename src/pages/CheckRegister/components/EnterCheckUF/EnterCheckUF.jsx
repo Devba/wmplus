@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './EnterCheckUF.css';
 import { API_BASE_URL } from '../../../../config/api';
-
+import { closeOverlay } from '../../../../engines/overlay/overlay-engine';
 
 
 
@@ -76,7 +76,8 @@ function EnterCheckUF({ onAddCheck }) {
   const [glAccounts, setGLAccounts] = useState([]);
   const [residents, setResidents] = useState([]);
   const [vendors, setVendors] = useState([]);
-
+  const [showEntryChoice, setShowEntryChoice] = useState(false);
+  const [pendingCheck, setPendingCheck] = useState(null);
 
 useEffect(() => {
   async function loadBanks() {
@@ -437,65 +438,7 @@ useEffect(() => {
     [bankId]
   );
 
-  useEffect(() => {
-  async function loadGLAccounts() {
-    if (!selectedBank) {
-      setGLAccounts([]);
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/settings/gl-mapping`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
-
-      const data = await response.json();
-
-  const matchingGLAccounts = (data.glAccounts || [])
-  .filter((gl) => {
-    const allowedBankTypes = String(gl.bankType || '')
-      .split(',')
-      .map((type) => type.trim().toLowerCase());
-
-    const selectedBankType =
-      String(selectedBank.bankType || '').trim().toLowerCase();
-
-    const isAssignableAccount =
-      !String(gl.glNumber || '').includes('-');
-
-    return (
-      isAssignableAccount &&
-      (
-        allowedBankTypes.includes(selectedBankType) ||
-        allowedBankTypes.includes('all')
-      )
-    );
-  })
-
-
-  .map((gl) => ({
-    bankId: String(gl.bankId),
-    category: gl.glName,
-    glNumber: String(gl.glNumber)
-  }));
-
-setGLAccounts(matchingGLAccounts);
-    } catch (error) {
-      console.error(
-        'Error loading GL accounts:',
-        error
-      );
-
-      setGLAccounts([]);
-    }
-  }
-
-  loadGLAccounts();
-}, [selectedBank]);
+  
 
   const availableGLAccounts = useMemo(
   () => serverGLAccounts,
@@ -594,59 +537,20 @@ setGLAccounts(matchingGLAccounts);
   }
 };
 
-  const handleGLChange = async (event) => {
+  const handleGLChange = (event) => {
   const category = event.target.value;
 
   setGLCategory(category);
-  setGLNumber('');
 
-  if (!category || !selectedBank) return;
-
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/settings/gl-mapping`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Server returned ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    const gl = (data.glAccounts || []).find((item) => {
-  const allowedBankTypes = String(item.bankType || '')
-    .split(',')
-    .map((type) => type.trim().toLowerCase());
-
-  const selectedBankType =
-    String(selectedBank.bankType || '').trim().toLowerCase();
-
-  const isActualGL =
-    !String(item.glNumber || '').includes('-');
-
-  return (
-    isActualGL &&
-    item.glName === category &&
-    (
-      allowedBankTypes.includes(selectedBankType) ||
-      allowedBankTypes.includes('all')
-    )
+  const gl = serverGLAccounts.find(
+    (item) => item.category === category
   );
-});
 
-    setGLNumber(
-      gl?.glNumber !== undefined && gl?.glNumber !== null
-        ? String(gl.glNumber)
-        : ''
-    );
-  } catch (error) {
-    console.error(
-      'Error loading assigned GL number:',
-      error
-    );
-
-    setGLNumber('');
-  }
+  setGLNumber(
+    gl?.glNumber !== undefined && gl?.glNumber !== null
+      ? String(gl.glNumber)
+      : ''
+  );
 };
 
   const handleResidentNameSearch = async (event) => {
@@ -769,52 +673,10 @@ setGLAccounts(matchingGLAccounts);
     setHelperEntityId('');
   };
 
-const handleEnterCheck = async () => {
-  if (!requiredFieldsComplete) return;
+  const handleEntryChoice = async (choice) => {
+  if (!pendingCheck) return;
 
-  const now = new Date();
-
-  const newCheck = {
-    checkNo: autoWithdrawal ? 'AW' : checkNumber,
-    payeeName: entityName,
-    amount: formatMoney(checkAmount),
-
-    dateIssued: '',
-    dateCleared: '',
-    monthCleared: '',
-
-    glAccount: glCategory,
-    vendorOrResidentAcct: entityId,
-
-    vendorInvoiceNo,
-    vendorInvoiceDate,
-    vendorInvoiceAmount: vendorInvoiceAmount
-      ? formatMoney(vendorInvoiceAmount)
-      : '',
-
-    checkNotation,
-
-    bankAcct: bankId,
-    checkAllowed: 'Y',
-    glNo: glNumber,
-
-    transactionNo: formatDateForTransaction(now),
-
-    escrowFlag:
-      selectedBank?.id === '301' ? 'Y' : 'N',
-
-    bankAccount: selectedBank?.name || ''
-  };
-
-  const confirmed = window.confirm(
-    'Enter this new check?\n\n' +
-      `Payee: ${newCheck.payeeName}\n` +
-      `Amount: ${newCheck.amount}\n` +
-      `Bank: ${newCheck.bankAccount}\n` +
-      `GL: ${newCheck.glNo} - ${newCheck.glAccount}`
-  );
-
-  if (!confirmed) return;
+  const newCheck = pendingCheck;
 
   try {
     const response = await fetch(
@@ -828,8 +690,8 @@ const handleEnterCheck = async () => {
           check_txn_num: newCheck.transactionNo,
           check_number: newCheck.checkNo,
           gl_name: newCheck.glAccount,
-          amount: parseMoney(checkAmount),
-          date_issued: null,
+          amount: parseMoney(newCheck.amount),
+          date_issued: newCheck.dateIssued || null,
           date_cleared: null,
           month_cleared: null,
           gl_number: newCheck.glNo,
@@ -838,12 +700,14 @@ const handleEnterCheck = async () => {
           invoice_date: formatDateForDatabase(
             newCheck.vendorInvoiceDate
           ),
-          invoice_amount: vendorInvoiceAmount
-            ? parseMoney(vendorInvoiceAmount)
+          invoice_amount: newCheck.vendorInvoiceAmount
+            ? parseMoney(newCheck.vendorInvoiceAmount)
             : 0,
           note: newCheck.checkNotation,
           bank_account: newCheck.bankAccount,
-          bank_account_id: bankId
+          bank_account_id: bankId,
+          check_allowed: newCheck.checkAllowed,
+          escrow_flag: newCheck.escrowFlag
         })
       }
     );
@@ -862,11 +726,24 @@ const handleEnterCheck = async () => {
       onAddCheck(newCheck);
     }
 
+    setShowEntryChoice(false);
+    setPendingCheck(null);
+
+    if (choice === 'continue') {
+      clearEntryForm();
+
+      window.alert(
+        'The check was saved. Enter the next check.'
+      );
+
+      return;
+    }
+
     window.alert(
-      'The check was saved to the database and added to the Check Register.'
+      'The check was saved to the Check Register.'
     );
 
-    clearEntryForm();
+    closeOverlay();
 
   } catch (error) {
     console.error(
@@ -881,8 +758,102 @@ const handleEnterCheck = async () => {
   }
 };
 
+
+
+const handleEnterCheck = async () => {
+  if (!requiredFieldsComplete) return;
+
+  const now = new Date();
+
+  const newCheck = {
+    checkNo: autoWithdrawal ? 'AW' : checkNumber,
+    payeeName: entityName,
+    amount: formatMoney(checkAmount),
+
+    dateIssued: autoWithdrawal
+  ? new Date().toISOString().slice(0, 10)
+  : '',
+    dateCleared: '',
+    monthCleared: '',
+
+    glAccount: glCategory,
+    vendorOrResidentAcct: entityId,
+
+    vendorInvoiceNo,
+    vendorInvoiceDate,
+    vendorInvoiceAmount: vendorInvoiceAmount
+      ? formatMoney(vendorInvoiceAmount)
+      : '',
+
+    checkNotation,
+
+    bankAcct: selectedBank?.name || '',
+    checkAllowed: 'Y',
+    glNo: glNumber,
+
+    transactionNo: formatDateForTransaction(now),
+
+    escrowFlag:
+      selectedBank?.id === '301' ? 'Y' : 'N',
+
+    bankAccount: selectedBank?.name || ''
+  };
+
+  setPendingCheck(newCheck);
+    setShowEntryChoice(true);
+    return;
+
+  
+};
+
   return (
     <div className="enter-check-uf">
+       {showEntryChoice && pendingCheck && (
+  <div className="enter-check-choice-overlay">
+    <div className="enter-check-choice-box">
+      <div className="enter-check-choice-title">
+        ENTER THIS CHECK?
+      </div>
+
+      <div className="enter-check-choice-details">
+        <div>Payee: {pendingCheck.payeeName}</div>
+        <div>Amount: {pendingCheck.amount}</div>
+        <div>Bank: {pendingCheck.bankAccount}</div>
+        <div>
+          GL: {pendingCheck.glNo} - {pendingCheck.glAccount}
+        </div>
+      </div>
+
+      <div className="enter-check-choice-buttons">
+        <button
+          type="button"
+          onClick={() => handleEntryChoice('close')}
+        >
+          ENTER CHECK &amp; CLOSE
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleEntryChoice('continue')}
+        >
+          ENTER CHECK &amp; CONTINUE
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowEntryChoice(false);
+            setPendingCheck(null);
+          }}
+        >
+          CANCEL
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
       <div className="enter-check-panel">
         <div className="enter-check-title">
           CHECK PAYMENT ENTRY:
@@ -1060,6 +1031,26 @@ onBlur={(event) => {
     value = `${month}/${day}/${currentYear}`;
   }
 
+  if (value) {
+    const enteredDate = new Date(value);
+    const today = new Date();
+
+    today.setHours(0, 0, 0, 0);
+    enteredDate.setHours(0, 0, 0, 0);
+
+    if (
+      Number.isNaN(enteredDate.getTime()) ||
+      enteredDate > today
+    ) {
+      window.alert(
+        'Vendor Invoice Date cannot be later than today.'
+      );
+
+      setVendorInvoiceDate('');
+      return;
+    }
+  }
+
   setVendorInvoiceDate(value);
 }}
             />
@@ -1090,12 +1081,7 @@ onBlur={(event) => {
             <input
               type="text"
               value={checkNumber}
-              onChange={(event) =>
-                setCheckNumber(event.target.value)
-              }
-              readOnly={
-                selectedBank?.checkMode === 'system'
-              }
+              readOnly
             />
           </label>
 
@@ -1146,7 +1132,11 @@ onBlur={(event) => {
         <div className="enter-check-action-row">
           <button
             type="button"
-            className="enter-check-submit"
+            className={
+              requiredFieldsComplete
+                ? 'enter-check-submit ready'
+                : 'enter-check-submit'
+            }
             disabled={!requiredFieldsComplete}
             onClick={handleEnterCheck}
           >

@@ -55,7 +55,7 @@ monthCleared:
   status: row.status,
   glNo: row.gl_number,
   transactionNo: row.check_txn_num,
-  escrowFlag: '',
+  escrowFlag: row.escrow_flag,
   bankAccount: row.bank_account_display
 }));
 
