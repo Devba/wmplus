@@ -115,11 +115,37 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
 - **Body limit:** `express.json({ limit: '10mb' })` global (imágenes grandes; antes daba 413 con el default 100kb).
 - **Frontend:** botón "📷 Escanear Check" en `EnterDepositUF.jsx` (modal DEPOSIT REGISTER ENTRY) → SweetAlert con cámara/subir → confirmación editable → autocompleta el formulario.
   - **Ojo z-index:** el overlay del modal usa `z-index:10000`; SweetAlert2 va a `1060` por defecto y queda **debajo del backdrop** (no se puede clicar). Fix: `.swal2-container { z-index: 20000 !important }` en el CSS del componente.
-- **Cheques de prueba:**
-  - Sintéticos (ImageMagick): `~/Documentos/cheques_prueba/` (`gen_checks.sh`).
-  - Realistas (IA): `~/Documentos/cheques_prueba_ai/` (`gen_checks_ai.js`) generados con `google/gemini-3.1-flash-lite-image` (~$0.03/cheque) — el campo de imagen viene en `message.images[0].image_url.url` (base64).
+- **Cheques de prueba (2026-08-15):** **11 imágenes en `wmplus/cheques_prueba/`** (6 exactos con residentes reales + 5 near-miss), generadas con `google/gemini-3.1-flash-lite-image` (~$0.03/cheque) — el campo de imagen viene en `message.images[0].image_url.url` (base64). **La carpeta está en `.gitignore` (no se sube).**
+  - Scripts: `gen_checks_real.cjs` (6 exactos) y `gen_checks_near.cjs` (5 near-miss para validar el matcher difuso).
 - **Generación de imágenes:** opencode-go/opencode **NO generan imágenes** (solo texto; algunos con visión de entrada). En OpenRouter, modelos de imagen disponibles: `openai/gpt-5-image-mini` (~$0.008), `openai/gpt-5.4-image-2` (~$0.031), `google/gemini-3.1-flash-lite-image` (~$0.031), `google/gemini-3-pro-image` (~$0.12).
 - **Modelos visión OCR en opencode-go:** `mimo-v2.5` ($0.14/$0.28), `gpt-5.6-luna`, `minimax-m3`, `qwen3.7-plus`, `kimi-k2.6`, ... Gratis en Zen: `opencode/mimo-v2.5-free`.
+
+## 10b. OCR de cheques (Check Payment Entry) — 2026-08-15
+
+- Mismo endpoint `POST /api/ocr/check` y flujo OCR que §10, ahora **también implementado en Check Payment Entry**.
+- **Hook/componente reutilizables** en `src/components/OcrScan/`:
+  - `useOcrScan.js`: hook que encapsula el escaneo (cámara/subir), la llamada al endpoint, la extracción y el **matcheo difuso del payee**.
+  - `OcrScanButton.jsx`: botón "📷 Scan Check".
+  - Ambos usados por `EnterDepositUF` y `EnterCheckUF`.
+- **Integración mínima en `EnterCheckUF.jsx`:** solo import + botón (toque mínimo para facilitar el merge con la rama de Hal en `feature/register-entry-wiring`).
+- **Matcher difuso de payees** (en `useOcrScan.js`, comiteado en `ffcf83e`):
+  - Distancia de **Levenshtein** + **substring**, **umbral 70%** (`THRESHOLD = 0.7`), **prioridad a nombre completo** (no apellido suelto) para evitar falsos positivos.
+  - Muestra el match con % en la confirmación: `✓ Match: <Nombre> (resident) — <score>%`.
+  - Validado con 5 cheques "near-miss": Sofia Adam→Sofia Adams, Sarah Allin→Sarah Allen, Elizabeth Allan→Elizabeth Allen, Juan Allen Jr→Juan Allen, Sebastian Adamz→Sebastian Adams.
+
+## 11. Revisión del push de Hal/Rick — 2026-08-15
+
+- **Rick pusheó** `f3f142f` "Complete Check Register entry workflow and Vendor ID updates" a `feature/register-entry-wiring` (7 archivos, +858/−696).
+- **José revisó los 4 cambios de `backend/server.js` — todos verificados ✓:**
+  1. `CheckAllowedYN` persistencia (GET + INSERT).
+  2. `EscrowFlag` persistencia (GET + INSERT).
+  3. Orden por `CheckTransactionNumber ASC`.
+  4. `DateCheckIssued` **NULL** (sin fallback a hoy).
+- Columnas `CheckAllowedYN` / `EscrowFlag` **confirmadas en BD** (`char(1)`). Se dio **go-ahead a Hal**.
+- **PENDIENTE para la integración futura (coordinar ambos `server.js`):**
+  - BravoFrontend tiene: `/api/modify-gl/submit`, `gl-options` con `page`/`bankId`/`useIn*`, `gl-mapping` con `useIn*`.
+  - Rama de Hal tiene: `void/execute`, `fines-late-fees`, `dues-programming`, vendor IDs secuenciales, `gl-mapping` estructural.
+- **Observación demo (worktree local `5174`, rama de Hal):** el dropdown "CHECK G/L ACCOUNT CATEGORY" aparece **VACÍO** para los bancos cargados → **PENDIENTE investigar** (posible `useIn*` en 'N' o filtro bankType).
 
 ---
 
