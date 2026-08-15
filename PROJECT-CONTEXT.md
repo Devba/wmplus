@@ -2,7 +2,7 @@
 
 > **Para cualquier agente opencode (nuevo o existente):** lee este documento + `AGENTS.md` ANTES de trabajar. Contiene el historial, contratos de API, acuerdos del equipo y estado actual del despliegue.
 
-**Última actualización:** 2026-08-13
+**Última actualización:** 2026-08-15
 **Rama de trabajo actual:** `features/vivomysql-mcp`
 **Branches relevantes:** `BravoFrontend` (integración), `feature/register-entry-wiring` (trabajo de Hal/frontend), `backend` (backend histórico), `main`
 
@@ -61,19 +61,30 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
 
 ## 6. Pendientes / en curso
 
-- [ ] CR Modify GL# end-to-end (Hal lo mergeará de `BravoFrontend` a su rama y probará).
+- [ ] Hal confirmó su trabajo de Vendor ID + Enter Check (2026-08-14) → **commit local pendiente de push** hasta revisión (gobierno coordinado). Revisar cuando pusheen.
+- [ ] Hal hará merge de `BravoFrontend` a su rama para traer `/api/modify-gl/submit` y probar CR Modify GL# end-to-end.
 - [ ] R&R del patrón `gl-options` a DP → APR → BDC → XFER (frontend, según roadmap).
 - [ ] Regla definitiva de elegibilidad de banco (coordinar backend/frontend).
 - [ ] Fiscal Year Setup: reconciliar SQL vs schema `FiscalYearSetup`.
-- [ ] Payees que no resuelven (p.ej. `V-001` vs `VEND-0xx`) — limpieza de datos.
+- [ ] Payees que no resuelven (p.ej. `V-001` vs `VEND-0xx`) — resuelto temporalmente por limpieza total de tablas (ver §10); validar con data nueva.
 - [ ] Migración de los módulos restantes del tray (reportes, escrow, AR, violaciones, etc.).
+
+## 6b. Limpieza de datos de prueba (2026-08-15) — HECHA
+
+- Se vaciaron por completo `DepositRegister` (3), `CheckRegister` (23) y `VendorMaster` (14) — todo era data de prueba/dev.
+- **Backup previo:** `backups/backup-20260815-111411.sql` (las 3 tablas).
+- Método seguro: `DELETE` en orden de dependencia (deposits → checks → vendors). Sin `TRUNCATE`, sin desactivar FKs.
+- **No hay foreign keys** que apunten a estas tablas (solo 2 FKs en la BD, ambas sin relación).
+- Objetivo: empezar con pizarra limpia para que Hal ingrese 4–5 vendors y 4–5 checks nuevos y verificar el flujo completo.
 
 ## 7. Notas técnicas importantes
 
 - **Nunca subir credenciales** (`opencode.json` con credenciales MySQL está en `.gitignore`).
-- El frontend clonado en `feature/register-entry-wiring` puede usar `localhost:3011` hardcodeado en algún service (ya se limpió la mayoría → usar `API_BASE_URL`).
+- **Tokens GitHub:** expiran/revocan con frecuencia. El remote usa `https://Devba:<TOKEN>@github.com/...`. Si un push falla con "Invalid username or token", pedir token vigente y hacer `git remote set-url origin https://Devba:<TOKEN>@github.com/Devba/wmplus.git`. También `gh auth login`.
+- El frontend clonado en `feature/register-entry-wiring` usa `localhost:3011` hardcodeado en algunos services (la mayoría ya migrados a `API_BASE_URL`).
 - Para pruebas locales: frontend `npm run dev`, backend `node server.js` en `backend/`.
-- La BD es de **pruebas**: `ViolationRegister` vacía, `FinesFeesBalance=0`. Residentes con deuda: 248 de 910 activos.
+- La BD es de **pruebas**: tras la limpieza (2026-08-15) CheckRegister/VendorMaster/DepositRegister están VACÍAS. Residentes: 910 activos, 248 con deuda por cuotas.
+- **Sesiones opencode:** `/share` genera un enlace público de lectura, NO un backup recuperable para seguir trabajando. Para "continuar la misma sesión" en otro equipo hay que copiar la carpeta de datos local de opencode + config. La vía robusta de contexto entre equipos es este `PROJECT-CONTEXT.md` + `AGENTS.md` versionados en git.
 
 ## 8. Cómo continuar el trabajo desde otro servidor
 
