@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const db = require('./db');
 require('dotenv').config();
 
@@ -8,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3011;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Health Check
 app.get('/api/health', async (req, res) => {
@@ -1044,7 +1047,7 @@ app.post('/api/ai-filter', async (req, res) => {
       return res.status(400).json({ error: 'Prompt string is required' });
     }
 
-    const opencodeCliPath = process.env.OPENCODE_CLI_PATH || '/home/alvaro/Documents/Default Project/tg-opencode-bridge/node_modules/opencode-ai/bin/opencode.exe';
+    const opencodeCliPath = process.env.OPENCODE_CLI_PATH || 'opencode';
     const opencodeModel = process.env.OPENCODE_AI_MODEL || 'opencode-go/deepseek-v4-flash';
 
     const systemMessage = `You are a database AI query engine for an HOA (homeowners association) management system. Translate natural language queries into safe SQL against the MySQL database.
@@ -1431,6 +1434,170 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesB
   } catch (err) {
     console.error('Error in /api/ai-filter:', err);
     return res.status(500).json({ error: 'AI Filter processing failed', details: err.message });
+  }
+});
+
+/* =============================================================
+   OCR CHECK: extract check data from an image via opencode CLI model
+   (default: opencode-go/mimo-v2.5). Falls back to OpenRouter if the
+   CLI fails or returns no valid JSON.
+   ============================================================= */
+
+app.post('/api/ocr/check', express.json({ limit: '10mb' }), async (req, res) => {
+  const systemMessage = `You are an OCR assistant for a bank deposit entry form. Analyze the provided check image and return ONLY a JSON object with the following keys:
+{
+  "checkNumber": string or null,
+  "amount": string or null (US dollar amount, numbers only, e.g. "1234.56"),
+  "date": string or null (format MM/DD/YYYY),
+  "payeeName": string or null (name on the "Pay to the order of" line),
+  "bankAccount": string or null (bank name or account memo if visible),
+  "glNumber": string or null (GL/account number if visible)
+}
+Rules:
+- Return raw JSON only, no markdown, no code fences, no comments.
+- If a field is not visible or not legible, set it to null.
+- If several fields could match, prefer the most legible/central value.`;
+
+  function parseOcrJson(text) {
+    const cleaned = String(text).replace(/```json/gi, '').replace(/```/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+
+    if (start === -1 || end <= start) return null;
+
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function mapResult(parsed, rawContent) {
+    return {
+      success: true,
+      checkNumber: parsed.checkNumber || null,
+      amount: parsed.amount || null,
+      date: parsed.date || null,
+      payeeName: parsed.payeeName || null,
+      bankAccount: parsed.bankAccount || null,
+      glNumber: parsed.glNumber || null,
+      raw: String(rawContent || '').slice(0, 500)
+    };
+  }
+
+  function runOpencodeOcr(promptText, tmpFile) {
+    return new Promise((resolve, reject) => {
+      const cliPath = process.env.OPENCODE_CLI_PATH || 'opencode';
+      const model = process.env.OPENCODE_OCR_MODEL || 'opencode-go/mimo-v2.5';
+      const args = ['run', '--title', 'wmplus-ocr', '-m', model, promptText, '--file', tmpFile];
+      const proc = spawn(cliPath, args, {
+        cwd: __dirname,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true
+      });
+      let stdout = '';
+      let stderr = '';
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 90000);
+
+      proc.stdout.on('data', (d) => { stdout += d; });
+      proc.stderr.on('data', (d) => { stderr += d; });
+      proc.on('error', (err) => { clearTimeout(timer); reject(err); });
+      proc.on('close', (code, signal) => {
+        clearTimeout(timer);
+        if (code !== 0) {
+          return reject(new Error(`opencode run exited code ${code}${signal ? ' signal ' + signal : ''}: ${stderr.slice(0, 300)}`));
+        }
+        resolve(stdout);
+      });
+    });
+  }
+
+  async function runOpenRouterOcr(imageData) {
+    const apiKey = process.env.OPENROUTER_API_KEY || '';
+    const model = process.env.OPENROUTER_OCR_MODEL || 'google/gemini-2.5-flash-lite';
+
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost:3011',
+        'X-Title': 'WM Plus Management'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemMessage },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Extract the check data from this image.' },
+              { type: 'image_url', image_url: { url: imageData } }
+            ]
+          }
+        ],
+        temperature: 0.1
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`OCR provider error ${response.status}: ${errText.slice(0, 300)}`);
+    }
+
+    const data = await response.json();
+    const rawContent = data.choices?.[0]?.message?.content || '{}';
+    const parsed = parseOcrJson(rawContent) || {};
+    return { parsed, rawContent };
+  }
+
+  try {
+    const { image } = req.body || {};
+
+    if (!image) {
+      return res.status(400).json({ error: 'Image data is required' });
+    }
+
+    const base64 = String(image).includes('base64,')
+      ? String(image).split(',')[1]
+      : String(image);
+
+    const ext = String(image).startsWith('data:image/png') ? 'png' : 'jpg';
+    const tmpFile = path.join(os.tmpdir(), `ocr_input_${Date.now()}.${ext}`);
+    fs.writeFileSync(tmpFile, Buffer.from(base64, 'base64'));
+
+    let parsed = null;
+    let rawContent = '';
+
+    try {
+      const stdout = await runOpencodeOcr(
+        `${systemMessage}\n\nAnalyze the attached check image and output ONLY the raw JSON.`,
+        tmpFile
+      );
+      parsed = parseOcrJson(stdout);
+      rawContent = stdout;
+      if (!parsed) {
+        console.warn('[OCR] opencode run no devolvió JSON válido; fallback a OpenRouter');
+      } else {
+        console.log(`[OCR] Modelo opencode-go devolvió: ${rawContent.slice(0, 200)}`);
+      }
+    } catch (err) {
+      console.warn('[OCR] opencode run falló, fallback a OpenRouter:', err.message);
+    }
+
+    if (!parsed) {
+      const fallback = await runOpenRouterOcr(image);
+      parsed = fallback.parsed;
+      rawContent = fallback.rawContent;
+    }
+
+    fs.unlinkSync(tmpFile);
+    return res.json(mapResult(parsed, rawContent));
+  } catch (err) {
+    console.error('Error in /api/ocr/check:', err);
+    return res.status(500).json({ error: 'OCR processing failed', details: err.message });
   }
 });
 

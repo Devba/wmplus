@@ -106,6 +106,21 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
      - Sin integrar, un despliegue con solo una de las versiones **pierde endpoints del otro lado**.
 - **Pendientes tras cualquier merge:** probar CR Modify GL# end-to-end (Hal lo hará tras mergear `BravoFrontend` a su rama).
 
+## 10. OCR de cheques (Deposit Register) — 2026-08-14
+
+- **Endpoint:** `POST /api/ocr/check` en `backend/server.js`. Recibe la imagen en base64 (`{ image }`), extrae: `checkNumber`, `amount`, `date`, `payeeName`, `bankAccount`, `glNumber`.
+- **Modelo por defecto:** `opencode-go/mimo-v2.5` (vía `opencode run -m ... --file <img>`, patrón como `/api/ai-filter`). Configurable con `OPENCODE_OCR_MODEL` en `backend/.env`.
+  - **Fallback:** OpenRouter `google/gemini-2.5-flash-lite` si el CLI falla o no devuelve JSON (`OPENROUTER_API_KEY` en `backend/.env`).
+  - El prompt debe ir **antes** de `--file` (flag variadic de opencode CLI).
+- **Body limit:** `express.json({ limit: '10mb' })` global (imágenes grandes; antes daba 413 con el default 100kb).
+- **Frontend:** botón "📷 Escanear Check" en `EnterDepositUF.jsx` (modal DEPOSIT REGISTER ENTRY) → SweetAlert con cámara/subir → confirmación editable → autocompleta el formulario.
+  - **Ojo z-index:** el overlay del modal usa `z-index:10000`; SweetAlert2 va a `1060` por defecto y queda **debajo del backdrop** (no se puede clicar). Fix: `.swal2-container { z-index: 20000 !important }` en el CSS del componente.
+- **Cheques de prueba:**
+  - Sintéticos (ImageMagick): `~/Documentos/cheques_prueba/` (`gen_checks.sh`).
+  - Realistas (IA): `~/Documentos/cheques_prueba_ai/` (`gen_checks_ai.js`) generados con `google/gemini-3.1-flash-lite-image` (~$0.03/cheque) — el campo de imagen viene en `message.images[0].image_url.url` (base64).
+- **Generación de imágenes:** opencode-go/opencode **NO generan imágenes** (solo texto; algunos con visión de entrada). En OpenRouter, modelos de imagen disponibles: `openai/gpt-5-image-mini` (~$0.008), `openai/gpt-5.4-image-2` (~$0.031), `google/gemini-3.1-flash-lite-image` (~$0.031), `google/gemini-3-pro-image` (~$0.12).
+- **Modelos visión OCR en opencode-go:** `mimo-v2.5` ($0.14/$0.28), `gpt-5.6-luna`, `minimax-m3`, `qwen3.7-plus`, `kimi-k2.6`, ... Gratis en Zen: `opencode/mimo-v2.5-free`.
+
 ---
 
 *(Este documento se actualiza conforme cambian los contratos, el despliegue y las decisiones. Mantener al día.)*
