@@ -15,6 +15,9 @@ dist-ssr
 # Local opencode config with credentials
 opencode.json
 
+# Local test checks (OCR)
+cheques_prueba/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

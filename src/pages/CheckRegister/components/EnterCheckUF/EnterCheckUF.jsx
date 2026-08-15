@@ -2,6 +2,7 @@
 
 
 import { useEffect, useMemo, useState } from 'react';
+import OcrScanButton from '../../../../components/OcrScan/OcrScanButton';
 import './EnterCheckUF.css';
 import { API_BASE_URL } from '../../../../config/api';
 
@@ -927,6 +928,30 @@ setGLAccounts(matchingGLAccounts);
         </div>
 
         <div className="enter-check-action-row">
+          <OcrScanButton
+            residents={residents}
+            vendors={vendors}
+            banks={banks}
+            glAccounts={glAccounts}
+            onComplete={(data) => {
+              if (data.checkNumber) setCheckNumber(data.checkNumber);
+              if (data.amount) setCheckAmount(data.amount);
+              if (data.bankId) setBankId(data.bankId);
+              if (data.glNumber) setGLNumber(data.glNumber);
+              if (data.payee) {
+                if (data.payee.type === 'resident') {
+                  setEntityId(data.payee.id);
+                  setEntityName(data.payee.name);
+                  setResidentAddress(data.payee.address || '');
+                } else if (data.payee.type === 'vendor') {
+                  setEntityId(data.payee.id);
+                  setEntityName(data.payee.name);
+                  setResidentAddress('');
+                }
+              }
+            }}
+          />
+
           <button
             type="button"
             className="enter-check-submit"
