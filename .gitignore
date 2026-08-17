@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# AI agent config (local only)
+AGENTS.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
