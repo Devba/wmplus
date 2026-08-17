@@ -846,9 +846,9 @@ const DEFAULT_EXPENSE_ROWS = [
     "description": "",
     "bankType": "Operating",
     "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "24500",
-    "consolidatedParentGl": "24500",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "24750 - 24999",
     "dc": "D",
     "ar": "A",
     "effectiveDate": "",
@@ -893,24 +893,135 @@ const DEFAULT_EXPENSE_ROWS = [
     "lastEditedBy": "",
     "systemLocked": true
   },
+  
   {
-    "glNumber": "2600 - 26999",
-    "glName": "RESERVED FOR FUTURE EXPENSE GL#s",
-    "sourceTable": "Check Register",
-    "description": "",
-    "bankType": "Operating",
-    "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "25000",
-    "consolidatedParentGl": "25000",
-    "dc": "D",
-    "ar": "A",
-    "effectiveDate": "",
-    "createdBy": "SYSTEM",
-    "createdDate": "",
-    "lastEditedBy": "",
-    "systemLocked": true
-  },
+  "glNumber": "26000",
+  "glName": "GUEST SUITES",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "P",
+  "parentGl": "",
+  "consolidatedParentGl": "26000",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26001 - 26499",
+  "glName": "Guest Suites Assignable Sub Headings",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26000",
+  "consolidatedParentGl": "26000",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26001",
+  "glName": "Guest Suite Junior Rm",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26000",
+  "consolidatedParentGl": "26000",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26002",
+  "glName": "Guest Suite Primary Rm",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26000",
+  "consolidatedParentGl": "26000",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26500",
+  "glName": "HARBOR SIDE HOUSING",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "P",
+  "parentGl": "",
+  "consolidatedParentGl": "26500",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26501 - 26999",
+  "glName": "Harbor Side Housing Assignable Sub Headings",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26500",
+  "consolidatedParentGl": "26500",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26501",
+  "glName": "Harbor Side Housing Bldg 1",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26500",
+  "consolidatedParentGl": "26500",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+
+
   {
     "glNumber": "27000",
     "glName": "POOL / POND",
@@ -1444,8 +1555,8 @@ const DEFAULT_REVENUE_ROWS = [
     "bankType": "Operating, Capital",
     "bankId": "OP_Bank_ID#1",
     "pc": "C",
-    "parentGl": "40080",
-    "consolidatedParentGl": "40080",
+    "parentGl": "40100",
+    "consolidatedParentGl": "40100",
     "dc": "C",
     "ar": "A",
     "effectiveDate": "",
@@ -1581,7 +1692,7 @@ const DEFAULT_REVENUE_ROWS = [
     "systemLocked": true
   },
   {
-    "glNumber": "40502 - 40699",
+    "glNumber": "40501 - 40599",
     "glName": "Bank Charge Reversal  Assignable Sub Headings",
     "sourceTable": "Bank Debit & Credits",
     "description": "",
@@ -1672,7 +1783,7 @@ const DEFAULT_REVENUE_ROWS = [
   },
   {
     "glNumber": "40701 - 40999",
-    "glName": "",
+    "glName": "Misc Revenue Assignments Assignable Sub Headings",
     "sourceTable": "",
     "description": "",
     "bankType": "All",
@@ -2307,9 +2418,9 @@ const DEFAULT_REVENUE_ROWS = [
     "description": "",
     "bankType": "All",
     "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "42000",
-    "consolidatedParentGl": "42000",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "43000 - 43999",
     "dc": "C",
     "ar": "A",
     "effectiveDate": "",
@@ -2361,9 +2472,9 @@ const DEFAULT_REVENUE_ROWS = [
     "description": "",
     "bankType": "Operating, Capital",
     "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "44000",
-    "consolidatedParentGl": "44000",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "44120 - 44139",
     "dc": "C",
     "ar": "A",
     "effectiveDate": "",
@@ -2415,9 +2526,9 @@ const DEFAULT_REVENUE_ROWS = [
     "description": "",
     "bankType": "all",
     "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "44140",
-    "consolidatedParentGl": "44140",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "44200 - 49999",
     "dc": "C",
     "ar": "A",
     "effectiveDate": "",
@@ -2562,6 +2673,9 @@ function GLMapping({
   const [pendingDestination, setPendingDestination] =
     useState('');
 
+    const [pendingRowIndex, setPendingRowIndex] =
+    useState(null);
+
   const currentRows =
     activeSection === 'expense'
       ? expenseRows
@@ -2690,19 +2804,19 @@ function GLMapping({
     setSaveError('');
   }
 
-  function selectRow(index) {
-    if (
-      editingRowIndex !== null &&
-      editingRowIndex !== index
-    ) {
-      window.alert(
-        'Save or discard the current edit before selecting another row.'
-      );
-      return;
-    }
-
-    setSelectedRowIndex(index);
+ function selectRow(index) {
+  if (
+    editingRowIndex !== null &&
+    editingRowIndex !== index
+  ) {
+    setPendingDestinationType('row');
+    setPendingRowIndex(index);
+    setShowUnsavedPrompt(true);
+    return;
   }
+
+  setSelectedRowIndex(index);
+}
 
   function updateRowField(index, fieldName, value) {
     const nextRows = cloneRows(currentRows);
@@ -2759,15 +2873,15 @@ function GLMapping({
     markChanged();
   }
 
-  function findParentRangeRow(rows, childIndex) {
-    for (let index = childIndex - 1; index >= 0; index -= 1) {
-      if (isRangeRow(rows[index])) {
-        return rows[index];
-      }
-    }
-
-    return null;
-  }
+function findParentRangeRow(rows, parentGl) {
+  return (
+    rows.find(
+      (row) =>
+        isRangeRow(row) &&
+        String(row.parentGl || '') === String(parentGl || '')
+    ) || null
+  );
+}
 
   function validateEditedRow() {
     if (editingRowIndex === null) {
@@ -2817,7 +2931,7 @@ function GLMapping({
 
     if (row.pc === 'C') {
       const rangeRow =
-        findParentRangeRow(currentRows, editingRowIndex);
+         findParentRangeRow(currentRows, row.parentGl);
 
       const allowedRange =
         parseGLRange(rangeRow?.glNumber);
@@ -2871,16 +2985,68 @@ function GLMapping({
       return;
     }
 
+    const rangeRow = findParentRangeRow(currentRows, parentGl);
+
+if (!rangeRow) {
+  window.alert(
+    'This heading does not have an assignable GL# range. Add Row is not allowed.'
+  );
+  return;
+}
+
+const allowedRange = parseGLRange(rangeRow.glNumber);
+
+if (!allowedRange) {
+  window.alert(
+    'The assignable GL# range for this heading is invalid.'
+  );
+  return;
+}
+
+const usedGLNumbers = new Set(
+  currentRows
+    .filter(
+      (row) =>
+        row.pc === 'C' &&
+        String(row.parentGl || '') === String(parentGl)
+    )
+    .map((row) => Number(row.glNumber))
+    .filter((value) => Number.isFinite(value))
+);
+
+let hasAvailableGLNumber = false;
+
+for (
+  let gl = allowedRange.start;
+  gl <= allowedRange.end;
+  gl += 1
+) {
+  if (!usedGLNumbers.has(gl)) {
+    hasAvailableGLNumber = true;
+    break;
+  }
+}
+
+if (!hasAvailableGLNumber) {
+  window.alert(
+    'No unused GL#s remain in this heading\'s assignable range.'
+  );
+  return;
+}
+
+
+
     const nextRows = cloneRows(currentRows);
     let insertAt = selectedRowIndex + 1;
 
     while (
-      insertAt < nextRows.length &&
-      nextRows[insertAt].pc === 'C' &&
-      String(nextRows[insertAt].parentGl) === String(parentGl)
-    ) {
-      insertAt += 1;
-    }
+    insertAt < nextRows.length &&
+    nextRows[insertAt].pc === 'C' &&
+    String(nextRows[insertAt].parentGl) === String(parentGl) &&
+    !isRangeRow(nextRows[insertAt])
+  ) {
+    insertAt += 1;
+  }
 
     const parentRow = nextRows.find(
       (row) =>
@@ -3314,18 +3480,36 @@ function GLMapping({
     setShowUnsavedPrompt(false);
   }
 
-  async function handlePromptYes() {
-    const saveSucceeded =
-      await saveCurrentSettings();
+async function handlePromptYes() {
+  const saveSucceeded =
+    await saveCurrentSettings();
 
-    if (!saveSucceeded) {
-      return;
-    }
-
-    completePendingNavigation();
+  if (!saveSucceeded) {
+    return;
   }
 
+  if (pendingDestinationType === 'row') {
+    setPendingDestinationType('');
+    setPendingRowIndex(null);
+    setShowUnsavedPrompt(false);
+    return;
+  }
+
+  completePendingNavigation();
+}
+
   async function handlePromptNo() {
+
+   if (pendingDestinationType === 'row') {
+  discardCurrentEdit();
+
+  setPendingDestinationType('');
+  setPendingRowIndex(null);
+  setShowUnsavedPrompt(false);
+
+  return;
+}
+
     setIsLoading(true);
     setSaveError('');
     setSaveMessage('');
@@ -3346,6 +3530,14 @@ function GLMapping({
   }
 
   function handlePromptCancel() {
+
+    if (pendingDestinationType === 'row') {
+  setPendingDestinationType('');
+  setPendingRowIndex(null);
+  setShowUnsavedPrompt(false);
+  return;
+}
+
     const wasSettingsNavigation =
       pendingDestinationType === 'settings-panel';
 
@@ -3608,6 +3800,14 @@ function GLMapping({
                           : ''
                       ].join(' ')
                     }
+                    onMouseDown={(event) => {
+                      if (
+                        editingRowIndex !== null &&
+                        editingRowIndex !== index
+                      ) {
+                        event.preventDefault();
+                      }
+                    }}
                     onClick={() => selectRow(index)}
                   >
                     <td>
@@ -3906,16 +4106,31 @@ function GLMapping({
         </div>
       </div>
 
-      <UnsavedChangesPrompt
-        isOpen={showUnsavedPrompt}
-        isSaving={isSaving}
-        isLoading={isLoading}
-        errorMessage={saveError}
-        onYes={handlePromptYes}
-        onNo={handlePromptNo}
-        onCancel={handlePromptCancel}
-      />
-    </div>
+<UnsavedChangesPrompt
+  isOpen={showUnsavedPrompt}
+  isSaving={isSaving}
+  isLoading={isLoading}
+  errorMessage={saveError}
+  onYes={handlePromptYes}
+  onNo={handlePromptNo}
+  onCancel={handlePromptCancel}
+yesLabel={
+  pendingDestinationType === 'row'
+    ? 'Save Row'
+    : 'Yes'
+}
+noLabel={
+  pendingDestinationType === 'row'
+    ? 'Delete Row'
+    : 'No'
+}
+cancelLabel={
+  pendingDestinationType === 'row'
+    ? 'Cancel'
+    : 'Cancel'
+}
+/>
+</div>
   );
 }
 

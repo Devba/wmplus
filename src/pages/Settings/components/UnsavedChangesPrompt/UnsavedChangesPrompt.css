@@ -43,14 +43,27 @@
 }
 
 .settings-prompt-actions button {
-  width: 82px;
+  width: 100px;
   height: 30px;
 
-  border: 1px solid #666666;
-  background: #efefef;
+  border: 2px solid black;
+  color: black;
 
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.settings-prompt-actions .settings-prompt-save {
+  background: green;
+}
+
+.settings-prompt-actions .settings-prompt-delete {
+  background: red;
+}
+
+.settings-prompt-actions .settings-prompt-cancel {
+  background: gray;
 }
 
 .settings-prompt-actions button:disabled {

@@ -2398,6 +2398,9 @@ app.put('/api/settings/fines', async (req, res) => {
    10. SETTINGS: GL MAPPING
    =========================================================== */
 
+
+
+
 app.get('/api/settings/gl-mapping', async (req, res) => {
   try {
      const [rows] = await db.query(`

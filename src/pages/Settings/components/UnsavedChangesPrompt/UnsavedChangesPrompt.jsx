@@ -11,8 +11,12 @@ function UnsavedChangesPrompt({
   errorMessage,
   onYes,
   onNo,
-  onCancel
+  onCancel,
+  yesLabel = 'Yes',
+  noLabel = 'No',
+  cancelLabel = 'Cancel'
 }) {
+
   if (!isOpen) {
     return null;
   }
@@ -39,31 +43,34 @@ function UnsavedChangesPrompt({
           Do you want to save them before continuing?
         </div>
 
-        <div className="settings-prompt-actions">
-          <button
-            type="button"
-            onClick={onYes}
-            disabled={isSaving}
-          >
-            Yes
-          </button>
+<div className="settings-prompt-actions">
+  <button
+    type="button"
+    className="settings-prompt-save"
+    onClick={onYes}
+    disabled={isSaving}
+  >
+    {yesLabel}
+  </button>
 
-          <button
-            type="button"
-            onClick={onNo}
-            disabled={isSaving || isLoading}
-          >
-            No
-          </button>
+  <button
+    type="button"
+    className="settings-prompt-delete"
+    onClick={onNo}
+    disabled={isSaving || isLoading}
+  >
+    {noLabel}
+  </button>
 
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSaving}
-          >
-            Cancel
-          </button>
-        </div>
+  <button
+    type="button"
+    className="settings-prompt-cancel"
+    onClick={onCancel}
+    disabled={isSaving}
+  >
+    {cancelLabel}
+  </button>
+</div>
 
         {errorMessage && (
           <div className="settings-prompt-error">

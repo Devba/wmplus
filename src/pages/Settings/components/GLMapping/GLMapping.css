@@ -195,6 +195,56 @@ body {
   background: #ffffff;
 }
 
+
+
+/* ===========================================================
+   GL MAPPING - FREEZE GL# AND GL# NAME COLUMNS
+   =========================================================== */
+
+.glmap-table th:nth-child(1),
+.glmap-table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+}
+
+.glmap-table th:nth-child(2),
+.glmap-table td:nth-child(2) {
+  position: sticky;
+  left: 120px;
+}
+
+/* Frozen header cells must stay above frozen body cells */
+
+.glmap-table th:nth-child(1),
+.glmap-table th:nth-child(2) {
+  z-index: 5;
+  background: #1f4e79;
+}
+
+/* Frozen body cells */
+
+.glmap-table td:nth-child(1),
+.glmap-table td:nth-child(2) {
+  z-index: 3;
+  background: #ffffff;
+}
+
+/* Preserve selected-row highlighting in frozen columns */
+
+.glmap-table tr.selected td:nth-child(1),
+.glmap-table tr.selected td:nth-child(2) {
+  background: #dfeaff;
+  border-color: #3f6fd9;
+}
+
+/* Visual edge between frozen and scrolling columns */
+
+.glmap-table th:nth-child(2),
+.glmap-table td:nth-child(2) {
+  box-shadow: 2px 0 2px rgba(0, 0, 0, 0.15);
+}
+
+
 .glmap-table tr.selected td {
   background: #dfeaff;
   border-color: #3f6fd9;
