@@ -10,6 +10,9 @@ import {
 import UnsavedChangesPrompt
   from '../UnsavedChangesPrompt/UnsavedChangesPrompt';
 
+import CreateParentFromReserveUF
+  from './CreateParentFromReserveUF';
+
 const DEFAULT_EXPENSE_ROWS = [
   {
     "glNumber": "20000",
@@ -2676,6 +2679,20 @@ function GLMapping({
     const [pendingRowIndex, setPendingRowIndex] =
     useState(null);
 
+   const [showCreateParentUF, setShowCreateParentUF] =
+  useState(false);
+
+const [createParentName, setCreateParentName] =
+  useState('');
+
+const [createParentStart, setCreateParentStart] =
+  useState('');
+
+const [createParentEnd, setCreateParentEnd] =
+  useState('');
+
+
+
   const currentRows =
     activeSection === 'expense'
       ? expenseRows
@@ -2706,6 +2723,142 @@ function GLMapping({
 
     return currentRows[selectedRowIndex] || null;
   }, [currentRows, selectedRowIndex]);
+
+  const selectedIsAssignableRange =
+  selectedRow !== null &&
+  selectedRow.pc === 'C' &&
+  isRangeRow(selectedRow) &&
+  String(selectedRow.parentGl || '').trim() !== '';
+
+const selectedIsReservedRange =
+  selectedRow !== null &&
+  selectedRow.pc === 'P' &&
+  isRangeRow(selectedRow) &&
+  String(selectedRow.parentGl || '').trim() === '';
+
+const selectedParentHasAssignableRange =
+  selectedRow !== null &&
+  selectedRow.pc === 'P' &&
+  !isRangeRow(selectedRow) &&
+  findParentRangeRow(
+    currentRows,
+    selectedRow.glNumber
+  ) !== null;
+
+const canAddRow =
+  selectedIsAssignableRange ||
+  selectedParentHasAssignableRange;
+
+const canCreateParentFromReserve =
+  selectedIsAssignableRange ||
+  selectedIsReservedRange;
+
+const createParentStartingOptions = useMemo(() => {
+  if (!canCreateParentFromReserve || !selectedRow) {
+    return [];
+  }
+
+  const selectedRange = parseGLRange(selectedRow.glNumber);
+
+  if (!selectedRange) {
+    return [];
+  }
+
+
+  if (selectedIsReservedRange) {
+  return [String(selectedRange.start)];
+  }
+
+
+  let firstAvailable = selectedRange.start;
+
+  // If splitting an existing Parent's assignable range,
+  // all existing children remain with that Parent.
+  if (selectedIsAssignableRange) {
+    const existingChildNumbers = currentRows
+  .filter(
+    (row) =>
+      row.pc === 'C' &&
+      !isRangeRow(row)
+  )
+  .map((row) => Number(row.glNumber))
+  .filter(
+    (value) =>
+      Number.isFinite(value) &&
+      value >= selectedRange.start &&
+      value <= selectedRange.end
+  );
+
+if (existingChildNumbers.length > 0) {
+  const highestExistingChild =
+    Math.max(...existingChildNumbers);
+
+  firstAvailable = Math.max(
+    selectedRange.start,
+    highestExistingChild + 1
+  );
+}
+  }
+
+  const options = [];
+
+  // Need at least one number after the Parent
+  // for its assignable range.
+  for (
+    let gl = firstAvailable;
+    gl < selectedRange.end;
+    gl += 1
+  ) {
+    options.push(String(gl));
+  }
+
+  return options;
+}, [
+
+
+  canCreateParentFromReserve,
+  selectedRow,
+  selectedIsAssignableRange,
+  currentRows
+]);
+
+
+const createParentEndingOptions = useMemo(() => {
+  if (!createParentStart || !selectedRow) {
+    return [];
+  }
+
+  const selectedRange = parseGLRange(selectedRow.glNumber);
+
+  if (!selectedRange) {
+    return [];
+  }
+
+  const startValue = Number(createParentStart);
+
+  if (!Number.isFinite(startValue)) {
+    return [];
+  }
+
+  const options = [];
+
+  for (
+    let gl = startValue + 1;
+    gl <= selectedRange.end;
+    gl += 1
+  ) {
+    options.push(String(gl));
+  }
+
+  return options;
+}, [
+  createParentStart,
+  selectedRow
+]);
+
+
+
+
 
   useEffect(() => {
     let componentIsActive = true;
@@ -2962,6 +3115,243 @@ function findParentRangeRow(rows, parentGl) {
     if (selectedRow.pc === 'C') return selectedRow.parentGl;
     return null;
   }
+
+  function createParentFromReservedRange() {
+  if (
+    !selectedRow ||
+    (
+      !selectedIsReservedRange &&
+      !selectedIsAssignableRange
+    )
+  ) {
+    return;
+  }
+
+  const selectedRange =
+    parseGLRange(selectedRow.glNumber);
+
+  if (!selectedRange) {
+    return;
+  }
+
+  const parentNumber =
+    Number(createParentStart);
+
+  const endNumber =
+    Number(createParentEnd);
+
+  const parentName =
+    createParentName.trim();
+
+  if (
+    !parentName ||
+    !Number.isFinite(parentNumber) ||
+    !Number.isFinite(endNumber) ||
+    endNumber <= parentNumber
+  ) {
+    return;
+  }
+
+  const newParentRow = {
+    ...selectedRow,
+    glNumber: String(parentNumber),
+    glName: parentName,
+    pc: 'P',
+    parentGl: '',
+    consolidatedParentGl: String(parentNumber),
+    systemLocked: false
+  };
+
+  delete newParentRow.id;
+
+  const newAssignableRow = {
+    ...selectedRow,
+    glNumber:
+      `${parentNumber + 1} - ${endNumber}`,
+    glName:
+      `${parentName} Assignable Sub Headings`,
+    pc: 'C',
+    parentGl: String(parentNumber),
+    consolidatedParentGl: String(parentNumber),
+    systemLocked: true
+  };
+
+  delete newAssignableRow.id;
+
+  // =====================================================
+  // CASE 1:
+  // Selected row is already a top-level Reserved Range.
+  // =====================================================
+
+  if (selectedIsReservedRange) {
+    const replacementRows = [
+      newParentRow,
+      newAssignableRow
+    ];
+
+    if (endNumber < selectedRange.end) {
+      const remainingStart =
+        endNumber + 1;
+
+      replacementRows.push({
+        ...selectedRow,
+        glNumber:
+          `${remainingStart} - ${selectedRange.end}`,
+        pc: 'P',
+        parentGl: '',
+        consolidatedParentGl:
+          `${remainingStart} - ${selectedRange.end}`,
+        systemLocked: true
+      });
+    }
+
+    setCurrentRows((rows) => {
+      const nextRows = cloneRows(rows);
+
+      nextRows.splice(
+        selectedRowIndex,
+        1,
+        ...replacementRows
+      );
+
+      return nextRows;
+    });
+  }
+
+  // =====================================================
+  // CASE 2:
+  // Selected row is an existing Parent's Assignable Range.
+  // Existing children stay with the old Parent.
+  // =====================================================
+
+  else if (selectedIsAssignableRange) {
+    const oldParentGl =
+      String(selectedRow.parentGl || '');
+
+    const nextRows =
+      cloneRows(currentRows);
+
+    // ---------------------------------------------
+    // Shorten the OLD Parent's assignable range.
+    // If no range remains before the new Parent,
+    // remove the old assignable-range row.
+    // ---------------------------------------------
+
+    if (parentNumber > selectedRange.start) {
+      nextRows[selectedRowIndex] = {
+        ...selectedRow,
+        glNumber:
+          `${selectedRange.start} - ${parentNumber - 1}`
+      };
+    } else {
+      nextRows.splice(
+        selectedRowIndex,
+        1
+      );
+    }
+
+    // ---------------------------------------------
+    // Find the OLD Parent again after the possible
+    // removal/replacement above.
+    // ---------------------------------------------
+
+    const oldParentIndex =
+      nextRows.findIndex(
+        (row) =>
+          row.pc === 'P' &&
+          String(row.glNumber) === oldParentGl
+      );
+
+    if (oldParentIndex < 0) {
+      window.alert(
+        'Could not locate the existing Parent GL#.'
+      );
+      return;
+    }
+
+    // ---------------------------------------------
+    // Move past ALL of the old Parent's rows.
+    // This keeps every existing child with the
+    // original Parent.
+    // ---------------------------------------------
+
+    let insertAt =
+      oldParentIndex + 1;
+
+    while (
+      insertAt < nextRows.length &&
+      nextRows[insertAt].pc === 'C' &&
+      String(
+        nextRows[insertAt].parentGl || ''
+      ) === oldParentGl
+    ) {
+      insertAt += 1;
+    }
+
+    // ---------------------------------------------
+    // Insert the NEW Parent and its range.
+    // ---------------------------------------------
+
+    nextRows.splice(
+      insertAt,
+      0,
+      newParentRow,
+      newAssignableRow
+    );
+
+    // ---------------------------------------------
+    // Anything remaining after the new section
+    // becomes a new top-level Reserved Range.
+    // ---------------------------------------------
+
+    if (endNumber < selectedRange.end) {
+      const remainingStart =
+        endNumber + 1;
+
+      const remainingRange =
+        `${remainingStart} - ${selectedRange.end}`;
+
+      const reservedName =
+        activeSection === 'expense'
+          ? 'RESERVED FOR FUTURE EXPENSE GL#s'
+          : 'Reserved for Misc Revenue Assignments';
+
+      nextRows.splice(
+        insertAt + 2,
+        0,
+        {
+          ...selectedRow,
+          id: undefined,
+          glNumber: remainingRange,
+          glName: reservedName,
+          pc: 'P',
+          parentGl: '',
+          consolidatedParentGl:
+            remainingRange,
+          systemLocked: true
+        }
+      );
+    }
+
+    setCurrentRows(nextRows);
+  }
+
+  setSelectedRowIndex(null);
+  setEditingRowIndex(null);
+
+  setShowCreateParentUF(false);
+  setCreateParentName('');
+  setCreateParentStart('');
+  setCreateParentEnd('');
+
+  markChanged();
+}
+
+
+
+
+
+
 
   function addRow() {
     if (selectedRowIndex === null || !selectedRow) {
@@ -3453,6 +3843,37 @@ if (!hasAvailableGLNumber) {
     setEditSnapshot(null);
   }
 
+
+  async function cancelAllChanges() {
+  setIsLoading(true);
+  setSaveError('');
+  setSaveMessage('');
+
+  try {
+    await restoreLastSavedData();
+
+    setHasUnsavedChanges(false);
+    setShowCreateParentUF(false);
+    setCreateParentName('');
+    setCreateParentStart('');
+    setCreateParentEnd('');
+  } catch (error) {
+    console.error(error);
+
+    setSaveError(
+      'The last saved GL Mapping settings could not be restored.'
+    );
+  } finally {
+    setIsLoading(false);
+  }
+}
+
+
+
+
+
+
+
   function discardCurrentEdit() {
     if (editSnapshot) {
       setCurrentRows(cloneRows(editSnapshot));
@@ -3650,9 +4071,11 @@ async function handlePromptYes() {
               type="button"
               id="btnGLMapAddRow"
               onClick={addRow}
+              disabled={!canAddRow}
             >
               Add Row
             </button>
+
 
             <button
               type="button"
@@ -3678,6 +4101,47 @@ async function handlePromptYes() {
                   ? 'SAVE CHANGES'
                   : 'Save'}
             </button>
+
+            <button
+              type="button"
+              id="btnGLMapCancelChanges"
+              onClick={cancelAllChanges}
+              disabled={!hasUnsavedChanges || isSaving || isLoading}
+            >
+              Cancel Changes
+            </button>
+
+
+
+
+
+           <button
+            type="button"
+            id="btnGLMapCreateParent"
+            disabled={!canCreateParentFromReserve}
+            onClick={() => {
+                const firstStart =
+                  createParentStartingOptions[0] || '';
+
+                setCreateParentName('');
+                setCreateParentStart(firstStart);
+                setCreateParentEnd(
+                    firstStart
+                      ? String(Number(firstStart) + 1)
+                      : ''
+                  );
+                setShowCreateParentUF(true);
+              }}
+            >
+            Create Parent From Reserve
+            </button>
+
+
+
+
+
+
+
 
             <button
               type="button"
@@ -4105,6 +4569,47 @@ async function handlePromptYes() {
           </table>
         </div>
       </div>
+
+
+
+<CreateParentFromReserveUF
+  isOpen={showCreateParentUF}
+  parentName={createParentName}
+  startingGl={createParentStart}
+  endingGl={createParentEnd}
+  startingOptions={createParentStartingOptions}
+  endingOptions={createParentEndingOptions}
+  onParentNameChange={(event) =>
+    setCreateParentName(event.target.value)
+  }
+  onStartingGlChange={(event) => {
+  const nextStart = event.target.value;
+
+  setCreateParentStart(nextStart);
+  setCreateParentEnd(
+    String(Number(nextStart) + 1)
+  );
+}}
+
+
+
+
+  onEndingGlChange={(event) =>
+    setCreateParentEnd(event.target.value)
+  }
+  onSave={createParentFromReservedRange}
+  onCancel={() => {
+    setShowCreateParentUF(false);
+    setCreateParentName('');
+    setCreateParentStart('');
+    setCreateParentEnd('');
+  }}
+/>
+
+
+
+
+
 
 <UnsavedChangesPrompt
   isOpen={showUnsavedPrompt}

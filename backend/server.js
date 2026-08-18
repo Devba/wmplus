@@ -2799,27 +2799,31 @@ app.get('/api/gl-options', async (req, res) => {
     }
 
     const [rows] = await db.query(`
-      SELECT
-        GLAccountID,
-        GLNumber,
-        GLName,
-        SourceTable,
-        BankType,
-        BankID
-      FROM GLAccounts
-      WHERE ActiveFlag = 'Y'
-        AND ${useField} = 'Y'
-      ORDER BY SortOrder ASC, GLAccountID ASC
-    `);
+  SELECT
+    GLAccountID,
+    GLNumber,
+    GLName,
+    SourceTable,
+    BankType,
+    BankID,
+    PC,
+    ParentGL
+  FROM GLAccounts
+  WHERE ActiveFlag = 'Y'
+    AND ${useField} = 'Y'
+  ORDER BY SortOrder ASC, GLAccountID ASC
+`);
 
-    const glAccounts = rows.map((row) => ({
-      id: row.GLAccountID,
-      glNumber: row.GLNumber,
-      glName: row.GLName,
-      sourceTable: row.SourceTable,
-      bankType: row.BankType,
-      bankId: row.BankID
-    }));
+const glAccounts = rows.map((row) => ({
+  id: row.GLAccountID,
+  glNumber: row.GLNumber,
+  glName: row.GLName,
+  sourceTable: row.SourceTable,
+  bankType: row.BankType,
+  bankId: row.BankID,
+  pc: row.PC,
+  parentGl: row.ParentGL
+}));
 
     res.json({
       success: true,

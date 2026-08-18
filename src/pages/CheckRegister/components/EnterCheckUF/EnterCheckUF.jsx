@@ -130,12 +130,15 @@ useEffect(() => {
           : [];
 
       setServerGLAccounts(
-        rows.map((gl) => ({
-          bankId: String(gl.bankId || ''),
-          category: gl.glName || '',
-          glNumber: String(gl.glNumber || '')
-        }))
-      );
+      rows.map((gl) => ({
+        bankId: String(gl.bankId || ''),
+        category: gl.glName || '',
+        glNumber: String(gl.glNumber || ''),
+        pc: String(gl.pc || ''),
+        parentGl: String(gl.parentGl || '')
+      }))
+    );
+
     } catch (error) {
       console.error(
         'Error loading Check Register GL options:',
@@ -363,6 +366,18 @@ const selectResidentFromAddressSearch = (resident) => {
 
   const [glCategory, setGLCategory] = useState('');
   const [glNumber, setGLNumber] = useState('');
+  const [glAccountName, setGLAccountName] = useState('');
+  const [showGLSelectionUF, setShowGLSelectionUF] =
+  useState(false);
+
+  const [selectedGLParent, setSelectedGLParent] =
+  useState('');
+
+  const [selectedGLChild, setSelectedGLChild] =
+  useState('');
+
+
+
 
   const [vendorInvoiceNo, setVendorInvoiceNo] = useState('');
   const [vendorInvoiceDate, setVendorInvoiceDate] =
@@ -440,10 +455,46 @@ useEffect(() => {
 
   
 
-  const availableGLAccounts = useMemo(
-  () => serverGLAccounts,
+  const availableGLParents = useMemo(
+  () =>
+    serverGLAccounts.filter(
+      (gl) =>
+        gl.pc === 'P' &&
+        /^\d+$/.test(gl.glNumber)
+    ),
   [serverGLAccounts]
 );
+
+const availableGLChildren = useMemo(
+  () =>
+    serverGLAccounts.filter(
+      (gl) =>
+        gl.pc === 'C' &&
+        /^\d+$/.test(gl.glNumber) &&
+        String(gl.parentGl || '').trim() !== ''
+    ),
+  [serverGLAccounts]
+);
+
+
+const visibleGLChildren = useMemo(
+  () =>
+    availableGLChildren.filter(
+      (gl) =>
+        String(gl.parentGl || '') ===
+        String(selectedGLParent || '')
+    ),
+  [
+    availableGLChildren,
+    selectedGLParent
+  ]
+);
+
+
+
+
+
+
 
   const bankBalance = selectedBank
     ? formatMoney(selectedBank.balance)
@@ -509,6 +560,7 @@ useEffect(() => {
   setBankId(newBankId);
   setGLCategory('');
   setGLNumber('');
+  setGLAccountName('');
   setCheckNumber('');
 
   if (!bank) return;
@@ -776,7 +828,7 @@ const handleEnterCheck = async () => {
     dateCleared: '',
     monthCleared: '',
 
-    glAccount: glCategory,
+    glAccount: glAccountName,
     vendorOrResidentAcct: entityId,
 
     vendorInvoiceNo,
@@ -808,6 +860,120 @@ const handleEnterCheck = async () => {
 
   return (
     <div className="enter-check-uf">
+      {showGLSelectionUF && (
+  <div className="enter-check-gl-overlay">
+    <div className="enter-check-gl-box">
+
+      <div className="enter-check-gl-title">
+        SELECT CHECK G/L ACCOUNT
+      </div>
+
+      <div className="enter-check-gl-columns">
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Parent / Anchor GL Categories
+          </div>
+
+          <div className="enter-check-gl-list">
+            {availableGLParents.map((gl) => (
+              <button
+                key={gl.glNumber}
+                type="button"
+                className={
+                  selectedGLParent === gl.glNumber
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() => {
+                  setSelectedGLParent(gl.glNumber);
+                  setSelectedGLChild('');
+                }}
+              >
+                {gl.glNumber} - {gl.category}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Child GL Accounts
+          </div>
+
+          <div
+              className="enter-check-gl-list"
+              onScroll={() => {
+                if (selectedGLChild) {
+                  setSelectedGLChild('');
+                }
+              }}
+            >
+            {visibleGLChildren.map((gl) => (
+              <button
+                key={gl.glNumber}
+                type="button"
+                className={
+                  selectedGLChild === gl.glNumber
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() =>
+                  setSelectedGLChild(gl.glNumber)
+                }
+              >
+                {gl.glNumber} - {gl.category}
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      <div className="enter-check-gl-actions">
+        <button
+  type="button"
+  disabled={!selectedGLChild}
+  onClick={() => {
+    const parent = availableGLParents.find(
+      (gl) => gl.glNumber === selectedGLParent
+    );
+
+    const child = availableGLChildren.find(
+      (gl) => gl.glNumber === selectedGLChild
+    );
+
+    if (!parent || !child) {
+      return;
+    }
+
+    setGLCategory(child.category);
+    setGLNumber(child.glNumber);
+    setGLAccountName(child.category);
+
+    setShowGLSelectionUF(false);
+    setSelectedGLParent('');
+    setSelectedGLChild('');
+  }}
+>
+  Select GL
+</button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowGLSelectionUF(false);
+            setSelectedGLParent('');
+            setSelectedGLChild('');
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
        {showEntryChoice && pendingCheck && (
   <div className="enter-check-choice-overlay">
     <div className="enter-check-choice-box">
@@ -939,23 +1105,20 @@ const handleEnterCheck = async () => {
     >
       <option value="">Select GL category</option>
     </select>
-  ) : (
-    <select
-      value={glCategory}
-      onChange={handleGLChange}
+    ) : (
+    <button
+      type="button"
+      onClick={() => {
+        setSelectedGLParent('');
+        setSelectedGLChild('');
+        setShowGLSelectionUF(true);
+      }}
     >
-      <option value="">Select GL category</option>
-
-      {availableGLAccounts.map((gl) => (
-        <option
-          key={`${gl.bankId}-${gl.glNumber}`}
-          value={gl.category}
-        >
-          {gl.category}
-        </option>
-      ))}
-    </select>
+      {glCategory || 'Select GL category'}
+    </button>
   )}
+
+
 </label>
 
           <label className="enter-check-field">

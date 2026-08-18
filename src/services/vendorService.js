@@ -42,13 +42,13 @@ export async function fetchVendors() {
         active_flag: v.active_flag || 'Y'
       }));
     }
-    setConnectionStatus(true);
-    return vendorIdListSampleData;
+    setConnectionStatus(false);
+    return [];
   } catch (err) {
-    console.warn('Could not fetch vendors from API, using sample data:', err);
-    setConnectionStatus(true);
-    return vendorIdListSampleData;
-  }
+  console.error('Could not fetch vendors from API:', err);
+  setConnectionStatus(true);
+  throw err;
+}
 }
 
 export async function createVendor(vendor) {
