@@ -1438,9 +1438,8 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesB
 });
 
 /* =============================================================
-   OCR CHECK: extract check data from an image via opencode CLI model
-   (default: opencode-go/mimo-v2.5). Falls back to OpenRouter if the
-   CLI fails or returns no valid JSON.
+   OCR CHECK: extract check data from an image via OpenRouter vision model
+   (default: google/gemini-2.5-flash-lite).
    ============================================================= */
 
 app.post('/api/ocr/check', express.json({ limit: '10mb' }), async (req, res) => {
@@ -1571,27 +1570,9 @@ Rules:
     let parsed = null;
     let rawContent = '';
 
-    try {
-      const stdout = await runOpencodeOcr(
-        `${systemMessage}\n\nAnalyze the attached check image and output ONLY the raw JSON.`,
-        tmpFile
-      );
-      parsed = parseOcrJson(stdout);
-      rawContent = stdout;
-      if (!parsed) {
-        console.warn('[OCR] opencode run no devolvió JSON válido; fallback a OpenRouter');
-      } else {
-        console.log(`[OCR] Modelo opencode-go devolvió: ${rawContent.slice(0, 200)}`);
-      }
-    } catch (err) {
-      console.warn('[OCR] opencode run falló, fallback a OpenRouter:', err.message);
-    }
-
-    if (!parsed) {
-      const fallback = await runOpenRouterOcr(image);
-      parsed = fallback.parsed;
-      rawContent = fallback.rawContent;
-    }
+    const fallback = await runOpenRouterOcr(image);
+    parsed = fallback.parsed;
+    rawContent = fallback.rawContent;
 
     fs.unlinkSync(tmpFile);
     return res.json(mapResult(parsed, rawContent));

@@ -2,9 +2,9 @@
 
 > **Para cualquier agente opencode (nuevo o existente):** lee este documento + `AGENTS.md` ANTES de trabajar. Contiene el historial, contratos de API, acuerdos del equipo y estado actual del despliegue.
 
-**Última actualización:** 2026-08-15
+**Última actualización:** 2026-08-18
 **Rama de trabajo actual:** `features/vivomysql-mcp`
-**Branches relevantes:** `BravoFrontend` (integración), `feature/register-entry-wiring` (trabajo de Hal/frontend), `backend` (backend histórico), `main`
+**Branches relevantes:** `BravoFrontend` (integración principal), `feature/register-entry-wiring` (trabajo de Hal/frontend), `backend` (backend histórico), `main`
 
 ---
 
@@ -93,32 +93,37 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
 3. Trabajar en una rama; siempre `git pull` antes de empezar y coordinar pushes.
 4. Consultar/acceder al VPS vía SSH (puerto 44) si se necesita desplegar o inspeccionar.
 
-## 9. Estrategia de trabajo actual (2026-08-14)
+## 9. Estrategia de trabajo actual (2026-08-18)
 
-- **Frontend (Hal) trabaja solo en su rama.** Backend se mantiene en **modo observación**:
+- **Frontend (Hal) trabaja solo en su rama (`feature/register-entry-wiring`).** Backend se mantiene en **modo observación**:
   - Revisar los pushes de Hal en `feature/register-entry-wiring` cuando ocurran.
   - **No tocar su trabajo** ni hacer merges prematuros mientras no haya urgencia.
 - **Cuándo intervenir (reglas de alerta):**
   1. Un push de Hal que toque `backend/server.js` sin coordinar (rompe el acuerdo de responsabilidades) → revisar y avisar.
-  2. Hal anuncie **despliegue al VPS** o un merge grande → integrar ANTES ambos `server.js`:
-     - Backend actual (VPS/BravoFrontend) tiene: `modify-gl/submit`, `gl-options`, `useIn*`, `gl-mapping`.
-     - Rama de Hal tiene: `void/execute`, `dues-programming`, `fines-late-fees`, vendor IDs.
-     - Sin integrar, un despliegue con solo una de las versiones **pierde endpoints del otro lado**.
-- **Pendientes tras cualquier merge:** probar CR Modify GL# end-to-end (Hal lo hará tras mergear `BravoFrontend` a su rama).
+  2. Hal anuncie **despliegue al VPS** o un merge grande → integrar ANTES ambos `server.js`.
+- **Merge plan (2026-08-18):**
+  - `feature/register-entry-wiring` → `BravoFrontend` (pendiente, Hal debe actualizar primero)
+  - `features/vivomysql-mcp` → `BravoFrontend` (después del merge de Hal)
+  - Ver sección §12 para detalles del merge.
 
-## 10. OCR de cheques (Deposit Register) — 2026-08-14
+## 10. OCR de cheques (Deposit Register) — 2026-08-18
 
 - **Endpoint:** `POST /api/ocr/check` en `backend/server.js`. Recibe la imagen en base64 (`{ image }`), extrae: `checkNumber`, `amount`, `date`, `payeeName`, `bankAccount`, `glNumber`.
-- **Modelo por defecto:** `opencode-go/mimo-v2.5` (vía `opencode run -m ... --file <img>`, patrón como `/api/ai-filter`). Configurable con `OPENCODE_OCR_MODEL` en `backend/.env`.
-  - **Fallback:** OpenRouter `google/gemini-2.5-flash-lite` si el CLI falla o no devuelve JSON (`OPENROUTER_API_KEY` en `backend/.env`).
-  - El prompt debe ir **antes** de `--file` (flag variadic de opencode CLI).
-- **Body limit:** `express.json({ limit: '10mb' })` global (imágenes grandes; antes daba 413 con el default 100kb).
-- **Frontend:** botón "📷 Escanear Check" en `EnterDepositUF.jsx` (modal DEPOSIT REGISTER ENTRY) → SweetAlert con cámara/subir → confirmación editable → autocompleta el formulario.
-  - **Ojo z-index:** el overlay del modal usa `z-index:10000`; SweetAlert2 va a `1060` por defecto y queda **debajo del backdrop** (no se puede clicar). Fix: `.swal2-container { z-index: 20000 !important }` en el CSS del componente.
-- **Cheques de prueba (2026-08-15):** **11 imágenes en `wmplus/cheques_prueba/`** (6 exactos con residentes reales + 5 near-miss), generadas con `google/gemini-3.1-flash-lite-image` (~$0.03/cheque) — el campo de imagen viene en `message.images[0].image_url.url` (base64). **La carpeta está en `.gitignore` (no se sube).**
-  - Scripts: `gen_checks_real.cjs` (6 exactos) y `gen_checks_near.cjs` (5 near-miss para validar el matcher difuso).
-- **Generación de imágenes:** opencode-go/opencode **NO generan imágenes** (solo texto; algunos con visión de entrada). En OpenRouter, modelos de imagen disponibles: `openai/gpt-5-image-mini` (~$0.008), `openai/gpt-5.4-image-2` (~$0.031), `google/gemini-3.1-flash-lite-image` (~$0.031), `google/gemini-3-pro-image` (~$0.12).
-- **Modelos visión OCR en opencode-go:** `mimo-v2.5` ($0.14/$0.28), `gpt-5.6-luna`, `minimax-m3`, `qwen3.7-plus`, `kimi-k2.6`, ... Gratis en Zen: `opencode/mimo-v2.5-free`.
+- **Modelo por defecto:** `google/gemini-2.5-flash-lite` vía OpenRouter. Configurable con `OPENROUTER_OCR_MODEL` en `backend/.env`.
+  - **API Key:** `OPENROUTER_API_KEY` en `backend/.env` (requerida).
+  - **Body limit:** `express.json({ limit: '10mb' })` global (imágenes grandes).
+  - El endpoint ya NO intenta `opencode run` primero — usa OpenRouter directamente.
+- **Frontend:** botón "📷 Escanear Check" en `EnterDepositUF.jsx` y `EnterCheckUF.jsx` → SweetAlert con cámara/subir → confirmación editable → autocompleta el formulario.
+  - **Ojo z-index:** el overlay del modal usa `z-index:10000`; SweetAlert2 va a `1060` por defecto y queda **debajo del backdrop**. Fix: `.swal2-container { z-index: 20000 !important }` en el CSS del componente.
+- **Hook/componente reutilizables** en `src/components/OcrScan/`:
+  - `useOcrScan.js`: hook que encapsula el escaneo (cámara/subir), la llamada al endpoint, la extracción y el **matcheo difuso del payee**.
+  - `OcrScanButton.jsx`: botón "📷 Scan Check".
+  - Ambos usados por `EnterDepositUF` y `EnterCheckUF`.
+- **Matcher difuso de payees** (en `useOcrScan.js`):
+  - Distancia de **Levenshtein** + **substring**, **umbral 70%** (`THRESHOLD = 0.7`), **prioridad a nombre completo** (no apellido suelto) para evitar falsos positivos.
+  - Muestra el match con % en la confirmación: `✓ Match: <Nombre> (resident) — <score>%`.
+- **Cheques de prueba:** 6 imágenes en `/tmp/opencode/` (subidas desde equipo local). **La carpeta está en `.gitignore` (no se sube).**
+- **Demo OCR grabada:** video de 32s en `https://dev.hoa-e-solutions.com/vivomysql/demo-ocr.mp4` (acceso público).
 
 ## 10b. OCR de cheques (Check Payment Entry) — 2026-08-15
 
@@ -146,6 +151,51 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
   - BravoFrontend tiene: `/api/modify-gl/submit`, `gl-options` con `page`/`bankId`/`useIn*`, `gl-mapping` con `useIn*`.
   - Rama de Hal tiene: `void/execute`, `fines-late-fees`, `dues-programming`, vendor IDs secuenciales, `gl-mapping` estructural.
 - **Observación demo (worktree local `5174`, rama de Hal):** el dropdown "CHECK G/L ACCOUNT CATEGORY" aparece **VACÍO** para los bancos cargados → **PENDIENTE investigar** (posible `useIn*` en 'N' o filtro bankType).
+
+## 12. Merge plan (2026-08-18)
+
+### Merge 1: `feature/register-entry-wiring` → `BravoFrontend`
+
+**Estado:** Pendiente. Hal debe actualizar su rama primero con `git pull origin BravoFrontend`.
+
+**Archivos afectados:** 22 archivos (2 nuevos, 2 eliminados, 18 modificados).
+
+**Conflictos en `server.js`:**
+| Zona | Decisión |
+|---|---|
+| `express.json` | Mantener `{ limit: '10mb' }` (necesario para OCR) |
+| `modify-gl/submit` | Mantener BravoFrontend (Hal lo eliminó) |
+| `gl-mapping` GET | Adoptar query de Hal (JOINs, mejor ordenamiento) |
+| `gl-mapping` PUT | Adoptar structural save de Hal (más completo) |
+| `gl-options` | Fusionar: PC/ParentGL de Hal + bankId de BravoFrontend |
+
+**Endpoints nuevos de Hal (agregar a BravoFrontend):**
+- `POST /api/void/execute`
+- `GET/PUT /api/settings/fines-late-fees`
+- `GET/PUT /api/settings/dues-programming`
+
+### Merge 2: `features/vivomysql-mcp` → `BravoFrontend`
+
+**Estado:** Pendiente (después del Merge 1).
+
+**Archivos afectados:** 11 archivos (7 nuevos, 4 modificados).
+
+**Conflictos en `server.js`:**
+| Zona | Decisión |
+|---|---|
+| `express.json` | Mantener `{ limit: '10mb' }` |
+| `requires` | Agregar child_process, fs, os, path |
+| `POST /api/ocr/check` | Agregar endpoint (nuevo, no conflicto) |
+| `POST /api/ai-filter` | Adoptar versión mejorada (count, violations) |
+
+**Componentes OCR nuevos:**
+- `src/components/OcrScan/OcrScanButton.jsx`
+- `src/components/OcrScan/useOcrScan.js`
+
+**Archivos de contexto (agregar):**
+- `PROJECT-CONTEXT.md`
+- `GL-DEPLOYMENT-REPORT.md`
+- `ROADMAP-2WEEKS.md`
 
 ---
 
