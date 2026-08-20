@@ -2,7 +2,7 @@
 
 > **Para cualquier agente opencode (nuevo o existente):** lee este documento + `AGENTS.md` ANTES de trabajar. Contiene el historial, contratos de API, acuerdos del equipo y estado actual del despliegue.
 
-**Última actualización:** 2026-08-18
+**Última actualización:** 2026-08-20
 **Rama de trabajo actual:** `features/vivomysql-mcp`
 **Branches relevantes:** `BravoFrontend` (integración principal), `feature/register-entry-wiring` (trabajo de Hal/frontend), `backend` (backend histórico), `main`
 
@@ -93,18 +93,12 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
 3. Trabajar en una rama; siempre `git pull` antes de empezar y coordinar pushes.
 4. Consultar/acceder al VPS vía SSH (puerto 44) si se necesita desplegar o inspeccionar.
 
-## 9. Estrategia de trabajo actual (2026-08-18)
+## 9. Estrategia de trabajo actual (2026-08-20)
 
-- **Frontend (Hal) trabaja solo en su rama (`feature/register-entry-wiring`).** Backend se mantiene en **modo observación**:
-  - Revisar los pushes de Hal en `feature/register-entry-wiring` cuando ocurran.
-  - **No tocar su trabajo** ni hacer merges prematuros mientras no haya urgencia.
-- **Cuándo intervenir (reglas de alerta):**
-  1. Un push de Hal que toque `backend/server.js` sin coordinar (rompe el acuerdo de responsabilidades) → revisar y avisar.
-  2. Hal anuncie **despliegue al VPS** o un merge grande → integrar ANTES ambos `server.js`.
-- **Merge plan (2026-08-18):**
-  - `feature/register-entry-wiring` → `BravoFrontend` (pendiente, Hal debe actualizar primero)
-  - `features/vivomysql-mcp` → `BravoFrontend` (después del merge de Hal)
-  - Ver sección §12 para detalles del merge.
+- **Merge completado:** `feature/register-entry-wiring` → `BravoFrontend` (commit `54b0f2d` + fix `000ec52`).
+- **Frontend (Hal) debe actualizar su rama:** `git pull origin BravoFrontend` para obtener los endpoints integrados.
+- **Próximo merge pendiente:** `features/vivomysql-mcp` → `BravoFrontend` (OCR + AI filter mejorado).
+- **Despliegue a VPS:** después del merge de vivomysql-mcp, actualizar PM2 en el servidor.
 
 ## 10. OCR de cheques (Deposit Register) — 2026-08-18
 
@@ -152,31 +146,32 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
   - Rama de Hal tiene: `void/execute`, `fines-late-fees`, `dues-programming`, vendor IDs secuenciales, `gl-mapping` estructural.
 - **Observación demo (worktree local `5174`, rama de Hal):** el dropdown "CHECK G/L ACCOUNT CATEGORY" aparece **VACÍO** para los bancos cargados → **PENDIENTE investigar** (posible `useIn*` en 'N' o filtro bankType).
 
-## 12. Merge plan (2026-08-18)
+## 11b. Merge completado (2026-08-20)
+
+- **Commit:** `54b0f2d` — "merge: integrate register-entry-wiring into BravoFrontend"
+- **Fix:** `000ec52` — "fix: restore express.json 10mb limit for OCR compatibility"
+- **Conflictos resueltos (5):**
+  1. `express.json` limit → restaurado a 10mb
+  2. `/api/modify-gl/submit` → versión avanzada de Hal (CR + DP + Expense Credit Refund)
+  3. `gl-mapping` GET → query con JOINs de Hal
+  4. `gl-mapping` PUT → structural save de Hal
+  5. `gl-options` → fusionado (PC/ParentGL de Hal + bankId de BravoFrontend)
+- **Endpoints nuevos integrados:**
+  - `POST /api/void/execute` (CR + DP)
+  - `GET/PUT /api/settings/fines-late-fees`
+  - `GET/PUT /api/settings/dues-programming`
+  - `POST /api/modify-gl/submit` (versión avanzada)
+- **Hal debe actualizar su rama:** `git pull origin BravoFrontend`
+
+## 12. Merge plan (2026-08-20)
 
 ### Merge 1: `feature/register-entry-wiring` → `BravoFrontend`
 
-**Estado:** Pendiente. Hal debe actualizar su rama primero con `git pull origin BravoFrontend`.
-
-**Archivos afectados:** 22 archivos (2 nuevos, 2 eliminados, 18 modificados).
-
-**Conflictos en `server.js`:**
-| Zona | Decisión |
-|---|---|
-| `express.json` | Mantener `{ limit: '10mb' }` (necesario para OCR) |
-| `modify-gl/submit` | Mantener BravoFrontend (Hal lo eliminó) |
-| `gl-mapping` GET | Adoptar query de Hal (JOINs, mejor ordenamiento) |
-| `gl-mapping` PUT | Adoptar structural save de Hal (más completo) |
-| `gl-options` | Fusionar: PC/ParentGL de Hal + bankId de BravoFrontend |
-
-**Endpoints nuevos de Hal (agregar a BravoFrontend):**
-- `POST /api/void/execute`
-- `GET/PUT /api/settings/fines-late-fees`
-- `GET/PUT /api/settings/dues-programming`
+**Estado:** ✅ COMPLETADO (commit `54b0f2d` + `000ec52`).
 
 ### Merge 2: `features/vivomysql-mcp` → `BravoFrontend`
 
-**Estado:** Pendiente (después del Merge 1).
+**Estado:** PENDIENTE (después del Merge 1).
 
 **Archivos afectados:** 11 archivos (7 nuevos, 4 modificados).
 
