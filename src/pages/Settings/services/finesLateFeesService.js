@@ -7,14 +7,15 @@
   Future production mode:
     server = Node/Express API
 */
+import { API_BASE_URL } from '../../../config/api';
+const PERSISTENCE_MODE = 'server';
 
-const PERSISTENCE_MODE = 'local';
 
 const STORAGE_KEY =
   'wmplus-settings-fines-late-fees';
 
 const SERVER_URL =
-  'http://localhost:3011/api/settings/fines-late-fees';
+  `${API_BASE_URL}/settings/fines-late-fees`;
 
 export async function loadFinesLateFees() {
   if (PERSISTENCE_MODE === 'server') {

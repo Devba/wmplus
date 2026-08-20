@@ -2,6 +2,7 @@
 
 
 import { useEffect, useRef, useState } from 'react';
+import { API_BASE_URL } from '../../../../config/api';
 import './ModifyGLCheckUF.css';
 
 const temporaryCheckGLOptions = [
@@ -138,10 +139,11 @@ function readRow(row) {
 
 function normalizeGLOptions(payload) {
   const source =
-    payload?.options ||
-    payload?.glOptions ||
-    payload?.data ||
-    payload;
+  payload?.glAccounts ||
+  payload?.options ||
+  payload?.glOptions ||
+  payload?.data ||
+  payload;
 
   if (!Array.isArray(source)) return [];
 
@@ -322,8 +324,9 @@ function ModifyGLCheckUF() {
       setLoadingGLOptions(true);
 
       try {
-        const response = await fetch('/api/gl-options?page=CR');
-
+              const response = await fetch(
+        `${API_BASE_URL}/gl-options?screen=CR`
+      );
         if (!response.ok) {
           throw new Error(
             `GL option request failed with status ${response.status}`
@@ -408,7 +411,9 @@ function ModifyGLCheckUF() {
     try {
       setMessage('Changing GL classification...');
 
-      const response = await fetch('/api/modify-gl/submit', {
+      const response = await fetch(
+  `${API_BASE_URL}/modify-gl/submit`,
+  {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -111,6 +111,47 @@ body {
   font-weight: 700;
 }
 
+
+#btnGLMapAddRow:disabled {
+  background: #d9d9d9;
+  color: #000000;
+  opacity: 1;
+  cursor: default;
+}
+
+#btnGLMapAddRow:not(:disabled) {
+  background: #b6d7a8;
+  color: #000000;
+  cursor: pointer;
+}
+
+
+
+
+
+#btnGLMapCreateParent {
+  background: #d9d9d9;
+  color: #000000;
+  border: 1px solid #666;
+  margin-left: 8px;
+  font-weight: 700;
+}
+
+#btnGLMapCreateParent:disabled {
+  background: #d9d9d9;
+  color: #000000;
+  opacity: 1;
+  cursor: default;
+}
+
+#btnGLMapCreateParent:not(:disabled) {
+  background: #b6d7a8;
+  color: #000000;
+  cursor: pointer;
+}
+
+
+
 #btnGLMapSave {
   background: #d9d9d9;
   color: #38761d;   /* dark green */
@@ -194,6 +235,56 @@ body {
   padding: 2px;
   background: #ffffff;
 }
+
+
+
+/* ===========================================================
+   GL MAPPING - FREEZE GL# AND GL# NAME COLUMNS
+   =========================================================== */
+
+.glmap-table th:nth-child(1),
+.glmap-table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+}
+
+.glmap-table th:nth-child(2),
+.glmap-table td:nth-child(2) {
+  position: sticky;
+  left: 120px;
+}
+
+/* Frozen header cells must stay above frozen body cells */
+
+.glmap-table th:nth-child(1),
+.glmap-table th:nth-child(2) {
+  z-index: 5;
+  background: #1f4e79;
+}
+
+/* Frozen body cells */
+
+.glmap-table td:nth-child(1),
+.glmap-table td:nth-child(2) {
+  z-index: 3;
+  background: #ffffff;
+}
+
+/* Preserve selected-row highlighting in frozen columns */
+
+.glmap-table tr.selected td:nth-child(1),
+.glmap-table tr.selected td:nth-child(2) {
+  background: #dfeaff;
+  border-color: #3f6fd9;
+}
+
+/* Visual edge between frozen and scrolling columns */
+
+.glmap-table th:nth-child(2),
+.glmap-table td:nth-child(2) {
+  box-shadow: 2px 0 2px rgba(0, 0, 0, 0.15);
+}
+
 
 .glmap-table tr.selected td {
   background: #dfeaff;
@@ -279,4 +370,19 @@ body {
 #btnGLMapSave:disabled {
   opacity: 0.65;
   cursor: default;
+}
+
+
+#btnGLMapCancelChanges:disabled {
+  color: #000000;
+  opacity: 1;
+  background-color: #d9d9d9;
+  font-weight: 700;
+}
+
+#btnGLMapCancelChanges:not(:disabled) {
+  color: #000000;
+  background-color: #f4cccc;
+  cursor: pointer;
+  font-weight: 700;
 }

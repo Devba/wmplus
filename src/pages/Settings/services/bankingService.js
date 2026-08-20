@@ -7,14 +7,14 @@
   Future production mode:
     server = Node/Express API
 */
-
-const PERSISTENCE_MODE = 'local';
+import { API_BASE_URL } from '../../../config/api';
+const PERSISTENCE_MODE = 'server';
 
 const STORAGE_KEY =
   'wmplus-settings-banking';
 
 const SERVER_URL =
-  'http://localhost:3011/api/settings/banking';
+  `${API_BASE_URL}/settings/banking`;
 
 export async function loadBankingSettings() {
   if (PERSISTENCE_MODE === 'server') {
@@ -78,18 +78,47 @@ async function loadBankingSettingsFromServer() {
       `Server returned ${response.status}.`
     );
   }
+  const data = await response.json();
+  const bankRows = Array.isArray(data.banks)
+    ? data.banks.map((bank) => ({
+        ...bank,
+        dbId: bank.id,
+        id:
+          `${String(bank.bankType || '')
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, '-')}-${bank.bankId}`
+      }))
+    : [];
 
-  return response.json();
+  return {
+    bankRows,
+    fiscalData: data.fiscalSetup || {},
+    selectedRowId: 'operating-101'
+  };
 }
 
 async function saveBankingSettingsToServer(data) {
+  const payload = {};
+
+  if (Array.isArray(data.banks)) {
+    payload.banks = data.banks.map((bank) => ({
+      ...bank,
+      id: bank.dbId
+    }));
+  }
+
+  if (data.fiscalSetup) {
+    payload.fiscalSetup = data.fiscalSetup;
+  }
+
   const response = await fetch(SERVER_URL, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json'
     },
-    body: JSON.stringify(data)
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {

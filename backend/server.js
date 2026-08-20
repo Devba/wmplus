@@ -41,6 +41,11 @@ app.get('/api/residents', async (req, res) => {
 
     const search = String(req.query.search || '').trim();
 
+    const sort =
+      String(req.query.sort || 'name').toLowerCase() === 'address'
+        ? 'address'
+        : 'name';
+
     let whereClause = `
       (DeletedFlag IS NULL OR DeletedFlag != 'Y')
     `;
@@ -48,26 +53,59 @@ app.get('/api/residents', async (req, res) => {
     const params = [];
 
     if (search) {
-      whereClause += `
-        AND (
-          LastName LIKE ?
-          OR FirstName LIKE ?
-          OR DisplayName LIKE ?
-          OR ResidentAccountID LIKE ?
-          OR ResidenceAddress LIKE ?
-        )
-      `;
-
       const searchValue = `%${search}%`;
 
-      params.push(
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue
-      );
+      if (sort === 'address') {
+        whereClause += `
+          AND ResidenceAddress LIKE ?
+        `;
+
+        params.push(searchValue);
+      } else {
+        whereClause += `
+          AND (
+            LastName LIKE ?
+            OR FirstName LIKE ?
+            OR DisplayName LIKE ?
+            OR ResidentAccountID LIKE ?
+            OR ResidenceAddress LIKE ?
+          )
+        `;
+
+        params.push(
+          searchValue,
+          searchValue,
+          searchValue,
+          searchValue,
+          searchValue
+        );
+      }
     }
+
+    const orderBy =
+      sort === 'address'
+        ? `
+          ORDER BY
+            CASE
+              WHEN TRIM(ResidenceAddress) REGEXP '^[0-9]+'
+              THEN CAST(
+                SUBSTRING_INDEX(
+                  TRIM(ResidenceAddress),
+                  ' ',
+                  1
+                ) AS UNSIGNED
+              )
+              ELSE 999999999
+            END ASC,
+            ResidenceAddress ASC,
+            ResidentAccountID ASC
+        `
+        : `
+          ORDER BY
+            LastName ASC,
+            FirstName ASC,
+            ResidentAccountID ASC
+        `;
 
     params.push(limit, offset);
 
@@ -105,10 +143,7 @@ app.get('/api/residents', async (req, res) => {
           ResidentNotes as resident_notes
         FROM ResidentMaster
         WHERE ${whereClause}
-        ORDER BY
-          LastName ASC,
-          FirstName ASC,
-          ResidentAccountID ASC
+        ${orderBy}
         LIMIT ? OFFSET ?
       `,
       params
@@ -119,7 +154,8 @@ app.get('/api/residents', async (req, res) => {
       offset,
       limit,
       hasMore: rows.length === limit,
-      search
+      search,
+      sort
     });
 
   } catch (err) {
@@ -290,7 +326,13 @@ app.get('/api/vendors', async (req, res) => {
         ActiveFlag as active_flag
       FROM VendorMaster
       WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
-      ORDER BY VendorName ASC
+      ORDER BY
+        CASE
+          WHEN VendorID REGEXP '^[0-9]{1,4}$' THEN 0
+          ELSE 1
+        END ASC,
+        CAST(VendorID AS UNSIGNED) ASC,
+        VendorName ASC
     `);
     res.json(rows);
   } catch (err) {
@@ -302,7 +344,47 @@ app.get('/api/vendors', async (req, res) => {
 app.post('/api/vendors', async (req, res) => {
   try {
     const v = req.body;
-    const vendorId = v.vendor_id || `VEND-${Date.now().toString().slice(-4)}`;
+    const [[settingsRow]] = await db.query(`
+  SELECT VendorStartingAcct
+  FROM SystemSettings
+  WHERE SystemSettingsID = 1
+  LIMIT 1
+`);
+
+const startingVendorNumber = Math.max(
+  1,
+  parseInt(settingsRow?.VendorStartingAcct, 10) || 1
+);
+
+const [existingVendorRows] = await db.query(`
+  SELECT VendorID
+  FROM VendorMaster
+  WHERE VendorID REGEXP '^[0-9]{1,4}$'
+`);
+
+const usedVendorNumbers = new Set(
+  existingVendorRows.map((row) =>
+    parseInt(row.VendorID, 10)
+  )
+);
+
+let nextVendorNumber = startingVendorNumber;
+
+while (
+  nextVendorNumber <= 9999 &&
+  usedVendorNumbers.has(nextVendorNumber)
+) {
+  nextVendorNumber += 1;
+}
+
+if (nextVendorNumber > 9999) {
+  return res.status(409).json({
+    error: 'No available Vendor ID numbers remain.'
+  });
+}
+
+const vendorId =
+  String(nextVendorNumber).padStart(4, '0');
     await db.query(`
       INSERT INTO VendorMaster (
         VendorID, VendorName, CareOfAddressLine, AddressLine1, AddressLine2, City, StateCode, ZipCode,
@@ -431,12 +513,14 @@ app.get('/api/check-register', async (req, res) => {
       SELECT
         cr.CheckTransactionNumber AS check_txn_num,
         cr.CheckNumber AS check_number,
+
         COALESCE(
           v.VendorName,
           r.DisplayName,
           mc.ManagementCompanyName,
           cr.VendorResidentID
         ) AS payee_name,
+
         cr.GLAccountName AS gl_name,
         cr.Amount AS amount,
         cr.DateCheckIssued AS date_issued,
@@ -450,8 +534,18 @@ app.get('/api/check-register', async (req, res) => {
         cr.CheckNotation AS note,
         cr.BankAccount AS bank_account,
         cr.BankAccountID AS bank_account_id,
-        CONCAT(ba.BankName, ' - ', ba.BankID) AS bank_account_display,
+        cr.CheckAllowedYN AS check_allowed,
+        cr.EscrowFlag AS escrow_flag,
+        CONCAT(
+          ba.BankName,
+          ' - ',
+          ba.BankType,
+          ' - ',
+          ba.BankID
+        ) AS bank_account_display,
+
         cr.Status AS status
+
       FROM CheckRegister cr
 
       LEFT JOIN VendorMaster v
@@ -464,14 +558,14 @@ app.get('/api/check-register', async (req, res) => {
         ON mc.MgtCoClientID = cr.VendorResidentID
 
       LEFT JOIN BankAccount ba
-      ON ba.BankAccountID = cr.BankAccountID
+        ON ba.BankAccountID = cr.BankAccountID
 
       WHERE cr.DeletedFlag IS NULL
          OR cr.DeletedFlag != 'Y'
 
-      ORDER BY
-        cr.DateCheckIssued DESC,
-        cr.CheckNumber DESC
+
+  ORDER BY
+  cr.CheckTransactionNumber ASC
     `);
 
     res.json(rows);
@@ -592,15 +686,15 @@ app.post('/api/check-register', async (req, res) => {
       INSERT INTO CheckRegister (
         CheckTransactionNumber, CheckNumber, GLAccountName, Amount, DateCheckIssued,
         DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
-        VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, Status,
+        VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, CheckAllowedYN, EscrowFlag, Status,
         DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       txnNum,
       c.check_number || '',
       c.gl_name || '',
       amount,
-      c.date_issued || new Date().toISOString().slice(0, 10),
+      c.date_issued || null,
       c.date_cleared || null,
       c.month_cleared || null,
       c.gl_number || 5000,
@@ -610,7 +704,9 @@ app.post('/api/check-register', async (req, res) => {
       c.invoice_amount || amount,
       c.note || '',
       c.bank_account || 'Operating 101',
-      bankAccountId
+      bankAccountId,
+      c.check_allowed || 'Y',
+      c.escrow_flag || 'N'
     ]);
 
     // Real-time Bank Cash Flow update (decrease balance)
@@ -635,94 +731,121 @@ app.post('/api/check-register', async (req, res) => {
   }
 });
 
-/* ===========================================================
-   3b. MODIFY GL# — CHECK / DEPOSIT REGISTER TRANSACTION
-   Updates the GL number + GL account/classification on an
-   existing transaction. Coordinated with frontend contract:
-   payload: page, transactionNo, oldGLNo, oldGLClassification,
-            newGLNo, newGLClassification
-   =========================================================== */
 
 app.post('/api/modify-gl/submit', async (req, res) => {
   try {
     const {
-      page = 'CR',
-      transactionNo = '',
-      newGLNo = '',
-      newGLClassification = ''
-    } = req.body || {};
+      page,
+      transactionNo,
+      newGLNo,
+      newGLClassification
+    } = req.body;
 
-    if (!transactionNo) {
+    if (page === 'DP') {
+  if (!transactionNo || !newGLNo || !newGLClassification) {
+    return res.status(400).json({
+      error:
+        'Transaction #, new GL#, and new GL classification are required.'
+    });
+  }
+
+  const {
+    newExpenseRefundGLNo
+  } = req.body;
+
+  const expenseRefundNumber =
+    newGLClassification === 'Expense Credit Refund'
+      ? newExpenseRefundGLNo || null
+      : null;
+
+  const expenseRefundCategory =
+    newGLClassification === 'Expense Credit Refund'
+      ? 'Expense Credit Refund'
+      : null;
+
+  const [result] = await db.query(`
+    UPDATE DepositRegister
+    SET
+      GLNumber = ?,
+      GLAccountName = ?,
+      ExpenseRefundGLNumber = ?,
+      ExpenseRefundGLCategory = ?,
+      TimeStampUpdated = NOW()
+    WHERE DepositTransactionNumber = ?
+      AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+  `, [
+    newGLNo,
+    newGLClassification,
+    expenseRefundNumber,
+    expenseRefundCategory,
+    transactionNo
+  ]);
+
+  if (result.affectedRows === 0) {
+    return res.status(404).json({
+      error: 'Deposit Register transaction was not found.'
+    });
+  }
+
+  return res.json({
+    success: true,
+    transactionNo,
+    glNumber: newGLNo,
+    glClassification: newGLClassification,
+    expenseRefundGLNumber: expenseRefundNumber
+  });
+}
+
+if (page !== 'CR') {
+  return res.status(400).json({
+    error: 'Invalid page for Modify GL.'
+  });
+}
+
+    if (!transactionNo || !newGLNo || !newGLClassification) {
       return res.status(400).json({
-        success: false,
-        message: 'transactionNo is required'
+        error: 'Transaction #, new GL#, and new GL classification are required.'
       });
     }
 
-    if (!newGLNo && !newGLClassification) {
-      return res.status(400).json({
-        success: false,
-        message: 'newGLNo or newGLClassification is required'
-      });
-    }
+    const [result] = await db.query(`
+      UPDATE CheckRegister
+      SET
+        GLNumber = ?,
+        GLAccountName = ?
+      WHERE CheckTransactionNumber = ?
+        AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+    `, [
+      newGLNo,
+      newGLClassification,
+      transactionNo
+    ]);
 
-    const pageKey = String(page || 'CR').toUpperCase().trim();
-    const newGlNoStr = String(newGLNo || '').trim();
-    const newClassStr = String(newGLClassification || '').trim();
-
-    let affectedRows = 0;
-
-    if (pageKey === 'CR') {
-      const [result] = await db.query(`
-        UPDATE CheckRegister
-        SET
-          GLNumber = ?,
-          GLAccountName = ?,
-          TimeStampUpdated = NOW()
-        WHERE CheckTransactionNumber = ?
-      `, [newGlNoStr, newClassStr, transactionNo]);
-      affectedRows = result.affectedRows;
-    } else if (pageKey === 'DP') {
-      const [result] = await db.query(`
-        UPDATE DepositRegister
-        SET
-          GLNumber = ?,
-          GLAccountName = ?,
-          TimeStampUpdated = NOW()
-        WHERE DepositTransactionNumber = ?
-      `, [newGlNoStr, newClassStr, transactionNo]);
-      affectedRows = result.affectedRows;
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: `Unsupported page: ${pageKey}. Use CR or DP.`
-      });
-    }
-
-    if (affectedRows === 0) {
+    if (result.affectedRows === 0) {
       return res.status(404).json({
-        success: false,
-        message: `No transaction found with transactionNo: ${transactionNo}`
+        error: 'Check Register transaction was not found.'
       });
     }
 
     res.json({
       success: true,
-      page: pageKey,
       transactionNo,
-      newGLNo: newGlNoStr,
-      newGLClassification: newClassStr,
-      affectedRows
+      glNumber: newGLNo,
+      glClassification: newGLClassification
     });
+
   } catch (err) {
-    console.error('Error modifying GL for transaction:', err);
+    console.error('Error modifying Check Register GL:', err);
+
     res.status(500).json({
-      success: false,
-      error: 'Failed to modify GL',
+      error: 'Failed to modify Check Register GL',
       details: err.message
     });
   }
 });
+
+
+
 
 /* ===========================================================
    4. DEPOSIT REGISTER (DepositRegister) & ACID TRANSACTION POSTING
@@ -731,42 +854,70 @@ app.post('/api/modify-gl/submit', async (req, res) => {
 app.get('/api/deposit-register', async (req, res) => {
   try {
     const [rows] = await db.query(`
-  SELECT
-    dr.DepositTransactionNumber AS deposit_txn_num,
-    dr.DepositorAccountName AS payer_name,
-    dr.Amount AS amount,
-    dr.BankAccountName AS bank_account_name,
-    dr.BankAccountID AS bank_account_id,
-    CONCAT(
-      ba.BankName,
-      ' - ',
-      dr.BankAccountName,
-      ' - ',
-      dr.BankAccountID
-    ) AS bank_account_display,
-    dr.GLAccountName AS gl_name,
-    dr.GLNumber AS gl_number,
-    dr.DateDeposited AS date_deposited,
-    dr.DateCleared AS date_cleared,
-    dr.MonthCleared AS month_cleared,
-    dr.ResidentAccountID AS resident_id,
-    dr.VendorID AS vendor_id,
-    dr.DepositNotation AS note,
-    dr.Status AS status
-  FROM DepositRegister dr
+      SELECT
+        dr.DepositTransactionNumber AS deposit_txn_num,
+        dr.DepositorAccountName AS depositor_account_name,
+        dr.Amount AS amount,
 
-  LEFT JOIN BankAccount ba
-    ON ba.BankAccountID = dr.BankAccountID
+        COALESCE(
+          r.DisplayName,
+          v.VendorName,
+          dr.DepositorAccountName,
+          dr.ResidentAccountID,
+          dr.VendorID
+        ) AS payer_name,
 
-  WHERE dr.DeletedFlag IS NULL
-     OR dr.DeletedFlag != 'Y'
+        dr.BankAccountName AS bank_account,
+        dr.BankAccountID AS bank_account_id,
 
-  ORDER BY dr.DateDeposited DESC, dr.DepositTransactionNumber DESC
-`);
+        CONCAT(
+          ba.BankName,
+          ' - ',
+          ba.BankType,
+          ' - ',
+          ba.BankID
+        ) AS bank_account_display,
+
+        dr.GLAccountName AS gl_name,
+        dr.GLNumber AS gl_number,
+        dr.DateDeposited AS date_deposited,
+        dr.DateCleared AS date_cleared,
+        dr.MonthCleared AS month_cleared,
+        dr.ResidentAccountID AS resident_id,
+        dr.VendorID AS vendor_id,
+        dr.ExpenseRefundGLCategory AS expense_refund_gl_category,
+        dr.ExpenseRefundGLNumber AS expense_refund_gl_number,
+        dr.DepositNotation AS note,
+        dr.Status AS status
+
+      FROM DepositRegister dr
+
+      LEFT JOIN ResidentMaster r
+        ON r.ResidentAccountID = dr.ResidentAccountID
+
+      LEFT JOIN VendorMaster v
+        ON v.VendorID = dr.VendorID
+
+      LEFT JOIN BankAccount ba
+        ON ba.BankAccountID = dr.BankAccountID
+
+      WHERE dr.DeletedFlag IS NULL
+         OR dr.DeletedFlag != 'Y'
+
+      ORDER BY
+        dr.DateDeposited ASC,
+        dr.DepositTransactionNumber ASC
+    `);
+
     res.json(rows);
+
   } catch (err) {
     console.error('Error fetching deposits:', err);
-    res.status(500).json({ error: 'Failed to fetch deposit register', details: err.message });
+
+    res.status(500).json({
+      error: 'Failed to fetch deposit register',
+      details: err.message
+    });
   }
 });
 
@@ -783,9 +934,10 @@ app.post('/api/deposit-register', async (req, res) => {
       INSERT INTO DepositRegister (
         DepositTransactionNumber, DepositorAccountName, Amount, BankAccountName,
         BankAccountID, GLAccountName, GLNumber, DateDeposited, DateCleared,
-        MonthCleared, ResidentAccountID, VendorID, DepositNotation, Status,
+        MonthCleared, ResidentAccountID, VendorID, ExpenseRefundGLCategory,
+        ExpenseRefundGLNumber, DepositNotation, Status,
         DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Posted', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, 'Posted', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       txnNum,
       d.payer_name || '',
@@ -799,6 +951,8 @@ app.post('/api/deposit-register', async (req, res) => {
       d.month_cleared || null,
       d.resident_id || '',
       d.vendor_id || '',
+      d.expense_refund_gl_category || '',
+      d.expense_refund_gl_number || null,
       d.note || ''
     ]);
 
@@ -1412,6 +1566,745 @@ app.put('/api/settings/banking', async (req, res) => {
   }
 });
 
+
+/* ===========================================================
+   VOID TRANSACTION
+   Deposit & Check Register persistence
+   =========================================================== */
+
+app.post('/api/void/execute', async (req, res) => {
+  try {
+    const transactionNumber =
+      req.body?.payload?.transaction_no;
+
+    const page =
+      req.body?.payload?.page || '';
+
+    if (!transactionNumber) {
+      return res.status(400).json({
+        ok: false,
+        status: {
+          message: 'Transaction # is required.'
+        }
+      });
+    }
+
+    if (page === 'DP') {
+  const [rows] = await db.query(`
+    SELECT
+      DepositTransactionNumber,
+      Status,
+      DateCleared,
+      MonthCleared
+    FROM DepositRegister
+    WHERE DepositTransactionNumber = ?
+    LIMIT 1
+  `, [transactionNumber]);
+
+  if (rows.length === 0) {
+    return res.status(404).json({
+      ok: false,
+      status: {
+        message: 'Deposit transaction not found.'
+      }
+    });
+  }
+
+  const deposit = rows[0];
+
+  if (
+    deposit.Status === 'Cleared' ||
+    deposit.DateCleared !== null ||
+    deposit.MonthCleared !== null
+  ) {
+    return res.status(400).json({
+      ok: false,
+      status: {
+        message:
+          'This deposit already cleared the bank and cannot be voided.'
+      }
+    });
+  }
+
+  if (deposit.Status === 'Voided') {
+    return res.status(400).json({
+      ok: false,
+      status: {
+        message: 'Transaction already voided.'
+      }
+    });
+  }
+
+  await db.query(`
+    UPDATE DepositRegister
+    SET
+      Status = 'Voided',
+      DateCleared = NULL,
+      MonthCleared = NULL,
+      TimeStampUpdated = NOW()
+    WHERE DepositTransactionNumber = ?
+  `, [transactionNumber]);
+
+  return res.json({
+    ok: true,
+    status: {
+      message: 'VOID successful.'
+    }
+  });
+}
+
+
+
+
+
+    if (page !== 'CR') {
+      return res.status(400).json({
+        ok: false,
+        status: {
+          message:
+            'Only Check Register void is enabled at this time.'
+        }
+      });
+    }
+
+    const [rows] = await db.query(`
+      SELECT
+        CheckTransactionNumber,
+        Status,
+        DateCheckCleared,
+        MonthCleared
+      FROM CheckRegister
+      WHERE CheckTransactionNumber = ?
+      LIMIT 1
+    `, [transactionNumber]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        status: {
+          message: 'Check transaction not found.'
+        }
+      });
+    }
+
+    const check = rows[0];
+
+    if (
+      check.Status === 'Cleared' ||
+      check.DateCheckCleared !== null ||
+      check.MonthCleared !== null
+    ) {
+      return res.status(400).json({
+        ok: false,
+        status: {
+          message:
+            'This check already cleared the bank and cannot be voided.'
+        }
+      });
+    }
+
+    if (check.Status === 'Voided') {
+      return res.status(400).json({
+        ok: false,
+        status: {
+          message: 'Transaction already voided.'
+        }
+      });
+    }
+
+    await db.query(`
+      UPDATE CheckRegister
+      SET
+        Status = 'Voided',
+        DateCheckCleared = NULL,
+        MonthCleared = NULL,
+        TimeStampUpdated = NOW()
+      WHERE CheckTransactionNumber = ?
+    `, [transactionNumber]);
+
+    return res.json({
+      ok: true,
+      status: {
+        message: 'VOID successful.'
+      }
+    });
+  } catch (err) {
+    console.error(
+      'Error voiding Check Register transaction:',
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      status: {
+        message: 'Unable to void check.'
+      },
+      details: err.message
+    });
+  }
+});
+
+
+/* ===========================================================
+   SETTINGS: FINES / LATE FEES PROGRAMMING
+   =========================================================== */
+
+app.get('/api/settings/fines-late-fees', async (req, res) => {
+  try {
+    const [[configRow]] = await db.query(`
+      SELECT *
+      FROM FinesConfig
+      WHERE FinesConfigID = 1
+      LIMIT 1
+    `);
+
+    const [fineTypeRows] = await db.query(`
+      SELECT
+        FineCategory,
+        SortOrder,
+        LetterCode,
+        ViolationType,
+        GLCode,
+        FineAmount,
+        ActiveFlag
+      FROM FineTypesList
+      ORDER BY FineCategory, SortOrder
+    `);
+
+    const [letterRows] = await db.query(`
+      SELECT *
+      FROM LetterRules
+      ORDER BY LetterRulesID
+    `);
+
+    const [[timingRow]] = await db.query(`
+      SELECT *
+      FROM TimingSchedule
+      WHERE TimingScheduleID = 1
+      LIMIT 1
+    `);
+
+    function buildFineTypeList(category) {
+      return fineTypeRows
+        .filter((row) => row.FineCategory === category)
+        .map((row) => [
+          row.LetterCode || '',
+          row.ViolationType || '',
+          row.GLCode || '',
+          Number(row.FineAmount || 0).toFixed(2),
+          row.ActiveFlag || 'Y'
+        ]);
+    }
+
+    function buildLetterRule(ruleType) {
+      const row =
+        letterRows.find(
+          (r) => r.RuleType === ruleType
+        ) || {};
+
+      return {
+        letter1Amount:
+          Number(row.Letter1Amount || 0).toFixed(2),
+        letter1PercentYN:
+          row.Letter1PercentYN || 'N',
+        letter1Percent:
+          Number(row.Letter1Percent || 0).toFixed(2),
+        letter1GL:
+          row.Letter1GL || '',
+        letter2Amount:
+          Number(row.Letter2Amount || 0).toFixed(2),
+        letter2PercentYN:
+          row.Letter2PercentYN || 'N',
+        letter2Percent:
+          Number(row.Letter2Percent || 0).toFixed(2),
+        letter2GL:
+          row.Letter2GL || '',
+        finalAmount:
+          Number(row.FinalAmount || 0).toFixed(2),
+        finalGL:
+          row.FinalGL || ''
+      };
+    }
+
+    res.json({
+      success: true,
+
+      violationFineRules: {
+        restartDays:
+          configRow?.RestartDays !== undefined
+            ? String(configRow.RestartDays)
+            : '',
+        fineAmount:
+          configRow?.FineAmount !== undefined
+            ? Number(configRow.FineAmount).toFixed(2)
+            : ''
+      },
+
+      fineTypesList: {
+        timed: buildFineTypeList('timed'),
+        immediate: buildFineTypeList('immediate')
+      },
+
+      arrearsRules:
+        buildLetterRule('arrearsRules'),
+
+      annualDuesLateFees:
+        buildLetterRule('annualDuesLateFees'),
+
+      specialAssessmentLateFees:
+        buildLetterRule('specialAssessmentLateFees'),
+
+      timingSchedule: {
+        warning1Days:
+          timingRow?.Warning1Days !== undefined
+            ? String(timingRow.Warning1Days)
+            : '30',
+        warning2Days:
+          timingRow?.Warning2Days !== undefined
+            ? String(timingRow.Warning2Days)
+            : '60',
+        collection1Days:
+          timingRow?.Collection1Days !== undefined
+            ? String(timingRow.Collection1Days)
+            : '90',
+        collection2Days:
+          timingRow?.Collection2Days !== undefined
+            ? String(timingRow.Collection2Days)
+            : '120',
+        finalDays:
+          timingRow?.FinalDays !== undefined
+            ? String(timingRow.FinalDays)
+            : '150'
+      }
+    });
+  } catch (err) {
+    console.error(
+      'Error fetching Fines / Late Fees settings:',
+      err
+    );
+
+    res.status(500).json({
+      error:
+        'Failed to fetch Fines / Late Fees settings',
+      details: err.message
+    });
+  }
+});
+
+
+app.put('/api/settings/fines-late-fees', async (req, res) => {
+  try {
+    const {
+      violationFineRules = {},
+      fineTypesList = {},
+      arrearsRules = {},
+      annualDuesLateFees = {},
+      specialAssessmentLateFees = {},
+      timingSchedule = {}
+    } = req.body;
+
+    await db.query(`
+      UPDATE FinesConfig
+      SET
+        RestartDays = ?,
+        FineAmount = ?,
+        TimeStampUpdated = NOW()
+      WHERE FinesConfigID = 1
+    `, [
+      Number(violationFineRules.restartDays || 0),
+      Number(violationFineRules.fineAmount || 0)
+    ]);
+
+    async function saveFineTypeCategory(
+      category,
+      rows
+    ) {
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = rows[i];
+
+        await db.query(`
+          UPDATE FineTypesList
+          SET
+            SortOrder = ?,
+            LetterCode = ?,
+            ViolationType = ?,
+            GLCode = ?,
+            FineAmount = ?,
+            ActiveFlag = ?
+          WHERE FineCategory = ?
+            AND SortOrder = ?
+        `, [
+          i,
+          row[0] || '',
+          row[1] || '',
+          row[2] || '',
+          Number(row[3] || 0),
+          row[4] || 'Y',
+          category,
+          i
+        ]);
+      }
+    }
+
+    await saveFineTypeCategory(
+      'timed',
+      fineTypesList.timed || []
+    );
+
+    await saveFineTypeCategory(
+      'immediate',
+      fineTypesList.immediate || []
+    );
+
+    async function saveLetterRule(
+      ruleType,
+      rule
+    ) {
+      await db.query(`
+        UPDATE LetterRules
+        SET
+          Letter1Amount = ?,
+          Letter1PercentYN = ?,
+          Letter1Percent = ?,
+          Letter1GL = ?,
+          Letter2Amount = ?,
+          Letter2PercentYN = ?,
+          Letter2Percent = ?,
+          Letter2GL = ?,
+          FinalAmount = ?,
+          FinalGL = ?,
+          TimeStampUpdated = NOW()
+        WHERE RuleType = ?
+      `, [
+        Number(rule.letter1Amount || 0),
+        rule.letter1PercentYN || 'N',
+        Number(rule.letter1Percent || 0),
+        rule.letter1GL || '',
+        Number(rule.letter2Amount || 0),
+        rule.letter2PercentYN || 'N',
+        Number(rule.letter2Percent || 0),
+        rule.letter2GL || '',
+        Number(rule.finalAmount || 0),
+        rule.finalGL || '',
+        ruleType
+      ]);
+    }
+
+    await saveLetterRule(
+      'arrearsRules',
+      arrearsRules
+    );
+
+    await saveLetterRule(
+      'annualDuesLateFees',
+      annualDuesLateFees
+    );
+
+    await saveLetterRule(
+      'specialAssessmentLateFees',
+      specialAssessmentLateFees
+    );
+
+    await db.query(`
+      UPDATE TimingSchedule
+      SET
+        Warning1Days = ?,
+        Warning2Days = ?,
+        Collection1Days = ?,
+        Collection2Days = ?,
+        FinalDays = ?,
+        TimeStampUpdated = NOW()
+      WHERE TimingScheduleID = 1
+    `, [
+      Number(timingSchedule.warning1Days || 30),
+      Number(timingSchedule.warning2Days || 60),
+      Number(timingSchedule.collection1Days || 90),
+      Number(timingSchedule.collection2Days || 120),
+      Number(timingSchedule.finalDays || 150)
+    ]);
+
+    res.json({
+      success: true,
+      message:
+        'Fines / Late Fees settings saved successfully'
+    });
+  } catch (err) {
+    console.error(
+      'Error saving Fines / Late Fees settings:',
+      err
+    );
+
+    res.status(500).json({
+      error:
+        'Failed to save Fines / Late Fees settings',
+      details: err.message
+    });
+  }
+});
+
+
+
+
+
+
+
+
+/* ===========================================================
+   SETTINGS: ANNUAL / SPECIAL DUES PROGRAMMING
+   =========================================================== */
+
+app.get('/api/settings/dues-programming', async (req, res) => {
+  try {
+    const [programRows] = await db.query(`
+      SELECT
+        DuesType,
+        AssessmentFrequency,
+        DATE_FORMAT(PaymentDueDate, '%m/%d/%Y') AS PaymentDueDate
+      FROM DuesProgramming
+      WHERE MgtCoClientID = 'MGTCO-001'
+        AND HOALicenseNumber = 'HOA-FL-2024-001'
+        AND ActiveFlag = 'Y'
+    `);
+
+    const [rateRows] = await db.query(`
+      SELECT
+        SectionType,
+        RateType,
+        CurrentRate,
+        NextRate
+      FROM DuesRates
+      ORDER BY DuesRateID
+    `);
+
+    function buildSection(sectionType) {
+      const program =
+        programRows.find(
+          (row) => row.DuesType === sectionType
+        ) || {};
+
+      const rates = {};
+
+      rateRows
+        .filter(
+          (row) => row.SectionType === sectionType
+        )
+        .forEach((row) => {
+          rates[row.RateType] = {
+            currentRate:
+              Number(row.CurrentRate || 0).toFixed(2),
+            nextRate:
+              Number(row.NextRate || 0).toFixed(2)
+          };
+        });
+
+      return {
+        paymentFrequency:
+          program.AssessmentFrequency || 'Annually',
+
+        dueDate:
+          program.PaymentDueDate || '',
+
+        rates
+      };
+    }
+
+    res.json({
+      success: true,
+      annualDues: buildSection('annualDues'),
+      specialAssessment:
+        buildSection('specialAssessment'),
+      activeSection: 'annual-dues'
+    });
+  } catch (err) {
+    console.error(
+      'Error fetching Dues Programming settings:',
+      err
+    );
+
+    res.status(500).json({
+      error:
+        'Failed to fetch Dues Programming settings',
+      details: err.message
+    });
+  }
+});
+
+
+app.put('/api/settings/dues-programming', async (req, res) => {
+  try {
+    const {
+      annualDues = {},
+      specialAssessment = {}
+    } = req.body;
+
+    function sqlDate(mmddyyyy) {
+      if (!mmddyyyy) {
+        return null;
+      }
+
+      const parts = mmddyyyy.split('/');
+
+      if (parts.length !== 3) {
+        return null;
+      }
+
+      return `${parts[2]}-${parts[0]}-${parts[1]}`;
+    }
+
+    async function saveProgrammingRow(
+      duesType,
+      section
+    ) {
+      const [existing] = await db.query(`
+        SELECT DuesProgrammingID
+        FROM DuesProgramming
+        WHERE MgtCoClientID = 'MGTCO-001'
+          AND HOALicenseNumber = 'HOA-FL-2024-001'
+          AND DuesType = ?
+        LIMIT 1
+      `, [duesType]);
+
+      if (existing.length > 0) {
+        await db.query(`
+          UPDATE DuesProgramming
+          SET
+            AssessmentFrequency = ?,
+            PaymentDueDate = ?,
+            ActiveFlag = 'Y',
+            OperatorID = 'USER',
+            TimeStampUpdated = NOW()
+          WHERE DuesProgrammingID = ?
+        `, [
+          section.paymentFrequency || 'Annually',
+          sqlDate(section.dueDate),
+          existing[0].DuesProgrammingID
+        ]);
+      } else {
+        await db.query(`
+          INSERT INTO DuesProgramming (
+            MgtCoClientID,
+            HOALicenseNumber,
+            DuesType,
+            AssessmentFrequency,
+            PaymentDueDate,
+            ActiveFlag,
+            OperatorID
+          )
+          VALUES (?, ?, ?, ?, ?, 'Y', 'USER')
+        `, [
+          'MGTCO-001',
+          'HOA-FL-2024-001',
+          duesType,
+          section.paymentFrequency || 'Annually',
+          sqlDate(section.dueDate)
+        ]);
+      }
+    }
+
+    async function saveRates(
+      sectionType,
+      rates
+    ) {
+      const rateTypes =
+        Object.keys(rates || {});
+
+      if (rateTypes.length === 0) {
+        return;
+      }
+
+      const currentCases = [];
+      const nextCases = [];
+      const params = [];
+
+      for (const rateType of rateTypes) {
+        currentCases.push(
+          'WHEN RateType = ? THEN ?'
+        );
+
+        params.push(
+          rateType,
+          Number(rates[rateType]?.currentRate || 0)
+        );
+      }
+
+      for (const rateType of rateTypes) {
+        nextCases.push(
+          'WHEN RateType = ? THEN ?'
+        );
+
+        params.push(
+          rateType,
+          Number(rates[rateType]?.nextRate || 0)
+        );
+      }
+
+      const placeholders =
+        rateTypes.map(() => '?').join(',');
+
+      params.push(
+        sectionType,
+        ...rateTypes
+      );
+
+      await db.query(`
+        UPDATE DuesRates
+        SET
+          CurrentRate =
+            CASE
+              ${currentCases.join('\n')}
+              ELSE CurrentRate
+            END,
+          NextRate =
+            CASE
+              ${nextCases.join('\n')}
+              ELSE NextRate
+            END
+        WHERE SectionType = ?
+          AND RateType IN (${placeholders})
+      `, params);
+    }
+
+    await saveProgrammingRow(
+      'annualDues',
+      annualDues
+    );
+
+    await saveProgrammingRow(
+      'specialAssessment',
+      specialAssessment
+    );
+
+    await saveRates(
+      'annualDues',
+      annualDues.rates
+    );
+
+    await saveRates(
+      'specialAssessment',
+      specialAssessment.rates
+    );
+
+    res.json({
+      success: true,
+      message:
+        'Dues Programming settings saved successfully'
+    });
+  } catch (err) {
+    console.error(
+      'Error saving Dues Programming settings:',
+      err
+    );
+
+    res.status(500).json({
+      error:
+        'Failed to save Dues Programming settings',
+      details: err.message
+    });
+  }
+});
+
+
+
 /* ===========================================================
    7. SETTINGS: GENERAL SYSTEM PROGRAMMING
    =========================================================== */
@@ -1694,9 +2587,55 @@ app.put('/api/settings/fines', async (req, res) => {
    10. SETTINGS: GL MAPPING
    =========================================================== */
 
+
+
+
 app.get('/api/settings/gl-mapping', async (req, res) => {
   try {
-    const [rows] = await db.query(`SELECT * FROM GLAccounts WHERE ActiveFlag='Y' ORDER BY SortOrder ASC`);
+     const [rows] = await db.query(`
+  SELECT
+    child.*
+  FROM GLAccounts child
+  LEFT JOIN GLAccounts parent
+    ON child.PC = 'C'
+   AND child.ParentGL = parent.GLNumber
+   AND parent.PC = 'P'
+   AND parent.ActiveFlag = 'Y'
+  WHERE child.ActiveFlag = 'Y'
+  ORDER BY
+  CASE
+    /* Normal child: use its parent's GL# as the section anchor */
+    WHEN child.PC = 'C'
+         AND TRIM(child.ParentGL) <> ''
+    THEN CAST(
+      TRIM(SUBSTRING_INDEX(child.ParentGL, '-', 1))
+      AS UNSIGNED
+    )
+
+    /* Top-level reserved range: place it at the END of its range */
+    WHEN child.PC = 'P'
+         AND child.GLNumber LIKE '%-%'
+    THEN CAST(
+      TRIM(SUBSTRING_INDEX(child.GLNumber, '-', -1))
+      AS UNSIGNED
+    )
+
+    /* Normal parent anchor: order by its own GL# */
+    ELSE CAST(
+      TRIM(SUBSTRING_INDEX(child.GLNumber, '-', 1))
+      AS UNSIGNED
+    )
+  END ASC,
+
+  CASE
+    WHEN child.PC = 'P' THEN 0
+    WHEN UPPER(child.GLName) LIKE '%FUTURE%' THEN 2
+    ELSE 1
+  END ASC,
+
+  child.SortOrder ASC,
+  child.GLAccountID ASC
+`);
     const mapped = rows.map(r => ({
       id: r.GLAccountID,
       glNumber: r.GLNumber,
@@ -1729,42 +2668,301 @@ app.get('/api/settings/gl-mapping', async (req, res) => {
 });
 
 app.put('/api/settings/gl-mapping', async (req, res) => {
-  try {
-    const { glAccounts } = req.body;
-    if (Array.isArray(glAccounts)) {
+  const { glAccounts, structuralSave } = req.body;
+
+  if (!Array.isArray(glAccounts)) {
+    return res.status(400).json({
+      error: 'glAccounts must be an array'
+    });
+  }
+
+  // -----------------------------------------------------------
+  // STRUCTURAL SAVE
+  // Add / Delete / Move Up / Move Down / Move To Parent.
+  // The array order received from React is the source of truth.
+  // -----------------------------------------------------------
+  if (structuralSave === true) {
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const submittedIds = [];
+
       for (const [idx, r] of glAccounts.entries()) {
         if (r.id) {
-          await db.query(`
+          await connection.query(`
             UPDATE GLAccounts SET
-              GLNumber=?, GLName=?, SourceTable=?, Description=?, BankType=?, BankID=?,
-              PC=?, ParentGL=?, ConsolidatedParentGL=?, DC=?, AR=?, EffectiveDate=?,
-              UseInCR=?, UseInDP=?, UseInAPR=?, UseInBDC=?, UseInXFER=?,
-              LastEditedBy=?, SystemLocked=?, SortOrder=?, TimeStampUpdated=NOW()
+              GLNumber=?,
+              GLName=?,
+              SourceTable=?,
+              Description=?,
+              BankType=?,
+              BankID=?,
+              PC=?,
+              ParentGL=?,
+              ConsolidatedParentGL=?,
+              DC=?,
+              AR=?,
+              EffectiveDate=?,
+              LastEditedBy=?,
+              SystemLocked=?,
+              ActiveFlag='Y',
+              SortOrder=?,
+              UseInCR=?,
+              UseInDP=?,
+              UseInAPR=?,
+              UseInBDC=?,
+              UseInXFER=?,
+              TimeStampUpdated=NOW()
             WHERE GLAccountID=?
           `, [
-            r.glNumber||'', r.glName||'', r.sourceTable||'', r.description||'', r.bankType||'', r.bankId||'',
-            r.pc||'P', r.parentGl||'', r.consolidatedParentGl||'', r.dc||'D', r.ar||'A', r.effectiveDate||'',
-            r.useInCR||'N', r.useInDP||'N', r.useInAPR||'N', r.useInBDC||'N', r.useInXFER||'N',
-            r.lastEditedBy||'SYSTEM', r.systemLocked ? 1 : 0, idx, r.id
+            r.glNumber || '',
+            r.glName || '',
+            r.sourceTable || '',
+            r.description || '',
+            r.bankType || '',
+            r.bankId || '',
+            r.pc || 'P',
+            r.parentGl || '',
+            r.consolidatedParentGl || '',
+            r.dc || 'D',
+            r.ar || 'A',
+            r.effectiveDate || '',
+            r.lastEditedBy || 'SYSTEM',
+            r.systemLocked ? 1 : 0,
+            idx,
+            r.useInCR || 'N',
+            r.useInDP || 'N',
+            r.useInAPR || 'N',
+            r.useInBDC || 'N',
+            r.useInXFER || r.useInXfer || 'N',
+            r.id
           ]);
+
+          submittedIds.push(Number(r.id));
+        } else {
+          const [result] = await connection.query(`
+            INSERT INTO GLAccounts (
+              GLNumber,
+              GLName,
+              SourceTable,
+              Description,
+              BankType,
+              BankID,
+              PC,
+              ParentGL,
+              ConsolidatedParentGL,
+              DC,
+              AR,
+              EffectiveDate,
+              CreatedBy,
+              CreatedDate,
+              LastEditedBy,
+              SystemLocked,
+              ActiveFlag,
+              SortOrder,
+              UseInCR,
+              UseInDP,
+              UseInAPR,
+              UseInBDC,
+              UseInXFER
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, 'Y', ?, ?, ?, ?, ?, ?
+            )
+          `, [
+            r.glNumber || '',
+            r.glName || '',
+            r.sourceTable || '',
+            r.description || '',
+            r.bankType || '',
+            r.bankId || '',
+            r.pc || 'C',
+            r.parentGl || '',
+            r.consolidatedParentGl || '',
+            r.dc || 'D',
+            r.ar || 'A',
+            r.effectiveDate || '',
+            r.createdBy || 'USER',
+            r.createdDate || '',
+            r.lastEditedBy || 'USER',
+            r.systemLocked ? 1 : 0,
+            idx,
+            r.useInCR || 'N',
+            r.useInDP || 'N',
+            r.useInAPR || 'N',
+            r.useInBDC || 'N',
+            r.useInXFER || r.useInXfer || 'N'
+          ]);
+
+          submittedIds.push(Number(result.insertId));
         }
       }
+
+      // A structural save contains the complete active mapping.
+      // Any unlocked active row omitted from that complete array
+      // was deleted by the user and is retired rather than erased.
+      if (submittedIds.length > 0) {
+        const placeholders = submittedIds.map(() => '?').join(',');
+
+        await connection.query(`
+          UPDATE GLAccounts
+          SET ActiveFlag='N',
+              TimeStampUpdated=NOW()
+          WHERE ActiveFlag='Y'
+            AND SystemLocked=0
+            AND GLAccountID NOT IN (${placeholders})
+        `, submittedIds);
+      }
+
+      await connection.commit();
+
+      return res.json({
+        success: true,
+        message: 'GL Accounts structure updated successfully'
+      });
+    } catch (err) {
+      await connection.rollback();
+      console.error('Error updating GL mapping structure:', err);
+
+      return res.status(500).json({
+        error: 'Failed to update GL mapping structure',
+        details: err.message
+      });
+    } finally {
+      connection.release();
     }
-    res.json({ success: true, message: 'GL Accounts updated successfully' });
+  }
+
+  // -----------------------------------------------------------
+  // SINGLE-ROW SAVE
+  // Ordinary field edit. SortOrder is intentionally untouched.
+  // -----------------------------------------------------------
+  try {
+    for (const r of glAccounts) {
+      if (!r.id) {
+        // Fast new-row save: insert only this P or C row.
+        // P display order is calculated by the GET query from GLNumber.
+        // C rows receive the next SortOrder within their ParentGL group.
+        const [sortRows] = await db.query(
+          r.pc === 'C' && String(r.parentGl || '').trim() !== ''
+            ? `SELECT COALESCE(MAX(SortOrder), -1) + 1 AS nextSortOrder
+                 FROM GLAccounts
+                WHERE ActiveFlag='Y' AND PC='C' AND ParentGL=?`
+            : `SELECT COALESCE(MAX(SortOrder), -1) + 1 AS nextSortOrder
+                 FROM GLAccounts
+                WHERE ActiveFlag='Y' AND PC='P'`,
+          r.pc === 'C' && String(r.parentGl || '').trim() !== ''
+            ? [r.parentGl]
+            : []
+        );
+
+        const nextSortOrder = Number(sortRows[0]?.nextSortOrder) || 0;
+
+        await db.query(`
+          INSERT INTO GLAccounts (
+            GLNumber, GLName, SourceTable, Description, BankType, BankID,
+            PC, ParentGL, ConsolidatedParentGL, DC, AR, EffectiveDate,
+            CreatedBy, CreatedDate, LastEditedBy, SystemLocked, ActiveFlag,
+            SortOrder, UseInCR, UseInDP, UseInAPR, UseInBDC, UseInXFER
+          ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Y',
+            ?, ?, ?, ?, ?, ?
+          )
+        `, [
+          r.glNumber || '',
+          r.glName || '',
+          r.sourceTable || '',
+          r.description || '',
+          r.bankType || '',
+          r.bankId || '',
+          r.pc || 'C',
+          r.parentGl || '',
+          r.consolidatedParentGl || '',
+          r.dc || 'D',
+          r.ar || 'A',
+          r.effectiveDate || '',
+          r.createdBy || 'USER',
+          r.createdDate || '',
+          r.lastEditedBy || 'USER',
+          r.systemLocked ? 1 : 0,
+          nextSortOrder,
+          r.useInCR || 'N',
+          r.useInDP || 'N',
+          r.useInAPR || 'N',
+          r.useInBDC || 'N',
+          r.useInXFER || r.useInXfer || 'N'
+        ]);
+
+        continue;
+      }
+
+      await db.query(`
+        UPDATE GLAccounts SET
+          GLNumber=?,
+          GLName=?,
+          SourceTable=?,
+          Description=?,
+          BankType=?,
+          BankID=?,
+          PC=?,
+          ParentGL=?,
+          ConsolidatedParentGL=?,
+          DC=?,
+          AR=?,
+          EffectiveDate=?,
+          LastEditedBy=?,
+          SystemLocked=?,
+          UseInCR=?,
+          UseInDP=?,
+          UseInAPR=?,
+          UseInBDC=?,
+          UseInXFER=?,
+          TimeStampUpdated=NOW()
+        WHERE GLAccountID=?
+      `, [
+        r.glNumber || '',
+        r.glName || '',
+        r.sourceTable || '',
+        r.description || '',
+        r.bankType || '',
+        r.bankId || '',
+        r.pc || 'P',
+        r.parentGl || '',
+        r.consolidatedParentGl || '',
+        r.dc || 'D',
+        r.ar || 'A',
+        r.effectiveDate || '',
+        r.lastEditedBy || 'SYSTEM',
+        r.systemLocked ? 1 : 0,
+        r.useInCR || 'N',
+        r.useInDP || 'N',
+        r.useInAPR || 'N',
+        r.useInBDC || 'N',
+        r.useInXFER || r.useInXfer || 'N',
+        r.id
+      ]);
+    }
+
+    return res.json({
+      success: true,
+      message: 'GL Account updated successfully'
+    });
   } catch (err) {
     console.error('Error updating GL mapping:', err);
-    res.status(500).json({ error: 'Failed to update GL mapping', details: err.message });
+
+    return res.status(500).json({
+      error: 'Failed to update GL mapping',
+      details: err.message
+    });
   }
 });
 
-/* ===========================================================
-   11. SETTINGS: GL OPTIONS (dropdown choices for entry screens)
-   Approved contract (2026-08-10):
-     - screen: CR | DP | APR | BDC | XFER
-     - returns full GL objects (glNumber, glName, bankType, bankId, sourceTable, ...)
-     - filters by the matching useIn* flag
-     - bank matching: if bankId provided, prefer GLs for that bank; otherwise returns all
-   =========================================================== */
+/* ============================================================
+   GL OPTIONS FOR TRANSACTION ENTRY
+=========================================================== */
 
 app.get('/api/gl-options', async (req, res) => {
   try {
@@ -1775,7 +2973,7 @@ app.get('/api/gl-options', async (req, res) => {
     ).toUpperCase().trim();
     const bankId = req.query.bankId ? String(req.query.bankId).trim() : '';
 
-    const flagByScreen = {
+    const fieldMap = {
       CR: 'UseInCR',
       DP: 'UseInDP',
       APR: 'UseInAPR',
@@ -1783,53 +2981,65 @@ app.get('/api/gl-options', async (req, res) => {
       XFER: 'UseInXFER'
     };
 
-    const flag = flagByScreen[screen];
+    const useField = fieldMap[screen];
 
-    let sql = `SELECT * FROM GLAccounts WHERE ActiveFlag='Y'`;
-    const params = [];
-
-    if (flag) {
-      sql += ` AND ${flag} = 'Y'`;
+    if (!useField) {
+      return res.status(400).json({
+        error: 'Invalid screen. Use CR, DP, APR, BDC, or XFER.'
+      });
     }
 
-    sql += ` ORDER BY SortOrder ASC, GLNumber ASC`;
+    const [rows] = await db.query(`
+  SELECT
+    GLAccountID,
+    GLNumber,
+    GLName,
+    SourceTable,
+    BankType,
+    BankID,
+    PC,
+    ParentGL
+  FROM GLAccounts
+  WHERE ActiveFlag = 'Y'
+    AND ${useField} = 'Y'
+  ORDER BY SortOrder ASC, GLAccountID ASC
+`);
 
-    const [rows] = await db.query(sql, params);
-
-    const mapped = rows.map(r => ({
-      id: r.GLAccountID,
-      glNumber: r.GLNumber,
-      glName: r.GLName,
-      sourceTable: r.SourceTable,
-      description: r.Description,
-      bankType: r.BankType,
-      bankId: r.BankID,
-      pc: r.PC,
-      parentGl: r.ParentGL,
-      dc: r.DC,
-      ar: r.AR,
-      activeFlag: r.ActiveFlag,
-      useInCR: r.UseInCR || 'N',
-      useInDP: r.UseInDP || 'N',
-      useInAPR: r.UseInAPR || 'N',
-      useInBDC: r.UseInBDC || 'N',
-      useInXFER: r.UseInXFER || 'N'
-    }));
+const glAccounts = rows.map((row) => ({
+  id: row.GLAccountID,
+  glNumber: row.GLNumber,
+  glName: row.GLName,
+  sourceTable: row.SourceTable,
+  bankType: row.BankType,
+  bankId: row.BankID,
+  pc: row.PC,
+  parentGl: row.ParentGL
+}));
 
     // If a bank was selected, prefer GLs configured for that bank;
     // keep the rest as fallback since server-side matching rule is not finalized yet.
-    let options = mapped;
+    let options = glAccounts;
     if (bankId) {
-      const forBank = mapped.filter(g => g.bankId === bankId);
+      const forBank = glAccounts.filter(g => g.bankId === bankId);
       if (forBank.length > 0) {
         options = forBank;
       }
     }
 
-    res.json({ success: true, screen, bankId, count: options.length, glOptions: options });
+    res.json({
+      success: true,
+      screen,
+      bankId,
+      count: options.length,
+      glAccounts: options
+    });
   } catch (err) {
     console.error('Error fetching GL options:', err);
-    res.status(500).json({ error: 'Failed to fetch GL options', details: err.message });
+
+    res.status(500).json({
+      error: 'Failed to fetch GL options',
+      details: err.message
+    });
   }
 });
 

@@ -3,11 +3,11 @@
 
 
 import { useMemo, useState } from 'react';
-
+import { API_BASE_URL } from '../../../../../config/api';
 import { closeOverlay } from '../../../../../engines';
 import './EnterAssmtPaymentUF.css';
 
-const API_BASE = 'http://localhost:3011';
+
 
 function accountFor(resident) {
   return String(
@@ -420,7 +420,7 @@ const payload = {
 
     try {
       const response = await fetch(
-        `${API_BASE}/api/apr/enter-payment`,
+        `${API_BASE_URL}/apr/enter-payment`,
         {
           method: 'POST',
           headers: {

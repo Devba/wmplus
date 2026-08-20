@@ -1,61 +1,72 @@
-
-
 import { useEffect, useMemo, useState } from 'react';
 import './DepositRegister.css';
 
 import TopSection from './components/TopSection/TopSection';
 import BodyBox from './components/BodyBox/BodyBox';
 
-import depositRegisterSampleData from './data/depositRegisterSampleData';
 import { API_BASE_URL } from '../../config/api';
 
 function DepositRegister({ onSelectPage }) {
   const [depositRows, setDepositRows] = useState([]);
-  
 
-useEffect(() => {
-  async function loadDepositRegister() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/deposit-register`);
+  useEffect(() => {
+    async function loadDepositRegister() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/deposit-register`);
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}`);
+        }
+
+        const rows = await response.json();
+
+        const mappedRows = rows.map((row) => ({
+          checkNumber: '',
+          depositorName: row.payer_name || row.depositor_account_name || '',
+          amount: row.amount,
+          depositAmount: row.amount,
+          bankAccount: row.bank_account_display || row.bank_account || '',
+          glAccount: row.gl_name || '',
+          depositDate: row.date_deposited || '',
+          date: row.date_deposited || '',
+          dateCleared:
+            row.status === 'Voided' ? 'VOID' : row.date_cleared || '',
+          monthCleared:
+            row.status === 'Voided' ? 'VOID' : row.month_cleared || '',
+          ownerAccount: row.resident_id
+          ? String(row.resident_id).replace(/\D/g, '').padStart(6, '0')
+          : '',
+          depositorId: row.resident_id || row.vendor_id || '',
+          vendorAcct: row.vendor_id
+          ? String(row.vendor_id).replace(/\D/g, '').padStart(4, '0')
+          : '',
+          vendorId: row.vendor_id || '',
+          invoiceNumber: '',
+          glNumber: row.gl_number || '',
+          glNo: row.gl_number || '',
+          transactionNumber: row.deposit_txn_num || '',
+          transaction: row.deposit_txn_num || '',
+          expenseRefundGLCategory: row.expense_refund_gl_category || '',
+          expenseRefundGLNumber: row.expense_refund_gl_number || '',
+          notation: row.note || '',
+          status: row.status || '',
+          arbFineAssigned: '$0.00',
+          fineAssigned: '$0.00',
+          paymentUploaded: 'YES',
+          depositOverflow: '$0.00',
+          escrowFlag: 'N'
+        }));
+
+        setDepositRows(mappedRows);
+      } catch (error) {
+        console.error('Error loading Deposit Register:', error);
       }
-
-      const rows = await response.json();
-
-      const mappedRows = rows.map((row) => ({
-        date: row.date_deposited,
-        depositAmount: row.amount,
-        checkAmount: '',
-        cashAmount: '',
-        glAccount: row.gl_name,
-        vendorAcct: row.resident_id || row.vendor_id || '',
-        bankAccount: row.bank_account_display,
-        status: row.status,
-        transaction: row.deposit_txn_num,
-        notation: row.note,
-        depositorName: row.payer_name
-      }));
-
-      setDepositRows(mappedRows);
-    } catch (error) {
-      console.error('Error loading Deposit Register:', error);
     }
-  }
 
-  loadDepositRegister();
-}, []);
+    loadDepositRegister();
+  }, []);
 
-
-
-
-
-
-
-
-  const [registerFilter, setRegisterFilter] =
-    useState(null);
+  const [registerFilter, setRegisterFilter] = useState(null);
 
   const displayedDepositRows = useMemo(() => {
     if (!registerFilter) {
@@ -65,35 +76,15 @@ useEffect(() => {
     return depositRows.filter((row) => {
       if (registerFilter.filterType === 'resident') {
         const residentAccount = String(
-          row.ownerAccount ||
-          row.depositorId ||
-          (
-            String(row.vendorAcct || '').length > 3
-              ? row.vendorAcct
-              : ''
-          )
+          row.ownerAccount || row.depositorId || ''
         ).trim();
 
-        return (
-          residentAccount ===
-          registerFilter.accountNumber
-        );
+        return residentAccount === registerFilter.accountNumber;
       }
 
       if (registerFilter.filterType === 'vendor') {
-        const vendorAccount = String(
-          row.vendorId ||
-          (
-            String(row.vendorAcct || '').length === 3
-              ? row.vendorAcct
-              : ''
-          )
-        ).trim();
-
-        return (
-          vendorAccount ===
-          registerFilter.accountNumber
-        );
+        const vendorAccount = String(row.vendorId || '').trim();
+        return vendorAccount === registerFilter.accountNumber;
       }
 
       return true;
@@ -101,30 +92,18 @@ useEffect(() => {
   }, [depositRows, registerFilter]);
 
   const handleAddDeposit = (newDeposit) => {
-    setDepositRows((currentRows) => [
-      ...currentRows,
-      newDeposit
-    ]);
+    setDepositRows((currentRows) => [...currentRows, newDeposit]);
   };
 
-  const handleApplyVendorResidentFilter = (
-    request
-  ) => {
-    const filterType = String(
-      request?.filterType || ''
-    ).trim();
-
-    const accountNumber = String(
-      request?.accountNumber || ''
-    ).trim();
+  const handleApplyVendorResidentFilter = (request) => {
+    const filterType = String(request?.filterType || '').trim();
+    const accountNumber = String(request?.accountNumber || '').trim();
 
     if (
       !accountNumber ||
       !['resident', 'vendor'].includes(filterType)
     ) {
-      window.alert(
-        'No valid resident or vendor was selected.'
-      );
+      window.alert('No valid resident or vendor was selected.');
       return;
     }
 
@@ -155,9 +134,7 @@ useEffect(() => {
           />
         </div>
 
-        <BodyBox
-          depositRows={displayedDepositRows}
-        />
+        <BodyBox depositRows={displayedDepositRows} />
       </div>
     </div>
   );

@@ -313,12 +313,11 @@ function Banking({
   }
 
   function buildCompleteBankingData() {
-    return {
-      bankRows,
-      fiscalData,
-      selectedRowId
-    };
-  }
+  return {
+    banks: bankRows,
+    fiscalSetup: fiscalData
+  };
+}
 
   async function saveCurrentBankingSettings() {
     if (
@@ -337,9 +336,15 @@ function Banking({
     setSaveError('');
 
     try {
-      await saveBankingSettings(
-        buildCompleteBankingData()
-      );
+      if (isFiscalSetup) {
+  await saveBankingSettings({
+    fiscalSetup: fiscalData
+  });
+} else {
+  await saveBankingSettings({
+    banks: selectedBank ? [selectedBank] : []
+  });
+}
 
       setHasUnsavedChanges(false);
       setSaveMessage('Changes saved.');

@@ -76,10 +76,17 @@ function VendorIdList({ onSelectPage }) {
   };
 
   const handleAddVendor = async (newVendor) => {
-    try {
-      await createVendor(newVendor);
-      setVendorRows((current) => [...current, newVendor]);
-      setSelectedVendor(newVendor);
+  try {
+    const result = await createVendor(newVendor);
+
+    const createdVendor = {
+      ...newVendor,
+      vendorId: result.vendor_id,
+      id: result.vendor_id
+    };
+
+    setVendorRows((current) => [...current, createdVendor]);
+    setSelectedVendor(createdVendor);
     } catch (err) {
       window.alert("Error creating vendor: " + err.message);
     }

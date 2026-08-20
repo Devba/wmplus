@@ -10,6 +10,9 @@ import {
 import UnsavedChangesPrompt
   from '../UnsavedChangesPrompt/UnsavedChangesPrompt';
 
+import CreateParentFromReserveUF
+  from './CreateParentFromReserveUF';
+
 const DEFAULT_EXPENSE_ROWS = [
   {
     "glNumber": "20000",
@@ -846,9 +849,9 @@ const DEFAULT_EXPENSE_ROWS = [
     "description": "",
     "bankType": "Operating",
     "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "24500",
-    "consolidatedParentGl": "24500",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "24750 - 24999",
     "dc": "D",
     "ar": "A",
     "effectiveDate": "",
@@ -893,24 +896,135 @@ const DEFAULT_EXPENSE_ROWS = [
     "lastEditedBy": "",
     "systemLocked": true
   },
+  
   {
-    "glNumber": "2600 - 26999",
-    "glName": "RESERVED FOR FUTURE EXPENSE GL#s",
-    "sourceTable": "Check Register",
-    "description": "",
-    "bankType": "Operating",
-    "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "25000",
-    "consolidatedParentGl": "25000",
-    "dc": "D",
-    "ar": "A",
-    "effectiveDate": "",
-    "createdBy": "SYSTEM",
-    "createdDate": "",
-    "lastEditedBy": "",
-    "systemLocked": true
-  },
+  "glNumber": "26000",
+  "glName": "GUEST SUITES",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "P",
+  "parentGl": "",
+  "consolidatedParentGl": "26000",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26001 - 26499",
+  "glName": "Guest Suites Assignable Sub Headings",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26000",
+  "consolidatedParentGl": "26000",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26001",
+  "glName": "Guest Suite Junior Rm",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26000",
+  "consolidatedParentGl": "26000",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26002",
+  "glName": "Guest Suite Primary Rm",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26000",
+  "consolidatedParentGl": "26000",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26500",
+  "glName": "HARBOR SIDE HOUSING",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "P",
+  "parentGl": "",
+  "consolidatedParentGl": "26500",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26501 - 26999",
+  "glName": "Harbor Side Housing Assignable Sub Headings",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26500",
+  "consolidatedParentGl": "26500",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+{
+  "glNumber": "26501",
+  "glName": "Harbor Side Housing Bldg 1",
+  "sourceTable": "Check Register",
+  "description": "",
+  "bankType": "Operating",
+  "bankId": "OP_Bank_ID#1",
+  "pc": "C",
+  "parentGl": "26500",
+  "consolidatedParentGl": "26500",
+  "dc": "D",
+  "ar": "A",
+  "effectiveDate": "",
+  "createdBy": "SYSTEM",
+  "createdDate": "",
+  "lastEditedBy": "",
+  "systemLocked": true
+},
+
+
   {
     "glNumber": "27000",
     "glName": "POOL / POND",
@@ -1444,8 +1558,8 @@ const DEFAULT_REVENUE_ROWS = [
     "bankType": "Operating, Capital",
     "bankId": "OP_Bank_ID#1",
     "pc": "C",
-    "parentGl": "40080",
-    "consolidatedParentGl": "40080",
+    "parentGl": "40100",
+    "consolidatedParentGl": "40100",
     "dc": "C",
     "ar": "A",
     "effectiveDate": "",
@@ -1581,7 +1695,7 @@ const DEFAULT_REVENUE_ROWS = [
     "systemLocked": true
   },
   {
-    "glNumber": "40502 - 40699",
+    "glNumber": "40501 - 40599",
     "glName": "Bank Charge Reversal  Assignable Sub Headings",
     "sourceTable": "Bank Debit & Credits",
     "description": "",
@@ -1672,7 +1786,7 @@ const DEFAULT_REVENUE_ROWS = [
   },
   {
     "glNumber": "40701 - 40999",
-    "glName": "",
+    "glName": "Misc Revenue Assignments Assignable Sub Headings",
     "sourceTable": "",
     "description": "",
     "bankType": "All",
@@ -2307,9 +2421,9 @@ const DEFAULT_REVENUE_ROWS = [
     "description": "",
     "bankType": "All",
     "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "42000",
-    "consolidatedParentGl": "42000",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "43000 - 43999",
     "dc": "C",
     "ar": "A",
     "effectiveDate": "",
@@ -2361,9 +2475,9 @@ const DEFAULT_REVENUE_ROWS = [
     "description": "",
     "bankType": "Operating, Capital",
     "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "44000",
-    "consolidatedParentGl": "44000",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "44120 - 44139",
     "dc": "C",
     "ar": "A",
     "effectiveDate": "",
@@ -2415,9 +2529,9 @@ const DEFAULT_REVENUE_ROWS = [
     "description": "",
     "bankType": "all",
     "bankId": "OP_Bank_ID#1",
-    "pc": "C",
-    "parentGl": "44140",
-    "consolidatedParentGl": "44140",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "44200 - 49999",
     "dc": "C",
     "ar": "A",
     "effectiveDate": "",
@@ -2442,7 +2556,14 @@ const BANK_TYPES = [
 ];
 
 function cloneRows(rows) {
-  return rows.map((row) => ({ ...row }));
+  return rows.map((row) => ({
+    ...row,
+    useInCR: row.useInCR || 'N',
+    useInDP: row.useInDP || 'N',
+    useInAPR: row.useInAPR || 'N',
+    useInBDC: row.useInBDC || 'N',
+    useInXfer: row.useInXfer || 'N'
+  }));
 }
 
 function digitsOnly(value) {
@@ -2555,6 +2676,23 @@ function GLMapping({
   const [pendingDestination, setPendingDestination] =
     useState('');
 
+    const [pendingRowIndex, setPendingRowIndex] =
+    useState(null);
+
+   const [showCreateParentUF, setShowCreateParentUF] =
+  useState(false);
+
+const [createParentName, setCreateParentName] =
+  useState('');
+
+const [createParentStart, setCreateParentStart] =
+  useState('');
+
+const [createParentEnd, setCreateParentEnd] =
+  useState('');
+
+
+
   const currentRows =
     activeSection === 'expense'
       ? expenseRows
@@ -2585,6 +2723,142 @@ function GLMapping({
 
     return currentRows[selectedRowIndex] || null;
   }, [currentRows, selectedRowIndex]);
+
+  const selectedIsAssignableRange =
+  selectedRow !== null &&
+  selectedRow.pc === 'C' &&
+  isRangeRow(selectedRow) &&
+  String(selectedRow.parentGl || '').trim() !== '';
+
+const selectedIsReservedRange =
+  selectedRow !== null &&
+  selectedRow.pc === 'P' &&
+  isRangeRow(selectedRow) &&
+  String(selectedRow.parentGl || '').trim() === '';
+
+const selectedParentHasAssignableRange =
+  selectedRow !== null &&
+  selectedRow.pc === 'P' &&
+  !isRangeRow(selectedRow) &&
+  findParentRangeRow(
+    currentRows,
+    selectedRow.glNumber
+  ) !== null;
+
+const canAddRow =
+  selectedIsAssignableRange ||
+  selectedParentHasAssignableRange;
+
+const canCreateParentFromReserve =
+  selectedIsAssignableRange ||
+  selectedIsReservedRange;
+
+const createParentStartingOptions = useMemo(() => {
+  if (!canCreateParentFromReserve || !selectedRow) {
+    return [];
+  }
+
+  const selectedRange = parseGLRange(selectedRow.glNumber);
+
+  if (!selectedRange) {
+    return [];
+  }
+
+
+  if (selectedIsReservedRange) {
+  return [String(selectedRange.start)];
+  }
+
+
+  let firstAvailable = selectedRange.start;
+
+  // If splitting an existing Parent's assignable range,
+  // all existing children remain with that Parent.
+  if (selectedIsAssignableRange) {
+    const existingChildNumbers = currentRows
+  .filter(
+    (row) =>
+      row.pc === 'C' &&
+      !isRangeRow(row)
+  )
+  .map((row) => Number(row.glNumber))
+  .filter(
+    (value) =>
+      Number.isFinite(value) &&
+      value >= selectedRange.start &&
+      value <= selectedRange.end
+  );
+
+if (existingChildNumbers.length > 0) {
+  const highestExistingChild =
+    Math.max(...existingChildNumbers);
+
+  firstAvailable = Math.max(
+    selectedRange.start,
+    highestExistingChild + 1
+  );
+}
+  }
+
+  const options = [];
+
+  // Need at least one number after the Parent
+  // for its assignable range.
+  for (
+    let gl = firstAvailable;
+    gl < selectedRange.end;
+    gl += 1
+  ) {
+    options.push(String(gl));
+  }
+
+  return options;
+}, [
+
+
+  canCreateParentFromReserve,
+  selectedRow,
+  selectedIsAssignableRange,
+  currentRows
+]);
+
+
+const createParentEndingOptions = useMemo(() => {
+  if (!createParentStart || !selectedRow) {
+    return [];
+  }
+
+  const selectedRange = parseGLRange(selectedRow.glNumber);
+
+  if (!selectedRange) {
+    return [];
+  }
+
+  const startValue = Number(createParentStart);
+
+  if (!Number.isFinite(startValue)) {
+    return [];
+  }
+
+  const options = [];
+
+  for (
+    let gl = startValue + 1;
+    gl <= selectedRange.end;
+    gl += 1
+  ) {
+    options.push(String(gl));
+  }
+
+  return options;
+}, [
+  createParentStart,
+  selectedRow
+]);
+
+
+
+
 
   useEffect(() => {
     let componentIsActive = true;
@@ -2683,19 +2957,19 @@ function GLMapping({
     setSaveError('');
   }
 
-  function selectRow(index) {
-    if (
-      editingRowIndex !== null &&
-      editingRowIndex !== index
-    ) {
-      window.alert(
-        'Save or discard the current edit before selecting another row.'
-      );
-      return;
-    }
-
-    setSelectedRowIndex(index);
+ function selectRow(index) {
+  if (
+    editingRowIndex !== null &&
+    editingRowIndex !== index
+  ) {
+    setPendingDestinationType('row');
+    setPendingRowIndex(index);
+    setShowUnsavedPrompt(true);
+    return;
   }
+
+  setSelectedRowIndex(index);
+}
 
   function updateRowField(index, fieldName, value) {
     const nextRows = cloneRows(currentRows);
@@ -2738,38 +3012,46 @@ function GLMapping({
       return;
     }
 
-    if (selectedRow.systemLocked === true) {
-      window.alert(
-        'This is a fixed system GL# row and cannot be edited.'
-      );
-      return;
-    }
+    
+
+    // if (selectedRow.systemLocked === true) {
+    //   window.alert(
+    //     'This is a fixed system GL# row and cannot be edited.'
+    //   );
+    //   return;
+    // }
 
     setEditSnapshot(cloneRows(currentRows));
     setEditingRowIndex(selectedRowIndex);
     markChanged();
   }
 
-  function findParentRangeRow(rows, childIndex) {
-    for (let index = childIndex - 1; index >= 0; index -= 1) {
-      if (isRangeRow(rows[index])) {
-        return rows[index];
-      }
-    }
-
-    return null;
-  }
+function findParentRangeRow(rows, parentGl) {
+  return (
+    rows.find(
+      (row) =>
+        isRangeRow(row) &&
+        String(row.parentGl || '') === String(parentGl || '')
+    ) || null
+  );
+}
 
   function validateEditedRow() {
     if (editingRowIndex === null) {
       return true;
     }
 
+    
+
     const row = currentRows[editingRowIndex];
 
     if (!row) {
       return true;
     }
+
+    if (row.systemLocked === true) {
+  return true;
+}
 
     const glNumber = String(row.glNumber || '').trim();
     const glName = String(row.glName || '').trim();
@@ -2802,7 +3084,7 @@ function GLMapping({
 
     if (row.pc === 'C') {
       const rangeRow =
-        findParentRangeRow(currentRows, editingRowIndex);
+         findParentRangeRow(currentRows, row.parentGl);
 
       const allowedRange =
         parseGLRange(rangeRow?.glNumber);
@@ -2834,6 +3116,243 @@ function GLMapping({
     return null;
   }
 
+  function createParentFromReservedRange() {
+  if (
+    !selectedRow ||
+    (
+      !selectedIsReservedRange &&
+      !selectedIsAssignableRange
+    )
+  ) {
+    return;
+  }
+
+  const selectedRange =
+    parseGLRange(selectedRow.glNumber);
+
+  if (!selectedRange) {
+    return;
+  }
+
+  const parentNumber =
+    Number(createParentStart);
+
+  const endNumber =
+    Number(createParentEnd);
+
+  const parentName =
+    createParentName.trim();
+
+  if (
+    !parentName ||
+    !Number.isFinite(parentNumber) ||
+    !Number.isFinite(endNumber) ||
+    endNumber <= parentNumber
+  ) {
+    return;
+  }
+
+  const newParentRow = {
+    ...selectedRow,
+    glNumber: String(parentNumber),
+    glName: parentName,
+    pc: 'P',
+    parentGl: '',
+    consolidatedParentGl: String(parentNumber),
+    systemLocked: false
+  };
+
+  delete newParentRow.id;
+
+  const newAssignableRow = {
+    ...selectedRow,
+    glNumber:
+      `${parentNumber + 1} - ${endNumber}`,
+    glName:
+      `${parentName} Assignable Sub Headings`,
+    pc: 'C',
+    parentGl: String(parentNumber),
+    consolidatedParentGl: String(parentNumber),
+    systemLocked: true
+  };
+
+  delete newAssignableRow.id;
+
+  // =====================================================
+  // CASE 1:
+  // Selected row is already a top-level Reserved Range.
+  // =====================================================
+
+  if (selectedIsReservedRange) {
+    const replacementRows = [
+      newParentRow,
+      newAssignableRow
+    ];
+
+    if (endNumber < selectedRange.end) {
+      const remainingStart =
+        endNumber + 1;
+
+      replacementRows.push({
+        ...selectedRow,
+        glNumber:
+          `${remainingStart} - ${selectedRange.end}`,
+        pc: 'P',
+        parentGl: '',
+        consolidatedParentGl:
+          `${remainingStart} - ${selectedRange.end}`,
+        systemLocked: true
+      });
+    }
+
+    setCurrentRows((rows) => {
+      const nextRows = cloneRows(rows);
+
+      nextRows.splice(
+        selectedRowIndex,
+        1,
+        ...replacementRows
+      );
+
+      return nextRows;
+    });
+  }
+
+  // =====================================================
+  // CASE 2:
+  // Selected row is an existing Parent's Assignable Range.
+  // Existing children stay with the old Parent.
+  // =====================================================
+
+  else if (selectedIsAssignableRange) {
+    const oldParentGl =
+      String(selectedRow.parentGl || '');
+
+    const nextRows =
+      cloneRows(currentRows);
+
+    // ---------------------------------------------
+    // Shorten the OLD Parent's assignable range.
+    // If no range remains before the new Parent,
+    // remove the old assignable-range row.
+    // ---------------------------------------------
+
+    if (parentNumber > selectedRange.start) {
+      nextRows[selectedRowIndex] = {
+        ...selectedRow,
+        glNumber:
+          `${selectedRange.start} - ${parentNumber - 1}`
+      };
+    } else {
+      nextRows.splice(
+        selectedRowIndex,
+        1
+      );
+    }
+
+    // ---------------------------------------------
+    // Find the OLD Parent again after the possible
+    // removal/replacement above.
+    // ---------------------------------------------
+
+    const oldParentIndex =
+      nextRows.findIndex(
+        (row) =>
+          row.pc === 'P' &&
+          String(row.glNumber) === oldParentGl
+      );
+
+    if (oldParentIndex < 0) {
+      window.alert(
+        'Could not locate the existing Parent GL#.'
+      );
+      return;
+    }
+
+    // ---------------------------------------------
+    // Move past ALL of the old Parent's rows.
+    // This keeps every existing child with the
+    // original Parent.
+    // ---------------------------------------------
+
+    let insertAt =
+      oldParentIndex + 1;
+
+    while (
+      insertAt < nextRows.length &&
+      nextRows[insertAt].pc === 'C' &&
+      String(
+        nextRows[insertAt].parentGl || ''
+      ) === oldParentGl
+    ) {
+      insertAt += 1;
+    }
+
+    // ---------------------------------------------
+    // Insert the NEW Parent and its range.
+    // ---------------------------------------------
+
+    nextRows.splice(
+      insertAt,
+      0,
+      newParentRow,
+      newAssignableRow
+    );
+
+    // ---------------------------------------------
+    // Anything remaining after the new section
+    // becomes a new top-level Reserved Range.
+    // ---------------------------------------------
+
+    if (endNumber < selectedRange.end) {
+      const remainingStart =
+        endNumber + 1;
+
+      const remainingRange =
+        `${remainingStart} - ${selectedRange.end}`;
+
+      const reservedName =
+        activeSection === 'expense'
+          ? 'RESERVED FOR FUTURE EXPENSE GL#s'
+          : 'Reserved for Misc Revenue Assignments';
+
+      nextRows.splice(
+        insertAt + 2,
+        0,
+        {
+          ...selectedRow,
+          id: undefined,
+          glNumber: remainingRange,
+          glName: reservedName,
+          pc: 'P',
+          parentGl: '',
+          consolidatedParentGl:
+            remainingRange,
+          systemLocked: true
+        }
+      );
+    }
+
+    setCurrentRows(nextRows);
+  }
+
+  setSelectedRowIndex(null);
+  setEditingRowIndex(null);
+
+  setShowCreateParentUF(false);
+  setCreateParentName('');
+  setCreateParentStart('');
+  setCreateParentEnd('');
+
+  markChanged();
+}
+
+
+
+
+
+
+
   function addRow() {
     if (selectedRowIndex === null || !selectedRow) {
       window.alert('Select a GL# range or hierarchy row first.');
@@ -2856,17 +3375,68 @@ function GLMapping({
       return;
     }
 
+    const rangeRow = findParentRangeRow(currentRows, parentGl);
+
+if (!rangeRow) {
+  window.alert(
+    'This heading does not have an assignable GL# range. Add Row is not allowed.'
+  );
+  return;
+}
+
+const allowedRange = parseGLRange(rangeRow.glNumber);
+
+if (!allowedRange) {
+  window.alert(
+    'The assignable GL# range for this heading is invalid.'
+  );
+  return;
+}
+
+const usedGLNumbers = new Set(
+  currentRows
+    .filter(
+      (row) =>
+        row.pc === 'C' &&
+        String(row.parentGl || '') === String(parentGl)
+    )
+    .map((row) => Number(row.glNumber))
+    .filter((value) => Number.isFinite(value))
+);
+
+let hasAvailableGLNumber = false;
+
+for (
+  let gl = allowedRange.start;
+  gl <= allowedRange.end;
+  gl += 1
+) {
+  if (!usedGLNumbers.has(gl)) {
+    hasAvailableGLNumber = true;
+    break;
+  }
+}
+
+if (!hasAvailableGLNumber) {
+  window.alert(
+    'No unused GL#s remain in this heading\'s assignable range.'
+  );
+  return;
+}
+
+
+
     const nextRows = cloneRows(currentRows);
     let insertAt = selectedRowIndex + 1;
 
     while (
-      insertAt < nextRows.length &&
-      nextRows[insertAt].pc === 'C' &&
-      !isRangeRow(nextRows[insertAt]) &&
-      String(nextRows[insertAt].parentGl) === String(parentGl)
-    ) {
-      insertAt += 1;
-    }
+    insertAt < nextRows.length &&
+    nextRows[insertAt].pc === 'C' &&
+    String(nextRows[insertAt].parentGl) === String(parentGl) &&
+    !isRangeRow(nextRows[insertAt])
+  ) {
+    insertAt += 1;
+  }
 
     const parentRow = nextRows.find(
       (row) =>
@@ -2874,10 +3444,18 @@ function GLMapping({
         String(row.glNumber) === String(parentGl)
     );
 
+
     nextRows.splice(insertAt, 0, {
       glNumber: '',
       glName: '',
       sourceTable: selectedRow.sourceTable || '',
+
+      useInCR: 'N',
+      useInDP: 'N',
+      useInAPR: 'N',
+      useInBDC: 'N',
+      useInXfer: 'N',
+
       description: '',
       bankType: selectedRow.bankType || 'Operating',
       bankId:
@@ -3104,38 +3682,115 @@ function GLMapping({
     try {
       const now = todayString();
 
-      const updatedRows = currentRows.map((row) => {
-        const nextRow = {
-          ...row,
+      // -------------------------------------------------
+      // ROW EDIT / NEW ROW
+      // Existing row edits stay fast: save one row only.
+      // New rows are structural changes: save the complete
+      // ordered mapping so SortOrder matches the screen.
+      // -------------------------------------------------
+      if (editingRowIndex !== null) {
+        const rowBeingSaved = currentRows[editingRowIndex];
+        const isNewRow = rowBeingSaved?.isNew === true;
+
+        const editedRow = {
+          ...rowBeingSaved,
           effectiveDate: now,
           lastEditedBy: 'USER',
-          createdBy: row.createdBy || 'USER',
-          createdDate: row.createdDate || now
+          createdBy: rowBeingSaved?.createdBy || 'USER',
+          createdDate: rowBeingSaved?.createdDate || now
         };
 
-        delete nextRow.isNew;
+        delete editedRow.isNew;
+        delete editedRow.insertAfterId;
+        delete editedRow.sortOrder;
 
-        return nextRow;
-      });
+        const updatedRows = [...currentRows];
+        updatedRows[editingRowIndex] = editedRow;
 
-      const completeData = {
-        expenseRows:
-          activeSection === 'expense'
-            ? updatedRows
-            : expenseRows,
-        revenueRows:
-          activeSection === 'revenue'
-            ? updatedRows
-            : revenueRows,
-        activeSection
-      };
+        if (isNewRow) {
+          // New P or C rows are saved individually.
+          // The server assigns the new row's SortOrder; the GET query
+          // then places P rows numerically and C rows under ParentGL.
+          const saveData = {
+            expenseRows:
+              activeSection === 'expense'
+                ? [editedRow]
+                : [],
+            revenueRows:
+              activeSection === 'revenue'
+                ? [editedRow]
+                : [],
+            activeSection,
+            structuralSave: false
+          };
 
-      await saveGLMapping(completeData);
+          await saveGLMapping(saveData);
 
-      if (activeSection === 'expense') {
-        setExpenseRows(updatedRows);
-      } else {
-        setRevenueRows(updatedRows);
+          // Reload once so the inserted row receives its database ID
+          // and appears in the server-calculated hierarchy/order.
+          const savedData = await loadGLMapping();
+
+          setExpenseRows(
+            Array.isArray(savedData?.expenseRows)
+              ? cloneRows(savedData.expenseRows)
+              : cloneRows(DEFAULT_EXPENSE_ROWS)
+          );
+          setRevenueRows(
+            Array.isArray(savedData?.revenueRows)
+              ? cloneRows(savedData.revenueRows)
+              : cloneRows(DEFAULT_REVENUE_ROWS)
+          );
+        } else {
+          const saveData = {
+            expenseRows:
+              activeSection === 'expense'
+                ? [editedRow]
+                : [],
+            revenueRows:
+              activeSection === 'revenue'
+                ? [editedRow]
+                : [],
+            activeSection,
+            structuralSave: false
+          };
+
+          await saveGLMapping(saveData);
+
+          if (activeSection === 'expense') {
+            setExpenseRows(updatedRows);
+          } else {
+            setRevenueRows(updatedRows);
+          }
+        }
+      }
+
+      // -------------------------------------------------
+      // STRUCTURAL CHANGES
+      // Move Up / Move Down / Move To Parent / Delete.
+      // The ordered React arrays are the source of truth.
+      // -------------------------------------------------
+      else {
+        const completeData = {
+          expenseRows,
+          revenueRows,
+          activeSection,
+          structuralSave: true
+        };
+
+        await saveGLMapping(completeData);
+
+        const savedData = await loadGLMapping();
+
+        setExpenseRows(
+          Array.isArray(savedData?.expenseRows)
+            ? cloneRows(savedData.expenseRows)
+            : cloneRows(DEFAULT_EXPENSE_ROWS)
+        );
+        setRevenueRows(
+          Array.isArray(savedData?.revenueRows)
+            ? cloneRows(savedData.revenueRows)
+            : cloneRows(DEFAULT_REVENUE_ROWS)
+        );
       }
 
       setEditingRowIndex(null);
@@ -3188,6 +3843,37 @@ function GLMapping({
     setEditSnapshot(null);
   }
 
+
+  async function cancelAllChanges() {
+  setIsLoading(true);
+  setSaveError('');
+  setSaveMessage('');
+
+  try {
+    await restoreLastSavedData();
+
+    setHasUnsavedChanges(false);
+    setShowCreateParentUF(false);
+    setCreateParentName('');
+    setCreateParentStart('');
+    setCreateParentEnd('');
+  } catch (error) {
+    console.error(error);
+
+    setSaveError(
+      'The last saved GL Mapping settings could not be restored.'
+    );
+  } finally {
+    setIsLoading(false);
+  }
+}
+
+
+
+
+
+
+
   function discardCurrentEdit() {
     if (editSnapshot) {
       setCurrentRows(cloneRows(editSnapshot));
@@ -3215,18 +3901,36 @@ function GLMapping({
     setShowUnsavedPrompt(false);
   }
 
-  async function handlePromptYes() {
-    const saveSucceeded =
-      await saveCurrentSettings();
+async function handlePromptYes() {
+  const saveSucceeded =
+    await saveCurrentSettings();
 
-    if (!saveSucceeded) {
-      return;
-    }
-
-    completePendingNavigation();
+  if (!saveSucceeded) {
+    return;
   }
 
+  if (pendingDestinationType === 'row') {
+    setPendingDestinationType('');
+    setPendingRowIndex(null);
+    setShowUnsavedPrompt(false);
+    return;
+  }
+
+  completePendingNavigation();
+}
+
   async function handlePromptNo() {
+
+   if (pendingDestinationType === 'row') {
+  discardCurrentEdit();
+
+  setPendingDestinationType('');
+  setPendingRowIndex(null);
+  setShowUnsavedPrompt(false);
+
+  return;
+}
+
     setIsLoading(true);
     setSaveError('');
     setSaveMessage('');
@@ -3247,6 +3951,14 @@ function GLMapping({
   }
 
   function handlePromptCancel() {
+
+    if (pendingDestinationType === 'row') {
+  setPendingDestinationType('');
+  setPendingRowIndex(null);
+  setShowUnsavedPrompt(false);
+  return;
+}
+
     const wasSettingsNavigation =
       pendingDestinationType === 'settings-panel';
 
@@ -3359,9 +4071,11 @@ function GLMapping({
               type="button"
               id="btnGLMapAddRow"
               onClick={addRow}
+              disabled={!canAddRow}
             >
               Add Row
             </button>
+
 
             <button
               type="button"
@@ -3376,13 +4090,58 @@ function GLMapping({
               id="btnGLMapSave"
               onClick={saveCurrentSettings}
               disabled={isLoading || isSaving}
+              style={{
+                backgroundColor: hasUnsavedChanges ? 'red' : '',
+                color: hasUnsavedChanges ? 'white' : ''
+              }}
             >
               {isSaving
                 ? 'Saving...'
-                : saveMessage
-                  ? 'Changes Saved'
+                : hasUnsavedChanges
+                  ? 'SAVE CHANGES'
                   : 'Save'}
             </button>
+
+            <button
+              type="button"
+              id="btnGLMapCancelChanges"
+              onClick={cancelAllChanges}
+              disabled={!hasUnsavedChanges || isSaving || isLoading}
+            >
+              Cancel Changes
+            </button>
+
+
+
+
+
+           <button
+            type="button"
+            id="btnGLMapCreateParent"
+            disabled={!canCreateParentFromReserve}
+            onClick={() => {
+                const firstStart =
+                  createParentStartingOptions[0] || '';
+
+                setCreateParentName('');
+                setCreateParentStart(firstStart);
+                setCreateParentEnd(
+                    firstStart
+                      ? String(Number(firstStart) + 1)
+                      : ''
+                  );
+                setShowCreateParentUF(true);
+              }}
+            >
+            Create Parent From Reserve
+            </button>
+
+
+
+
+
+
+
 
             <button
               type="button"
@@ -3459,6 +4218,11 @@ function GLMapping({
                 <th style={{ width: '120px' }}>Created By</th>
                 <th style={{ width: '130px' }}>Created Date</th>
                 <th style={{ width: '130px' }}>Last Edited By</th>
+                <th style={{ width: '90px' }}>Use in CR</th>
+                <th style={{ width: '90px' }}>Use in DP</th>
+                <th style={{ width: '90px' }}>Use in APR</th>
+                <th style={{ width: '90px' }}>Use in BDC</th>
+                <th style={{ width: '100px' }}>Use in XFER</th>
                 <th style={{ width: '180px' }}>
                   Table GL# Recorded
                 </th>
@@ -3471,6 +4235,19 @@ function GLMapping({
                   editingRowIndex === index &&
                   row.systemLocked !== true;
 
+                  
+
+                const usageEditable =
+                  editingRowIndex === index;
+
+                  const sourceTableName = String(
+                  row.sourceTable || ''
+                )
+                  .trim()
+                  .replace(/\s+/g, ' ')
+                  .toLowerCase();
+
+                
                 const availableBankIds =
                   bankIdOptions(row.bankType);
 
@@ -3487,6 +4264,14 @@ function GLMapping({
                           : ''
                       ].join(' ')
                     }
+                    onMouseDown={(event) => {
+                      if (
+                        editingRowIndex !== null &&
+                        editingRowIndex !== index
+                      ) {
+                        event.preventDefault();
+                      }
+                    }}
                     onClick={() => selectRow(index)}
                   >
                     <td>
@@ -3660,6 +4445,115 @@ function GLMapping({
                     </td>
 
                     <td>
+                    <select
+                      value={row.useInCR || 'N'}
+                      disabled={!usageEditable}
+                      // disabled={
+                      //   !usageEditable ||
+                      //   sourceTableName !== 'check register'
+                      // }
+                      onChange={(event) =>
+                        updateRowField(
+                          index,
+                          'useInCR',
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="N">No</option>
+                      <option value="Y">Yes</option>
+                    </select>
+                  </td>
+
+                  <td>
+                    <select
+                      value={row.useInDP || 'N'}
+                      // DP
+                      disabled={!usageEditable}
+                      // disabled={
+                      //   !usageEditable ||
+                      //   sourceTableName !== 'deposit register'
+                      // }
+                      onChange={(event) =>
+                        updateRowField(
+                          index,
+                          'useInDP',
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="N">No</option>
+                      <option value="Y">Yes</option>
+                    </select>
+                  </td>
+
+                  <td>
+                    <select
+                      value={row.useInAPR || 'N'}
+                      // APR
+                      disabled={!usageEditable}
+                        // disabled={
+                        //   !usageEditable ||
+                        //   sourceTableName !== "ass'mt pay'mt register"
+                        // }
+                      onChange={(event) =>
+                        updateRowField(
+                          index,
+                          'useInAPR',
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="N">No</option>
+                      <option value="Y">Yes</option>
+                    </select>
+                  </td>
+
+                  <td>
+                      <select
+                        value={row.useInBDC || 'N'}
+                        // BDC
+                        disabled={!usageEditable}
+                      // disabled={
+                      //   !usageEditable ||
+                      //   sourceTableName !== 'bank debit & credits'
+                      // }
+                        onChange={(event) =>
+                          updateRowField(
+                            index,
+                            'useInBDC',
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="N">No</option>
+                        <option value="Y">Yes</option>
+                      </select>
+                    </td>
+
+                    <td>
+                      <select
+                        value={row.useInXfer || 'N'}
+                        // XFER
+                        disabled={!usageEditable}
+                      // disabled={
+                      //   !usageEditable ||
+                      //   sourceTableName !== '$$ xfer & intra account deposits'
+                      // }
+                        onChange={(event) =>
+                          updateRowField(
+                            index,
+                            'useInXfer',
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="N">No</option>
+                        <option value="Y">Yes</option>
+                      </select>
+                    </td>
+
+                    <td>
                       {renderTextInput(
                         row,
                         index,
@@ -3676,16 +4570,72 @@ function GLMapping({
         </div>
       </div>
 
-      <UnsavedChangesPrompt
-        isOpen={showUnsavedPrompt}
-        isSaving={isSaving}
-        isLoading={isLoading}
-        errorMessage={saveError}
-        onYes={handlePromptYes}
-        onNo={handlePromptNo}
-        onCancel={handlePromptCancel}
-      />
-    </div>
+
+
+<CreateParentFromReserveUF
+  isOpen={showCreateParentUF}
+  parentName={createParentName}
+  startingGl={createParentStart}
+  endingGl={createParentEnd}
+  startingOptions={createParentStartingOptions}
+  endingOptions={createParentEndingOptions}
+  onParentNameChange={(event) =>
+    setCreateParentName(event.target.value)
+  }
+  onStartingGlChange={(event) => {
+  const nextStart = event.target.value;
+
+  setCreateParentStart(nextStart);
+  setCreateParentEnd(
+    String(Number(nextStart) + 1)
+  );
+}}
+
+
+
+
+  onEndingGlChange={(event) =>
+    setCreateParentEnd(event.target.value)
+  }
+  onSave={createParentFromReservedRange}
+  onCancel={() => {
+    setShowCreateParentUF(false);
+    setCreateParentName('');
+    setCreateParentStart('');
+    setCreateParentEnd('');
+  }}
+/>
+
+
+
+
+
+
+<UnsavedChangesPrompt
+  isOpen={showUnsavedPrompt}
+  isSaving={isSaving}
+  isLoading={isLoading}
+  errorMessage={saveError}
+  onYes={handlePromptYes}
+  onNo={handlePromptNo}
+  onCancel={handlePromptCancel}
+yesLabel={
+  pendingDestinationType === 'row'
+    ? 'Save Row'
+    : 'Yes'
+}
+noLabel={
+  pendingDestinationType === 'row'
+    ? 'Delete Row'
+    : 'No'
+}
+cancelLabel={
+  pendingDestinationType === 'row'
+    ? 'Cancel'
+    : 'Cancel'
+}
+/>
+</div>
   );
 }
 

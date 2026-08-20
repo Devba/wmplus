@@ -1,10 +1,10 @@
 
 
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import './EnterCheckUF.css';
 import { API_BASE_URL } from '../../../../config/api';
-
+import { closeOverlay } from '../../../../engines/overlay/overlay-engine';
 
 
 
@@ -38,6 +38,28 @@ function parseMoney(value) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+
+const formatDateForDatabase = (dateText) => {
+  const value = String(dateText || '').trim();
+
+  if (!value) return null;
+
+  const parts = value.replace(/-/g, '/').split('/');
+
+  if (parts.length !== 3) return null;
+
+  const month = String(parts[0]).padStart(2, '0');
+  const day = String(parts[1]).padStart(2, '0');
+  const year = parts[2];
+
+  return `${year}-${month}-${day}`;
+};
+
+
+
+
+
+
 function formatDateForTransaction(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -54,7 +76,8 @@ function EnterCheckUF({ onAddCheck }) {
   const [glAccounts, setGLAccounts] = useState([]);
   const [residents, setResidents] = useState([]);
   const [vendors, setVendors] = useState([]);
-
+  const [showEntryChoice, setShowEntryChoice] = useState(false);
+  const [pendingCheck, setPendingCheck] = useState(null);
 
 useEffect(() => {
   async function loadBanks() {
@@ -82,14 +105,60 @@ useEffect(() => {
   loadBanks();
 }, []);
 
+
+
+
 useEffect(() => {
-  async function loadResidentsAndVendors() {
+  async function loadCRGLAccounts() {
     try {
-      const [residentResponse, vendorResponse] =
-        await Promise.all([
-          fetch(`${API_BASE_URL}/residents?offset=0`),
-          fetch(`${API_BASE_URL}/vendors`)
-        ]);
+      const response = await fetch(
+        `${API_BASE_URL}/gl-options?screen=CR`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Server returned ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      const rows = Array.isArray(data.glAccounts)
+        ? data.glAccounts
+        : Array.isArray(data)
+          ? data
+          : [];
+
+      setServerGLAccounts(
+      rows.map((gl) => ({
+        bankId: String(gl.bankId || ''),
+        category: gl.glName || '',
+        glNumber: String(gl.glNumber || ''),
+        pc: String(gl.pc || ''),
+        parentGl: String(gl.parentGl || '')
+      }))
+    );
+
+    } catch (error) {
+      console.error(
+        'Error loading Check Register GL options:',
+        error
+      );
+
+      setServerGLAccounts([]);
+    }
+  }
+
+  loadCRGLAccounts();
+}, []);
+
+
+useEffect(() => {
+  async function loadResidents() {
+    try {
+      const residentResponse = await fetch(
+        `${API_BASE_URL}/residents?offset=0`
+      );
 
       if (!residentResponse.ok) {
         throw new Error(
@@ -97,54 +166,73 @@ useEffect(() => {
         );
       }
 
+      const residentData = await residentResponse.json();
+      const residentRows = residentData.residents || [];
+
+      setResidentOffset(residentData.offset || 0);
+      setResidentHasMore(Boolean(residentData.hasMore));
+
+      const loadedResidents = residentRows.map((resident) => ({
+        id: String(resident.account_id),
+
+        lastName:
+          resident.last_name ||
+          resident.display_name ||
+          resident.account_id ||
+          '',
+
+        fullName:
+          resident.display_name ||
+          `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
+
+        address: resident.residence_address || ''
+      }));
+
+      setResidents(loadedResidents);
+
+    } catch (error) {
+      console.error(
+        'Error loading residents:',
+        error
+      );
+
+      setResidents([]);
+    }
+  }
+
+  async function loadVendors() {
+    try {
+      const vendorResponse = await fetch(
+        `${API_BASE_URL}/vendors`
+      );
+
       if (!vendorResponse.ok) {
         throw new Error(
           `Vendors server returned ${vendorResponse.status}`
         );
       }
 
-      const residentData = await residentResponse.json();
       const vendorRows = await vendorResponse.json();
-
-      const residentRows = residentData.residents || [];
-
-      setResidentOffset(residentData.offset || 0);
-      setResidentHasMore(Boolean(residentData.hasMore));
-
-      const loadedResidents = residentRows
-  .map((resident) => ({
-    id: String(resident.account_id),
-    lastName:
-  resident.last_name ||
-  resident.display_name ||
-  resident.account_id ||
-  '',
-    fullName:
-      resident.display_name ||
-      `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
-    address: resident.residence_address || ''
-  }))
-  
 
       const loadedVendors = vendorRows.map((vendor) => ({
         id: String(vendor.vendor_id),
         name: vendor.vendor_name || ''
       }));
 
-      setResidents(loadedResidents);
       setVendors(loadedVendors);
+
     } catch (error) {
       console.error(
-        'Error loading residents/vendors:',
+        'Error loading vendors:',
         error
       );
 
-      setResidents([]);
       setVendors([]);
     }
   }
 
-  loadResidentsAndVendors();
+  loadResidents();
+  loadVendors();
 }, []);
 
 
@@ -193,12 +281,12 @@ const loadNextResidentChunk = async () => {
   }
 };
 
-const searchResidents = async (searchText) => {
+const searchResidents = async (searchText, sortMode = 'name') => {
   const trimmedSearch = String(searchText || '').trim();
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/residents?search=${encodeURIComponent(trimmedSearch)}&offset=0`
+      `${API_BASE_URL}/residents?search=${encodeURIComponent(trimmedSearch)}&offset=0&sort=${sortMode}`
     );
 
     if (!response.ok) {
@@ -258,7 +346,7 @@ const handleResidentAddressQueryChange = async (event) => {
   setResidentAddressQuery(value);
   setResidentAddressDropdownOpen(true);
 
-  await searchResidents(value);
+  await searchResidents(value, 'address');
 };
 
 const selectResidentFromAddressSearch = (resident) => {
@@ -278,6 +366,18 @@ const selectResidentFromAddressSearch = (resident) => {
 
   const [glCategory, setGLCategory] = useState('');
   const [glNumber, setGLNumber] = useState('');
+  const [glAccountName, setGLAccountName] = useState('');
+  const [showGLSelectionUF, setShowGLSelectionUF] =
+  useState(false);
+
+  const [selectedGLParent, setSelectedGLParent] =
+  useState('');
+
+  const [selectedGLChild, setSelectedGLChild] =
+  useState('');
+
+
+
 
   const [vendorInvoiceNo, setVendorInvoiceNo] = useState('');
   const [vendorInvoiceDate, setVendorInvoiceDate] =
@@ -287,6 +387,7 @@ const selectResidentFromAddressSearch = (resident) => {
 
   const [checkNumber, setCheckNumber] = useState('');
   const [checkNotation, setCheckNotation] = useState('');
+  const [serverGLAccounts, setServerGLAccounts] = useState([]);
   const [autoWithdrawal, setAutoWithdrawal] = useState(false);
 
   const [residentNameSearch, setResidentNameSearch] =
@@ -304,7 +405,38 @@ const selectResidentFromAddressSearch = (resident) => {
   const [residentAddressDropdownOpen, setResidentAddressDropdownOpen] =
     useState(false);
   
+  const residentNameComboRef = useRef(null);
+const residentAddressComboRef = useRef(null);
 
+useEffect(() => {
+  const handleClickOutsideResidentLookups = (event) => {
+    if (
+      residentNameComboRef.current &&
+      !residentNameComboRef.current.contains(event.target)
+    ) {
+      setResidentNameDropdownOpen(false);
+    }
+
+    if (
+      residentAddressComboRef.current &&
+      !residentAddressComboRef.current.contains(event.target)
+    ) {
+      setResidentAddressDropdownOpen(false);
+    }
+  };
+
+  document.addEventListener(
+    'mousedown',
+    handleClickOutsideResidentLookups
+  );
+
+  return () => {
+    document.removeEventListener(
+      'mousedown',
+      handleClickOutsideResidentLookups
+    );
+  };
+}, []);
 
   const [residentOffset, setResidentOffset] = useState(0);
   const [residentHasMore, setResidentHasMore] = useState(false);
@@ -321,70 +453,48 @@ const selectResidentFromAddressSearch = (resident) => {
     [bankId]
   );
 
-  useEffect(() => {
-  async function loadGLAccounts() {
-    if (!selectedBank) {
-      setGLAccounts([]);
-      return;
-    }
+  
 
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/settings/gl-mapping`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
-
-      const data = await response.json();
-
-  const matchingGLAccounts = (data.glAccounts || [])
-  .filter((gl) => {
-    const allowedBankTypes = String(gl.bankType || '')
-      .split(',')
-      .map((type) => type.trim().toLowerCase());
-
-    const selectedBankType =
-      String(selectedBank.bankType || '').trim().toLowerCase();
-
-    const isAssignableAccount =
-      !String(gl.glNumber || '').includes('-');
-
-    return (
-      isAssignableAccount &&
-      (
-        allowedBankTypes.includes(selectedBankType) ||
-        allowedBankTypes.includes('all')
-      )
-    );
-  })
-
-
-  .map((gl) => ({
-    bankId: String(gl.bankId),
-    category: gl.glName,
-    glNumber: String(gl.glNumber)
-  }));
-
-setGLAccounts(matchingGLAccounts);
-    } catch (error) {
-      console.error(
-        'Error loading GL accounts:',
-        error
-      );
-
-      setGLAccounts([]);
-    }
-  }
-
-  loadGLAccounts();
-}, [selectedBank]);
-
-  const availableGLAccounts = useMemo(
-  () => glAccounts,
-  [glAccounts]
+  const availableGLParents = useMemo(
+  () =>
+    serverGLAccounts.filter(
+      (gl) =>
+        gl.pc === 'P' &&
+        /^\d+$/.test(gl.glNumber)
+    ),
+  [serverGLAccounts]
 );
+
+const availableGLChildren = useMemo(
+  () =>
+    serverGLAccounts.filter(
+      (gl) =>
+        gl.pc === 'C' &&
+        /^\d+$/.test(gl.glNumber) &&
+        String(gl.parentGl || '').trim() !== ''
+    ),
+  [serverGLAccounts]
+);
+
+
+const visibleGLChildren = useMemo(
+  () =>
+    availableGLChildren.filter(
+      (gl) =>
+        String(gl.parentGl || '') ===
+        String(selectedGLParent || '')
+    ),
+  [
+    availableGLChildren,
+    selectedGLParent
+  ]
+);
+
+
+
+
+
+
 
   const bankBalance = selectedBank
     ? formatMoney(selectedBank.balance)
@@ -450,6 +560,7 @@ setGLAccounts(matchingGLAccounts);
   setBankId(newBankId);
   setGLCategory('');
   setGLNumber('');
+  setGLAccountName('');
   setCheckNumber('');
 
   if (!bank) return;
@@ -478,59 +589,20 @@ setGLAccounts(matchingGLAccounts);
   }
 };
 
-  const handleGLChange = async (event) => {
+  const handleGLChange = (event) => {
   const category = event.target.value;
 
   setGLCategory(category);
-  setGLNumber('');
 
-  if (!category || !selectedBank) return;
-
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/settings/gl-mapping`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Server returned ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    const gl = (data.glAccounts || []).find((item) => {
-  const allowedBankTypes = String(item.bankType || '')
-    .split(',')
-    .map((type) => type.trim().toLowerCase());
-
-  const selectedBankType =
-    String(selectedBank.bankType || '').trim().toLowerCase();
-
-  const isActualGL =
-    !String(item.glNumber || '').includes('-');
-
-  return (
-    isActualGL &&
-    item.glName === category &&
-    (
-      allowedBankTypes.includes(selectedBankType) ||
-      allowedBankTypes.includes('all')
-    )
+  const gl = serverGLAccounts.find(
+    (item) => item.category === category
   );
-});
 
-    setGLNumber(
-      gl?.glNumber !== undefined && gl?.glNumber !== null
-        ? String(gl.glNumber)
-        : ''
-    );
-  } catch (error) {
-    console.error(
-      'Error loading assigned GL number:',
-      error
-    );
-
-    setGLNumber('');
-  }
+  setGLNumber(
+    gl?.glNumber !== undefined && gl?.glNumber !== null
+      ? String(gl.glNumber)
+      : ''
+  );
 };
 
   const handleResidentNameSearch = async (event) => {
@@ -653,66 +725,304 @@ setGLAccounts(matchingGLAccounts);
     setHelperEntityId('');
   };
 
-  const handleEnterCheck = () => {
-    if (!requiredFieldsComplete) return;
+  const handleEntryChoice = async (choice) => {
+  if (!pendingCheck) return;
 
-    const now = new Date();
+  const newCheck = pendingCheck;
 
-    const newCheck = {
-      checkNo: autoWithdrawal ? 'AW' : checkNumber,
-      payeeName: entityName,
-      amount: formatMoney(checkAmount),
-
-      dateIssued: '',
-      dateCleared: '',
-      monthCleared: '',
-
-      glAccount: glCategory,
-      vendorOrResidentAcct: entityId,
-
-      vendorInvoiceNo,
-      vendorInvoiceDate,
-      vendorInvoiceAmount: vendorInvoiceAmount
-        ? formatMoney(vendorInvoiceAmount)
-        : '',
-
-      checkNotation,
-
-      bankAcct: bankId,
-      checkAllowed: 'Y',
-      glNo: glNumber,
-
-      transactionNo: formatDateForTransaction(now),
-
-      escrowFlag:
-        selectedBank?.id === '301' ? 'Y' : 'N',
-
-      bankAccount: selectedBank?.name || ''
-    };
-
-    const confirmed = window.confirm(
-      'Enter this new check?\n\n' +
-        `Payee: ${newCheck.payeeName}\n` +
-        `Amount: ${newCheck.amount}\n` +
-        `Bank: ${newCheck.bankAccount}\n` +
-        `GL: ${newCheck.glNo} - ${newCheck.glAccount}`
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/check-register`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          check_txn_num: newCheck.transactionNo,
+          check_number: newCheck.checkNo,
+          gl_name: newCheck.glAccount,
+          amount: parseMoney(newCheck.amount),
+          date_issued: newCheck.dateIssued || null,
+          date_cleared: null,
+          month_cleared: null,
+          gl_number: newCheck.glNo,
+          payee_id: newCheck.payeeId,
+          invoice_num: newCheck.vendorInvoiceNo,
+          invoice_date: formatDateForDatabase(
+            newCheck.vendorInvoiceDate
+          ),
+          invoice_amount: newCheck.vendorInvoiceAmount
+            ? parseMoney(newCheck.vendorInvoiceAmount)
+            : 0,
+          note: newCheck.checkNotation,
+          bank_account: newCheck.bankAccount,
+          bank_account_id: bankId,
+          check_allowed: newCheck.checkAllowed,
+          escrow_flag: newCheck.escrowFlag
+        })
+      }
     );
 
-    if (!confirmed) return;
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result?.details ||
+        result?.error ||
+        `Server returned ${response.status}`
+      );
+    }
 
     if (typeof onAddCheck === 'function') {
       onAddCheck(newCheck);
     }
 
+    setShowEntryChoice(false);
+    setPendingCheck(null);
+
+    if (choice === 'continue') {
+      clearEntryForm();
+
+      window.alert(
+        'The check was saved. Enter the next check.'
+      );
+
+      return;
+    }
+
     window.alert(
-      'The check was added to the bottom of the Check Register.'
+      'The check was saved to the Check Register.'
     );
 
-    clearEntryForm();
+    closeOverlay();
+
+  } catch (error) {
+    console.error(
+      'Error saving check:',
+      error
+    );
+
+    window.alert(
+      'The check was NOT saved.\n\n' +
+      error.message
+    );
+  }
+};
+
+
+
+const handleEnterCheck = async () => {
+  if (!requiredFieldsComplete) return;
+
+  const now = new Date();
+
+  const newCheck = {
+    checkNo: autoWithdrawal ? 'AW' : checkNumber,
+    payeeName: entityName,
+    payeeId: entityId,
+    amount: formatMoney(checkAmount),
+
+    dateIssued: autoWithdrawal
+  ? new Date().toISOString().slice(0, 10)
+  : '',
+    dateCleared: '',
+    monthCleared: '',
+
+    glAccount: glAccountName,
+    vendorOrResidentAcct: String(entityId || '').toUpperCase().startsWith('RES-')
+      ? String(entityId).replace(/\D/g, '').padStart(6, '0')
+      : String(entityId || '').replace(/\D/g, '').padStart(4, '0'),
+
+    vendorInvoiceNo,
+    vendorInvoiceDate,
+    vendorInvoiceAmount: vendorInvoiceAmount
+      ? formatMoney(vendorInvoiceAmount)
+      : '',
+
+    checkNotation,
+
+    bankAcct: selectedBank?.name || '',
+    checkAllowed: 'Y',
+    glNo: glNumber,
+
+    transactionNo: formatDateForTransaction(now),
+
+    escrowFlag:
+      selectedBank?.id === '301' ? 'Y' : 'N',
+
+    bankAccount: selectedBank?.name || ''
   };
+
+  setPendingCheck(newCheck);
+    setShowEntryChoice(true);
+    return;
+
+  
+};
 
   return (
     <div className="enter-check-uf">
+      {showGLSelectionUF && (
+  <div className="enter-check-gl-overlay">
+    <div className="enter-check-gl-box">
+
+      <div className="enter-check-gl-title">
+        SELECT CHECK G/L ACCOUNT
+      </div>
+
+      <div className="enter-check-gl-columns">
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Parent / Anchor GL Categories
+          </div>
+
+          <div className="enter-check-gl-list">
+            {availableGLParents.map((gl) => (
+              <button
+                key={gl.glNumber}
+                type="button"
+                className={
+                  selectedGLParent === gl.glNumber
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() => {
+                  setSelectedGLParent(gl.glNumber);
+                  setSelectedGLChild('');
+                }}
+              >
+                {gl.glNumber} - {gl.category}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Child GL Accounts
+          </div>
+
+          <div
+              className="enter-check-gl-list"
+              onScroll={() => {
+                if (selectedGLChild) {
+                  setSelectedGLChild('');
+                }
+              }}
+            >
+            {visibleGLChildren.map((gl) => (
+              <button
+                key={gl.glNumber}
+                type="button"
+                className={
+                  selectedGLChild === gl.glNumber
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() =>
+                  setSelectedGLChild(gl.glNumber)
+                }
+              >
+                {gl.glNumber} - {gl.category}
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      <div className="enter-check-gl-actions">
+        <button
+  type="button"
+  disabled={!selectedGLChild}
+  onClick={() => {
+    const parent = availableGLParents.find(
+      (gl) => gl.glNumber === selectedGLParent
+    );
+
+    const child = availableGLChildren.find(
+      (gl) => gl.glNumber === selectedGLChild
+    );
+
+    if (!parent || !child) {
+      return;
+    }
+
+    setGLCategory(child.category);
+    setGLNumber(child.glNumber);
+    setGLAccountName(child.category);
+
+    setShowGLSelectionUF(false);
+    setSelectedGLParent('');
+    setSelectedGLChild('');
+  }}
+>
+  Select GL
+</button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowGLSelectionUF(false);
+            setSelectedGLParent('');
+            setSelectedGLChild('');
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+       {showEntryChoice && pendingCheck && (
+  <div className="enter-check-choice-overlay">
+    <div className="enter-check-choice-box">
+      <div className="enter-check-choice-title">
+        ENTER THIS CHECK?
+      </div>
+
+      <div className="enter-check-choice-details">
+        <div>Payee: {pendingCheck.payeeName}</div>
+        <div>Amount: {pendingCheck.amount}</div>
+        <div>Bank: {pendingCheck.bankAccount}</div>
+        <div>
+          GL: {pendingCheck.glNo} - {pendingCheck.glAccount}
+        </div>
+      </div>
+
+      <div className="enter-check-choice-buttons">
+        <button
+          type="button"
+          onClick={() => handleEntryChoice('close')}
+        >
+          ENTER CHECK &amp; CLOSE
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleEntryChoice('continue')}
+        >
+          ENTER CHECK &amp; CONTINUE
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowEntryChoice(false);
+            setPendingCheck(null);
+          }}
+        >
+          CANCEL
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
       <div className="enter-check-panel">
         <div className="enter-check-title">
           CHECK PAYMENT ENTRY:
@@ -751,9 +1061,22 @@ setGLAccounts(matchingGLAccounts);
                 type="text"
                 inputMode="decimal"
                 value={checkAmount}
-                onChange={(event) =>
-                  setCheckAmount(event.target.value)
-                }
+                onChange={(event) => {
+                const value = event.target.value;
+
+                setCheckAmount(value);
+
+                setVendorInvoiceAmount((current) => {
+                  if (
+                    !current ||
+                    current === checkAmount
+                  ) {
+                    return value;
+                  }
+
+                  return current;
+                });
+              }}
               />
             </div>
           </label>
@@ -763,31 +1086,47 @@ setGLAccounts(matchingGLAccounts);
 
             <input
               type="text"
-              value={entityId}
+              value={
+                String(entityId || '').toUpperCase().startsWith('RES-')
+                  ? String(entityId).replace(/\D/g, '').padStart(6, '0')
+                  : String(entityId || '').replace(/\D/g, '').padStart(4, '0')
+              }
               readOnly
             />
           </label>
 
-          <label className="enter-check-field">
-            <span>CHECK G/L ACCOUNT CATEGORY</span>
+<label className="enter-check-field">
+  <span>CHECK G/L ACCOUNT CATEGORY</span>
 
-            <select
-              value={glCategory}
-              onChange={handleGLChange}
-              disabled={!bankId}
-            >
-              <option value="">Select GL category</option>
+  {!bankId ? (
+    <select
+      value=""
+      onChange={() => {}}
+      onMouseDown={(event) => {
+        event.preventDefault();
 
-              {availableGLAccounts.map((gl) => (
-                <option
-                  key={`${gl.bankId}-${gl.glNumber}`}
-                  value={gl.category}
-                >
-                  {gl.category}
-                </option>
-              ))}
-            </select>
-          </label>
+        window.alert(
+          'Please select a Bank Account before choosing a G/L Account Category.'
+        );
+      }}
+    >
+      <option value="">Select GL category</option>
+    </select>
+    ) : (
+    <button
+      type="button"
+      onClick={() => {
+        setSelectedGLParent('');
+        setSelectedGLChild('');
+        setShowGLSelectionUF(true);
+      }}
+    >
+      {glCategory || 'Select GL category'}
+    </button>
+  )}
+
+
+</label>
 
           <label className="enter-check-field">
             <span>Assigned GL#</span>
@@ -842,9 +1181,48 @@ setGLAccounts(matchingGLAccounts);
               type="text"
               placeholder="MM/DD/YYYY"
               value={vendorInvoiceDate}
-              onChange={(event) =>
-                setVendorInvoiceDate(event.target.value)
-              }
+ onChange={(event) => {
+  setVendorInvoiceDate(event.target.value);
+}}
+
+onBlur={(event) => {
+  let value = event.target.value
+    .trim()
+    .replace(/-/g, '/');
+
+  const parts = value.split('/');
+
+  if (parts.length === 2) {
+    const currentYear = new Date().getFullYear();
+
+    const month = String(parts[0]).padStart(2, '0');
+    const day = String(parts[1]).padStart(2, '0');
+
+    value = `${month}/${day}/${currentYear}`;
+  }
+
+  if (value) {
+    const enteredDate = new Date(value);
+    const today = new Date();
+
+    today.setHours(0, 0, 0, 0);
+    enteredDate.setHours(0, 0, 0, 0);
+
+    if (
+      Number.isNaN(enteredDate.getTime()) ||
+      enteredDate > today
+    ) {
+      window.alert(
+        'Vendor Invoice Date cannot be later than today.'
+      );
+
+      setVendorInvoiceDate('');
+      return;
+    }
+  }
+
+  setVendorInvoiceDate(value);
+}}
             />
           </label>
 
@@ -873,12 +1251,7 @@ setGLAccounts(matchingGLAccounts);
             <input
               type="text"
               value={checkNumber}
-              onChange={(event) =>
-                setCheckNumber(event.target.value)
-              }
-              readOnly={
-                selectedBank?.checkMode === 'system'
-              }
+              readOnly
             />
           </label>
 
@@ -929,7 +1302,11 @@ setGLAccounts(matchingGLAccounts);
         <div className="enter-check-action-row">
           <button
             type="button"
-            className="enter-check-submit"
+            className={
+              requiredFieldsComplete
+                ? 'enter-check-submit ready'
+                : 'enter-check-submit'
+            }
             disabled={!requiredFieldsComplete}
             onClick={handleEnterCheck}
           >
@@ -966,7 +1343,10 @@ setGLAccounts(matchingGLAccounts);
             <label className="enter-check-field">
               <span>Resident Name</span>
 
-              <div className="enter-check-resident-combo">
+              <div
+                className="enter-check-resident-combo"
+                ref={residentNameComboRef}
+              >
   <input
     type="text"
     value={residentNameQuery}
@@ -1053,12 +1433,18 @@ setGLAccounts(matchingGLAccounts);
 
  
 
-             <div className="enter-check-resident-combo">
+             <div
+                className="enter-check-resident-combo"
+                ref={residentAddressComboRef}
+              >
   <input
     type="text"
     value={residentAddressQuery}
     placeholder="Select resident address"
-    onFocus={() => setResidentAddressDropdownOpen(true)}
+    onFocus={async () => {
+  setResidentAddressDropdownOpen(true);
+  await searchResidents(residentAddressQuery, 'address');
+}}
     onChange={handleResidentAddressQueryChange}
     autoComplete="off"
   />
@@ -1099,7 +1485,11 @@ setGLAccounts(matchingGLAccounts);
              
               <input
                 type="text"
-                value={helperEntityId}
+                value={
+                        String(helperEntityId || '').toUpperCase().startsWith('RES-')
+                          ? String(helperEntityId).replace(/\D/g, '').padStart(6, '0')
+                          : helperEntityId
+                      }
                 onChange={(event) =>
                   setHelperEntityId(event.target.value)
                 }

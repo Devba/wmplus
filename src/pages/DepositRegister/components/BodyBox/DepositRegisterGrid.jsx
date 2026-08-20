@@ -4,8 +4,8 @@ import { useState } from 'react';
 import HeaderRow from './HeaderRow';
 
 function DepositRegisterGrid({ depositRows }) {
-  const [selectedTransaction, setSelectedTransaction] =
-    useState(null);
+  const [selectedRowIndex, setSelectedRowIndex] =
+  useState(null);
 
   return (
     <div className="depreg-table-wrap">
@@ -17,15 +17,12 @@ function DepositRegisterGrid({ depositRows }) {
             <tr
               key={`${row.transactionNumber || row.transaction}-${index}`}
               className={
-                selectedTransaction ===
-                (row.transactionNumber || row.transaction)
+                selectedRowIndex === index
                   ? 'is-selected'
                   : ''
               }
               onClick={() =>
-                setSelectedTransaction(
-                  row.transactionNumber || row.transaction
-                )
+                setSelectedRowIndex(index)
               }
             >
               <td>{row.checkNumber || index + 1001}</td>
@@ -36,7 +33,7 @@ function DepositRegisterGrid({ depositRows }) {
               <td>{row.depositDate || row.date}</td>
               <td>{row.dateCleared || ''}</td>
               <td>{row.monthCleared || ''}</td>
-              <td>{row.ownerAccount || row.depositorId || row.vendorAcct}</td>
+              <td>{row.ownerAccount || ''}</td>
               <td>{row.vendorId || ''}</td>
               <td>{row.invoiceNumber || ''}</td>
               <td>{row.expenseRefundGLCategory || ''}</td>

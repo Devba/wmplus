@@ -35,19 +35,29 @@ const mappedRows = rows.map((row) => ({
   payeeName: row.payee_name,
   amount: row.amount,
   dateIssued: row.date_issued,
-  dateCleared: row.date_cleared,
-  monthCleared: row.month_cleared,
+  dateCleared:
+  row.status === 'Voided'
+    ? 'VOID'
+    : row.date_cleared,
+
+  monthCleared:
+  row.status === 'Voided'
+    ? 'VOID'
+    : row.month_cleared,
   glAccount: row.gl_name,
-  vendorOrResidentAcct: row.payee_id,
+  vendorOrResidentAcct: String(row.payee_id || '').toUpperCase().startsWith('RES-')
+  ? String(row.payee_id).replace(/\D/g, '').padStart(6, '0')
+  : String(row.payee_id || '').replace(/\D/g, '').padStart(4, '0'),
   vendorInvoiceNo: row.invoice_num,
   vendorInvoiceDate: row.invoice_date,
   vendorInvoiceAmount: row.invoice_amount,
   checkNotation: row.note,
   bankAcct: row.bank_account,
-  checkAllowed: row.status,
+  checkAllowed: row.check_allowed,
+  status: row.status,
   glNo: row.gl_number,
   transactionNo: row.check_txn_num,
-  escrowFlag: '',
+  escrowFlag: row.escrow_flag,
   bankAccount: row.bank_account_display
 }));
 

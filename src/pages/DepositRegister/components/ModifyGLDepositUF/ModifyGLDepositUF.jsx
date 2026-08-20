@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import './ModifyGLDepositUF.css';
+import { API_BASE_URL } from '../../../../config/api';
 
 const temporaryDepositGLOptions = [
   {
@@ -176,11 +177,11 @@ function readRow(row) {
 
 function normalizeGLOptions(payload) {
   const source =
+    payload?.glAccounts ||
     payload?.options ||
     payload?.glOptions ||
     payload?.data ||
     payload;
-
   if (!Array.isArray(source)) return [];
 
   return source
@@ -384,8 +385,8 @@ function ModifyGLDepositUF() {
       try {
         const [mainResponse, refundResponse] =
           await Promise.all([
-            fetch('/api/gl-options?page=DP'),
-            fetch('/api/gl-options?page=DP_REFUND')
+            fetch(`${API_BASE_URL}/gl-options?screen=DP`),
+            fetch(`${API_BASE_URL}/gl-options?screen=DP_REFUND`)
           ]);
 
         let mainOptions = [];
@@ -517,7 +518,7 @@ function ModifyGLDepositUF() {
     try {
       setMessage('Changing Deposit Register GL classification...');
 
-      const response = await fetch('/api/modify-gl/submit', {
+      const response = await fetch(`${API_BASE_URL}/modify-gl/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -572,6 +573,32 @@ function ModifyGLDepositUF() {
       setMessage(
         'Deposit Register GL classification changed successfully.'
       );
+
+
+     if (locatedRowRef.current) {
+  const cells = locatedRowRef.current.querySelectorAll('td');
+
+  cells[4].innerText =
+    newGLOption?.classification ||
+    newGLOption?.label ||
+    selectedGL;
+
+  cells[13].innerText =
+    newGLOption?.glNo ||
+    newGLOption?.value ||
+    selectedGL;
+
+  if (refundSelectionRequired) {
+    cells[12].innerText =
+      newRefundGLOption?.glNo ||
+      newRefundGLOption?.value ||
+      selectedRefundGL;
+  } else {
+    cells[12].innerText = '';
+  }
+}
+
+
 
       setSelectedGL('');
       setSelectedRefundGL('');
