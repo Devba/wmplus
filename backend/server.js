@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3011;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Health Check
 app.get('/api/health', async (req, res) => {
@@ -2960,16 +2960,18 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
   }
 });
 
-
-
-/* ===========================================================
+/* ============================================================
    GL OPTIONS FOR TRANSACTION ENTRY
 =========================================================== */
+
 app.get('/api/gl-options', async (req, res) => {
   try {
-    const screen = String(req.query.screen || '')
-      .trim()
-      .toUpperCase();
+    // 'screen' is the standard param. 'page' is accepted temporarily
+    // for backward compatibility with older frontend calls.
+    const screen = String(
+      req.query.screen || req.query.page || ''
+    ).toUpperCase().trim();
+    const bankId = req.query.bankId ? String(req.query.bankId).trim() : '';
 
     const fieldMap = {
       CR: 'UseInCR',
@@ -3014,10 +3016,22 @@ const glAccounts = rows.map((row) => ({
   parentGl: row.ParentGL
 }));
 
+    // If a bank was selected, prefer GLs configured for that bank;
+    // keep the rest as fallback since server-side matching rule is not finalized yet.
+    let options = glAccounts;
+    if (bankId) {
+      const forBank = glAccounts.filter(g => g.bankId === bankId);
+      if (forBank.length > 0) {
+        options = forBank;
+      }
+    }
+
     res.json({
       success: true,
-      count: glAccounts.length,
-      glAccounts
+      screen,
+      bankId,
+      count: options.length,
+      glAccounts: options
     });
   } catch (err) {
     console.error('Error fetching GL options:', err);
@@ -3028,11 +3042,6 @@ const glAccounts = rows.map((row) => ({
     });
   }
 });
-
-
-
-
-
 
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {
