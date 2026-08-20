@@ -687,7 +687,7 @@ app.post('/api/check-register', async (req, res) => {
         CheckTransactionNumber, CheckNumber, GLAccountName, Amount, DateCheckIssued,
         DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
         VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, CheckAllowedYN, EscrowFlag, Status,
-DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+        DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       txnNum,
@@ -731,6 +731,122 @@ DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
   }
 });
 
+
+app.post('/api/modify-gl/submit', async (req, res) => {
+  try {
+    const {
+      page,
+      transactionNo,
+      newGLNo,
+      newGLClassification
+    } = req.body;
+
+    if (page === 'DP') {
+  if (!transactionNo || !newGLNo || !newGLClassification) {
+    return res.status(400).json({
+      error:
+        'Transaction #, new GL#, and new GL classification are required.'
+    });
+  }
+
+  const {
+    newExpenseRefundGLNo
+  } = req.body;
+
+  const expenseRefundNumber =
+    newGLClassification === 'Expense Credit Refund'
+      ? newExpenseRefundGLNo || null
+      : null;
+
+  const expenseRefundCategory =
+    newGLClassification === 'Expense Credit Refund'
+      ? 'Expense Credit Refund'
+      : null;
+
+  const [result] = await db.query(`
+    UPDATE DepositRegister
+    SET
+      GLNumber = ?,
+      GLAccountName = ?,
+      ExpenseRefundGLNumber = ?,
+      ExpenseRefundGLCategory = ?,
+      TimeStampUpdated = NOW()
+    WHERE DepositTransactionNumber = ?
+      AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+  `, [
+    newGLNo,
+    newGLClassification,
+    expenseRefundNumber,
+    expenseRefundCategory,
+    transactionNo
+  ]);
+
+  if (result.affectedRows === 0) {
+    return res.status(404).json({
+      error: 'Deposit Register transaction was not found.'
+    });
+  }
+
+  return res.json({
+    success: true,
+    transactionNo,
+    glNumber: newGLNo,
+    glClassification: newGLClassification,
+    expenseRefundGLNumber: expenseRefundNumber
+  });
+}
+
+if (page !== 'CR') {
+  return res.status(400).json({
+    error: 'Invalid page for Modify GL.'
+  });
+}
+
+    if (!transactionNo || !newGLNo || !newGLClassification) {
+      return res.status(400).json({
+        error: 'Transaction #, new GL#, and new GL classification are required.'
+      });
+    }
+
+    const [result] = await db.query(`
+      UPDATE CheckRegister
+      SET
+        GLNumber = ?,
+        GLAccountName = ?
+      WHERE CheckTransactionNumber = ?
+        AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+    `, [
+      newGLNo,
+      newGLClassification,
+      transactionNo
+    ]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: 'Check Register transaction was not found.'
+      });
+    }
+
+    res.json({
+      success: true,
+      transactionNo,
+      glNumber: newGLNo,
+      glClassification: newGLClassification
+    });
+
+  } catch (err) {
+    console.error('Error modifying Check Register GL:', err);
+
+    res.status(500).json({
+      error: 'Failed to modify Check Register GL',
+      details: err.message
+    });
+  }
+});
+
+
+
+
 /* ===========================================================
    4. DEPOSIT REGISTER (DepositRegister) & ACID TRANSACTION POSTING
    =========================================================== */
@@ -769,6 +885,8 @@ app.get('/api/deposit-register', async (req, res) => {
         dr.MonthCleared AS month_cleared,
         dr.ResidentAccountID AS resident_id,
         dr.VendorID AS vendor_id,
+        dr.ExpenseRefundGLCategory AS expense_refund_gl_category,
+        dr.ExpenseRefundGLNumber AS expense_refund_gl_number,
         dr.DepositNotation AS note,
         dr.Status AS status
 
@@ -787,8 +905,8 @@ app.get('/api/deposit-register', async (req, res) => {
          OR dr.DeletedFlag != 'Y'
 
       ORDER BY
-        dr.DateDeposited DESC,
-        dr.DepositTransactionNumber DESC
+        dr.DateDeposited ASC,
+        dr.DepositTransactionNumber ASC
     `);
 
     res.json(rows);
@@ -816,9 +934,10 @@ app.post('/api/deposit-register', async (req, res) => {
       INSERT INTO DepositRegister (
         DepositTransactionNumber, DepositorAccountName, Amount, BankAccountName,
         BankAccountID, GLAccountName, GLNumber, DateDeposited, DateCleared,
-        MonthCleared, ResidentAccountID, VendorID, DepositNotation, Status,
+        MonthCleared, ResidentAccountID, VendorID, ExpenseRefundGLCategory,
+        ExpenseRefundGLNumber, DepositNotation, Status,
         DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Posted', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, 'Posted', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
       txnNum,
       d.payer_name || '',
@@ -832,6 +951,8 @@ app.post('/api/deposit-register', async (req, res) => {
       d.month_cleared || null,
       d.resident_id || '',
       d.vendor_id || '',
+      d.expense_refund_gl_category || '',
+      d.expense_refund_gl_number || null,
       d.note || ''
     ]);
 
@@ -1448,7 +1569,7 @@ app.put('/api/settings/banking', async (req, res) => {
 
 /* ===========================================================
    VOID TRANSACTION
-   Check Register persistence
+   Deposit & Check Register persistence
    =========================================================== */
 
 app.post('/api/void/execute', async (req, res) => {
@@ -1467,6 +1588,74 @@ app.post('/api/void/execute', async (req, res) => {
         }
       });
     }
+
+    if (page === 'DP') {
+  const [rows] = await db.query(`
+    SELECT
+      DepositTransactionNumber,
+      Status,
+      DateCleared,
+      MonthCleared
+    FROM DepositRegister
+    WHERE DepositTransactionNumber = ?
+    LIMIT 1
+  `, [transactionNumber]);
+
+  if (rows.length === 0) {
+    return res.status(404).json({
+      ok: false,
+      status: {
+        message: 'Deposit transaction not found.'
+      }
+    });
+  }
+
+  const deposit = rows[0];
+
+  if (
+    deposit.Status === 'Cleared' ||
+    deposit.DateCleared !== null ||
+    deposit.MonthCleared !== null
+  ) {
+    return res.status(400).json({
+      ok: false,
+      status: {
+        message:
+          'This deposit already cleared the bank and cannot be voided.'
+      }
+    });
+  }
+
+  if (deposit.Status === 'Voided') {
+    return res.status(400).json({
+      ok: false,
+      status: {
+        message: 'Transaction already voided.'
+      }
+    });
+  }
+
+  await db.query(`
+    UPDATE DepositRegister
+    SET
+      Status = 'Voided',
+      DateCleared = NULL,
+      MonthCleared = NULL,
+      TimeStampUpdated = NOW()
+    WHERE DepositTransactionNumber = ?
+  `, [transactionNumber]);
+
+  return res.json({
+    ok: true,
+    status: {
+      message: 'VOID successful.'
+    }
+  });
+}
+
+
+
+
 
     if (page !== 'CR') {
       return res.status(400).json({

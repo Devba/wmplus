@@ -137,22 +137,32 @@
   height: 26px;
   padding: 0;
 
-  border: 1px solid #666666;
-  background: #efefef;
-  color: green;
+  border: 2px solid #000000;
+  background: #d9d9d9;
+  color: #000000;
 
   font-family: Arial, Helvetica, sans-serif;
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.enter-deposit-submit.ready {
+  border: 2px solid #000000;
+  background: #8fd14f;
+  color: #000000;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .enter-deposit-submit:disabled {
-  border-color: #aaaaaa;
-  background: #cccccc;
-  color: #666666;
+  border: 2px solid #000000;
+  background: #d9d9d9;
+  color: #000000;
   cursor: not-allowed;
+  opacity: 1;
 }
 
 .enter-deposit-middle .enter-deposit-field {
@@ -337,6 +347,257 @@
 .enter-deposit-helper-id input {
   width: 100px;
 }
+
+
+
+/* =========================================================
+   DP R&R FROM COMPLETED CR — QUICK RESIDENT LOOKUPS
+   ========================================================= */
+
+.enter-deposit-resident-combo {
+  position: relative;
+  width: 300px;
+}
+
+.enter-deposit-resident-combo > input {
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 34px;
+}
+
+.enter-deposit-resident-combo::after {
+  content: '▼';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 14px;
+  color: #333333;
+}
+
+.enter-deposit-resident-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #888888;
+  z-index: 1000;
+}
+
+.enter-deposit-resident-option {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 0;
+  border-bottom: 1px solid #dddddd;
+  background: #ffffff;
+  color: #000000;
+  text-align: left;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.enter-deposit-resident-option:hover {
+  background: #f3f8ff;
+}
+
+.enter-deposit-load-more {
+  font-weight: 700;
+}
+
+.enter-deposit-gl-trigger {
+  width: 300px;
+  height: 20px;
+  box-sizing: border-box;
+  padding: 1px 5px;
+  border: 1px solid #999999;
+  background: #ffffff;
+  color: #111111;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* =========================================================
+   DEPOSIT G/L ACCOUNT SELECTION UF
+   ========================================================= */
+
+.enter-deposit-gl-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.enter-deposit-gl-box {
+  width: 760px;
+  height: 470px;
+  background: #ffffff;
+  border: 2px solid #000000;
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+.enter-deposit-gl-title {
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.enter-deposit-gl-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.enter-deposit-gl-column-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.enter-deposit-gl-list {
+  height: 330px;
+  overflow-y: auto;
+  border: 1px solid #000000;
+  background: #ffffff;
+}
+
+.enter-deposit-gl-option {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 0;
+  border-bottom: 1px solid #c0c0c0;
+  background: #ffffff;
+  color: #000000;
+  text-align: left;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.enter-deposit-gl-option.selected {
+  background: #cfe2f3;
+  color: #000000;
+}
+
+.enter-deposit-gl-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.enter-deposit-gl-actions button {
+  min-width: 110px;
+  height: 32px;
+  border: 2px solid #000000;
+  color: #000000;
+  font-weight: 700;
+}
+
+.enter-deposit-gl-actions button:disabled {
+  background: #d9d9d9;
+  color: #000000;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.enter-deposit-gl-actions button:not(:disabled):first-child {
+  background: #8fd14f;
+  color: #000000;
+  cursor: pointer;
+}
+
+.enter-deposit-gl-actions button:nth-child(2) {
+  background: #d9d9d9;
+  color: #000000;
+  cursor: pointer;
+}
+
+/* =========================================================
+   ENTER DEPOSIT CONFIRMATION UF
+   ========================================================= */
+
+.enter-deposit-choice-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.enter-deposit-choice-box {
+  width: 520px;
+  background: #ffffff;
+  border: 2px solid #666666;
+  border-radius: 8px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.enter-deposit-choice-title {
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.enter-deposit-choice-details {
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 18px;
+}
+
+.enter-deposit-choice-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.enter-deposit-choice-buttons button {
+  min-width: 135px;
+  height: 34px;
+  border: 2px solid #000000;
+  background: #d9d9d9;
+  color: #000000;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.enter-deposit-choice-buttons button:nth-child(1) {
+  background: #8fd14f;
+  color: #000000;
+  border: 2px solid #000000;
+}
+
+.enter-deposit-choice-buttons button:nth-child(2) {
+  background: #b9dcff;
+  color: #000000;
+  border: 2px solid #000000;
+}
+
+.enter-deposit-choice-buttons button:nth-child(3) {
+  background: #efefef;
+  color: #000000;
+  border: 2px solid #666666;
+}
+
+
 
 @media (max-width: 1310px) {
   .enter-deposit-uf {

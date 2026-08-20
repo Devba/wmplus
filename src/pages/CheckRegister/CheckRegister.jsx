@@ -40,12 +40,14 @@ const mappedRows = rows.map((row) => ({
     ? 'VOID'
     : row.date_cleared,
 
-monthCleared:
+  monthCleared:
   row.status === 'Voided'
     ? 'VOID'
     : row.month_cleared,
   glAccount: row.gl_name,
-  vendorOrResidentAcct: row.payee_id,
+  vendorOrResidentAcct: String(row.payee_id || '').toUpperCase().startsWith('RES-')
+  ? String(row.payee_id).replace(/\D/g, '').padStart(6, '0')
+  : String(row.payee_id || '').replace(/\D/g, '').padStart(4, '0'),
   vendorInvoiceNo: row.invoice_num,
   vendorInvoiceDate: row.invoice_date,
   vendorInvoiceAmount: row.invoice_amount,

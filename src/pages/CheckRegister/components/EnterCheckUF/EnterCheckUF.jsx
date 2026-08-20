@@ -747,7 +747,7 @@ const visibleGLChildren = useMemo(
           date_cleared: null,
           month_cleared: null,
           gl_number: newCheck.glNo,
-          payee_id: newCheck.vendorOrResidentAcct,
+          payee_id: newCheck.payeeId,
           invoice_num: newCheck.vendorInvoiceNo,
           invoice_date: formatDateForDatabase(
             newCheck.vendorInvoiceDate
@@ -820,6 +820,7 @@ const handleEnterCheck = async () => {
   const newCheck = {
     checkNo: autoWithdrawal ? 'AW' : checkNumber,
     payeeName: entityName,
+    payeeId: entityId,
     amount: formatMoney(checkAmount),
 
     dateIssued: autoWithdrawal
@@ -829,7 +830,9 @@ const handleEnterCheck = async () => {
     monthCleared: '',
 
     glAccount: glAccountName,
-    vendorOrResidentAcct: entityId,
+    vendorOrResidentAcct: String(entityId || '').toUpperCase().startsWith('RES-')
+      ? String(entityId).replace(/\D/g, '').padStart(6, '0')
+      : String(entityId || '').replace(/\D/g, '').padStart(4, '0'),
 
     vendorInvoiceNo,
     vendorInvoiceDate,
@@ -1083,7 +1086,11 @@ const handleEnterCheck = async () => {
 
             <input
               type="text"
-              value={entityId}
+              value={
+                String(entityId || '').toUpperCase().startsWith('RES-')
+                  ? String(entityId).replace(/\D/g, '').padStart(6, '0')
+                  : String(entityId || '').replace(/\D/g, '').padStart(4, '0')
+              }
               readOnly
             />
           </label>
@@ -1478,7 +1485,11 @@ onBlur={(event) => {
              
               <input
                 type="text"
-                value={helperEntityId}
+                value={
+                        String(helperEntityId || '').toUpperCase().startsWith('RES-')
+                          ? String(helperEntityId).replace(/\D/g, '').padStart(6, '0')
+                          : helperEntityId
+                      }
                 onChange={(event) =>
                   setHelperEntityId(event.target.value)
                 }
