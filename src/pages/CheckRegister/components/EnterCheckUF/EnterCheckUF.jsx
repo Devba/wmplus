@@ -71,6 +71,26 @@ function formatDateForTransaction(date) {
   return `CHK${month}${day}${year}-${hours}${minutes}${seconds}`;
 }
 
+function normalizeMoneyInput(value) {
+  let normalized = String(value || '').replace(/[^0-9.]/g, '');
+
+  const parts = normalized.split('.');
+
+  if (parts.length > 2) {
+    normalized = `${parts[0]}.${parts.slice(1).join('')}`;
+  }
+
+  if (normalized.includes('.')) {
+    const [whole, decimals = ''] = normalized.split('.');
+    normalized = `${whole}.${decimals.substring(0, 2)}`;
+  }
+
+  return normalized.substring(0, 12);
+}
+
+
+
+
 function EnterCheckUF({ onAddCheck }) {
   const [banks, setBanks] = useState([]);
   const [glAccounts, setGLAccounts] = useState([]);
@@ -1062,7 +1082,7 @@ const handleEnterCheck = async () => {
                 inputMode="decimal"
                 value={checkAmount}
                 onChange={(event) => {
-                const value = event.target.value;
+                const value = normalizeMoneyInput(event.target.value);
 
                 setCheckAmount(value);
 
@@ -1168,6 +1188,7 @@ const handleEnterCheck = async () => {
             <input
               type="text"
               value={vendorInvoiceNo}
+              maxLength={30}
               onChange={(event) =>
                 setVendorInvoiceNo(event.target.value)
               }
@@ -1239,7 +1260,9 @@ onBlur={(event) => {
                 inputMode="decimal"
                 value={vendorInvoiceAmount}
                 onChange={(event) =>
-                  setVendorInvoiceAmount(event.target.value)
+                  setVendorInvoiceAmount(
+                    normalizeMoneyInput(event.target.value)
+                  )
                 }
               />
             </div>
