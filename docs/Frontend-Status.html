@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estado del Frontend — W M+ Management System</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --text:#e2e8f0;
+    --muted:#94a3b8; --line:#334155; --accent:#38bdf8;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.5;}
+  header{background:linear-gradient(135deg,#0ea5e9,#6366f1);padding:28px 32px;color:#fff}
+  header h1{margin:0 0 6px;font-size:24px}
+  header p{margin:2px 0;opacity:.95;font-size:13px}
+  main{max-width:1100px;margin:0 auto;padding:24px 20px 60px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:20px 22px;margin:18px 0}
+  h2{margin:0 0 12px;font-size:18px;color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:8px}
+  h3{margin:18px 0 8px;font-size:15px;color:#cbd5e1}
+  p,li{font-size:14px;color:var(--text)}
+  .muted{color:var(--muted)}
+  .legend span{display:inline-block;margin-right:16px;font-size:13px}
+  .dot{font-weight:700}
+  .ok{color:var(--green)} .prog{color:var(--yellow)} .pend{color:var(--red)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cbd5e1}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+  code{background:#0b1220;padding:1px 6px;border-radius:5px;font-size:12px;color:#7dd3fc}
+  .tag{display:inline-block;background:var(--panel2);border:1px solid var(--line);
+    border-radius:6px;padding:2px 8px;font-size:12px;color:#cbd5e1;margin:2px 4px 2px 0}
+  ul{margin:6px 0 6px 18px} li{margin:4px 0}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+  .note{background:#0b1220;border-left:3px solid var(--accent);padding:10px 14px;
+    border-radius:6px;margin:10px 0;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Estado del Frontend — W M+ Management System</h1>
+  <p><strong>Fecha:</strong> 2026-08-20 &nbsp;·&nbsp; <strong>Autor:</strong> Resumen para equipo (José / Hal / Rick)</p>
+  <p><strong>Ramas:</strong> <code>features/vivomysql-mcp</code> (José/OCR) · <code>BravoFrontend</code> (integración) · <code>feature/register-entry-wiring</code> (Hal)</p>
+  <p class="legend">
+    <span class="dot ok">✅ Hecho</span>
+    <span class="dot prog">🟡 En curso</span>
+    <span class="dot pend">⬜ Pendiente</span>
+  </p>
+</header>
+
+<main>
+
+  <section>
+    <h2>1. Resumen ejecutivo</h2>
+    <p>El frontend es una SPA en <strong>React 18 + Vite</strong> (monorepo junto al backend en <code>/home/alvaro/wmplus</code>).
+    La división de responsabilidades se respeta: <strong>Backend/DB = José</strong>, <strong>Frontend = Hal (+ Rick)</strong>.</p>
+    <ul>
+      <li><span class="dot ok">✅</span> <strong>Check Register (CR)</strong> y <strong>Deposit Register (DP)</strong> completos (UI + backend).</li>
+      <li><span class="dot ok">✅</span> <strong>Settings</strong>: <code>fines-late-fees</code>, <code>dues-programming</code>, <code>gl-mapping</code>, <code>gl-options</code> (PC/ParentGL) completos.</li>
+      <li><span class="dot prog">🟡</span> <strong>APR (Assessment Payment Register)</strong>: UI construida con datos de muestra; falta el backend <code>/api/apr/*</code>.</li>
+      <li><span class="dot ok">✅</span> <strong>OCR (José)</strong>: componentes de escaneo + matcher difuso + <code>ai-filter</code> — en <code>features/vivomysql-mcp</code>, <strong>pendiente de merge</strong> a <code>BravoFrontend</code>.</li>
+      <li><span class="dot pend">⬜</span> <strong>BDC / XFER</strong>: no iniciado (roadmap semana 2).</li>
+    </ul>
+    <div class="note">El merge <code>feature/register-entry-wiring → BravoFrontend</code> ya está completado y sin conflictos. El backend de <code>BravoFrontend</code> tiene los endpoints de Hal (void/execute, fines-late-fees, dues-programming, gl-mapping, gl-options, modify-gl/submit).</div>
+  </section>
+
+  <section>
+    <h2>2. Estado por módulo</h2>
+    <table>
+      <thead>
+        <tr><th>Módulo</th><th>Qué hay</th><th>Rama</th><th>Estado</th><th>Notas</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Check Register (CR)</strong></td>
+          <td>Entry workflow, Vendor IDs, payee matching, void (<code>/api/void/execute</code>), GL Category UF, modify GL</td>
+          <td><code>feature/register-entry-wiring</code> → <code>BravoFrontend</code></td>
+          <td class="ok">✅</td>
+          <td>Backend <code>/api/check-register</code> (GET/POST) OK. R&R <code>gl-options?screen=CR</code> hecho.</td>
+        </tr>
+        <tr>
+          <td><strong>Deposit Register (DP)</strong></td>
+          <td>Entry, void, modify GL (Expense Credit Refund), monthly summary</td>
+          <td><code>feature/register-entry-wiring</code> → <code>BravoFrontend</code></td>
+          <td class="ok">✅</td>
+          <td>Backend <code>/api/deposit-register</code> (GET/POST) OK.</td>
+        </tr>
+        <tr>
+          <td><strong>Settings</strong></td>
+          <td><code>fines-late-fees</code>, <code>dues-programming</code>, <code>gl-mapping</code> (structural), <code>gl-options</code> (PC/ParentGL)</td>
+          <td><code>feature/register-entry-wiring</code> → <code>BravoFrontend</code></td>
+          <td class="ok">✅</td>
+          <td>Endpoints GET/PUT presentes en backend.</td>
+        </tr>
+        <tr>
+          <td><strong>Vendor ID List</strong></td>
+          <td>CRUD de vendor IDs</td>
+          <td><code>feature/register-entry-wiring</code></td>
+          <td class="ok">✅</td>
+          <td>Usa fallback a sample data si el API falla.</td>
+        </tr>
+        <tr>
+          <td><strong>Main Directory</strong></td>
+          <td>Listado de residentes/directorio</td>
+          <td><code>feature/register-entry-wiring</code></td>
+          <td class="ok">✅</td>
+          <td>Usa fallback a sample data si el API falla.</td>
+        </tr>
+        <tr>
+          <td><strong>Assessment Payment Register (APR)</strong></td>
+          <td>UI con datos de muestra; llama <code>POST /api/apr/enter-payment</code>; void solo manipula DOM</td>
+          <td><code>feature/register-entry-wiring</code></td>
+          <td class="prog">🟡</td>
+          <td><strong>Falta backend</strong> <code>/api/apr/*</code>. Tabla <code>AssessmentPaymentRegister</code> aún no creada.</td>
+        </tr>
+        <tr>
+          <td><strong>OCR (José)</strong></td>
+          <td><code>OcrScanButton</code>, <code>useOcrScan</code>, matcher difuso (Levenshtein+substring), <code>ai-filter</code></td>
+          <td><code>features/vivomysql-mcp</code></td>
+          <td class="ok">✅</td>
+          <td>Funcional en su rama; <strong>pendiente merge</strong> a <code>BravoFrontend</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>BDC / XFER</strong></td>
+          <td>—</td>
+          <td>—</td>
+          <td class="pend">⬜</td>
+          <td>No iniciado (roadmap semana 2).</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>3. En curso ahora</h2>
+    <ul>
+      <li><span class="dot prog">🟡</span> <strong>Diseño de <code>AssessmentPaymentRegister</code> + endpoints <code>/api/apr/*</code></strong> (enter-payment / list / void). Hal propuso la tabla; José revisó y recomendó:
+        <ul>
+          <li>Derivar YTD/balances desde transacciones (no guardar YTD corrido por fila).</li>
+          <li>Servidor asigna el <code>transaction#</code> (secuencial, no <code>APR-${Date.now()}</code> del cliente).</li>
+          <li>Backend recomputa; no confiar en YTD enviado por el cliente.</li>
+          <li>El posting debe actualizar también <code>ResidentMaster</code>.</li>
+        </ul>
+        <em>Esperando confirmación de Hal para redactar el DDL + contrato de endpoints.</em>
+      </li>
+      <li><span class="dot pend">⬜</span> <strong>R&R de <code>gl-options?screen=BDC</code> y <code>XFER</code></strong> en las pantallas de entrada (hoy solo CR→DP→APR).</li>
+      <li><span class="dot prog">🟡</span> <strong>Merge OCR</strong>: <code>features/vivomysql-mcp → BravoFrontend</code> pendiente (después del merge de Hal).</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>4. Lo que falta — Frontend</h2>
+    <div class="cols">
+      <div>
+        <h3>Frontend (Hal)</h3>
+        <ul>
+          <li>Reemplazar <code>localhost:3011</code> hardcodeado en <code>EnterAssmtPaymentUF</code> (<code>gk="http://localhost:3011"</code>) por <code>API_BASE_URL</code>.</li>
+          <li>Eliminar fallbacks a <em>sample data</em> donde ya hay endpoint real (APR siempre usa muestra).</li>
+          <li>UI de <strong>BDC</strong> y <strong>XFER</strong> (transacciones core pendientes).</li>
+          <li>UI de <strong>Fiscal Year Setup</strong>.</li>
+          <li>Void de APR debe ser <strong>server-side</strong> (hoy solo DOM).</li>
+          <li>Monthly summaries de algunos registros.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Dependencias de Backend (bloquean al frontend)</h3>
+        <ul>
+          <li><code>POST /api/apr/enter-payment</code>, <code>GET /api/apr/list</code>, <code>POST /api/apr/void</code> (server-side).</li>
+          <li>Endpoints <strong>BDC</strong> / <strong>XFER</strong> + <code>gl-options</code> para esas pantallas.</li>
+          <li>Endpoint <strong>Fiscal Year Setup</strong>.</li>
+          <li>Soporte de <strong>transacción atómica</strong> en <code>db.js</code> (<code>beginTransaction</code>/<code>commit</code>/<code>rollback</code>).</li>
+          <li>El posting APR debe actualizar <code>ResidentMaster</code> + <code>Monthly/QTRLY/YRLY_AssmtRegister</code> + <code>AssessmentPaymentSummary</code> + <code>CashFlowTransaction_*</code> en una sola txn.</li>
+          <li><strong>Merge OCR</strong> <code>features/vivomysql-mcp → BravoFrontend</code>.</li>
+          <li><strong>Deploy sincronizado</strong> a staging/VPS (<code>manage-Bravofrontend</code> + PM2).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>5. Roadmap resumido (sprint 2 semanas)</h2>
+    <table>
+      <thead><tr><th>#</th><th>Tarea</th><th>Dueño</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>9</td><td>APR: R&R <code>gl-options?screen=APR</code> en Assmt Paymt Register Entry</td><td>F</td><td class="pend">⬜</td></tr>
+        <tr><td>10</td><td>APR: verificar <code>UseInAPR</code>, persistencia POST, balances</td><td>B</td><td class="pend">⬜</td></tr>
+        <tr><td>11</td><td>BDC: R&R <code>gl-options?screen=BDC</code></td><td>F</td><td class="pend">⬜</td></tr>
+        <tr><td>12</td><td>BDC: <code>UseInBDC</code>, persistencia y reconciliación</td><td>B</td><td class="pend">⬜</td></tr>
+        <tr><td>13</td><td>XFER: R&R <code>gl-options?screen=XFER</code></td><td>F</td><td class="pend">⬜</td></tr>
+        <tr><td>14</td><td>XFER: <code>UseInXFER</code>, persistencia</td><td>B</td><td class="pend">⬜</td></tr>
+        <tr><td>15</td><td>Settings: Fiscal Year Setup (reconciliar SQL vs schema)</td><td>C</td><td class="pend">⬜</td></tr>
+        <tr><td>16</td><td>Settings: validar Banking/General/Dues/Fines persistence en staging</td><td>C</td><td class="pend">⬜</td></tr>
+        <tr><td>17</td><td>Deploy sincronizado a staging/VPS</td><td>C</td><td class="pend">⬜</td></tr>
+        <tr><td>18</td><td>Demo end-to-end (GL Mapping → gl-options → 5 pantallas → registros)</td><td>C</td><td class="pend">⬜</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">Leyenda: B = Backend · F = Frontend · C = Coordinado. Detalle completo en <code>ROADMAP-2WEEKS.md</code>.</p>
+  </section>
+
+  <section>
+    <h2>6. Ramas y comandos clave</h2>
+    <p>
+      <span class="tag">features/vivomysql-mcp</span>
+      <span class="tag">BravoFrontend</span>
+      <span class="tag">feature/register-entry-wiring</span>
+    </p>
+    <ul>
+      <li>Hal debe actualizar su rama: <code>git pull origin BravoFrontend</code></li>
+      <li>Backend local: PM2 <code>wmplus-backend</code> en puerto <code>3011</code></li>
+      <li>Frontend dev: <code>npm run dev</code> (Vite, puerto 5173, proxy <code>/api → :3011</code>)</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  Documento generado 2026-08-20 · W M+ Management System · estado del frontend y dependencias de backend
+</footer>
+</body>
+</html>
