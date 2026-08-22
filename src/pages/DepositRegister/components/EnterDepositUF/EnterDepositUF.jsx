@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import './EnterDepositUF.css';
 import { API_BASE_URL } from '../../../../config/api';
 import { closeOverlay } from '../../../../engines/overlay/overlay-engine';
+import Swal from 'sweetalert2';
 
 function normalizeMoneyInput(value) {
   let normalized = String(value || '').replace(/[^0-9.]/g, '');
@@ -675,6 +676,178 @@ try {
     }
   };
 
+  // ===== OCR scan (portado de vivomysql-mcp) =====
+  const fileToBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const applyOcr = (fields) => {
+    console.log('[OCR] applyOcr llamado con:', JSON.stringify(fields));
+
+    if (fields.checkNumber) setCheckNumber(fields.checkNumber);
+
+    if (fields.amount) {
+      const normalized = normalizeMoneyInput(fields.amount);
+
+      setDepositAmount(normalized);
+      setRemainingDeposit(normalized ? formatMoney(normalized) : '');
+    }
+
+    if (fields.date) setDepositDate(fields.date);
+
+    if (fields.bankAccount) {
+      const matchedBank = banks.find(
+        (bank) =>
+          String(bank.id).toLowerCase() === String(fields.bankAccount).toLowerCase() ||
+          String(bank.bankName || '').toLowerCase() === String(fields.bankAccount).toLowerCase()
+      );
+
+      if (matchedBank) setBankId(matchedBank.id);
+    }
+
+    if (fields.glNumber) {
+      const matchedGL = serverGLAccounts.find(
+        (account) =>
+          String(account.glNumber || '').toLowerCase() === String(fields.glNumber).toLowerCase() ||
+          String(account.glName || '').toLowerCase().includes(String(fields.glNumber).toLowerCase())
+      );
+
+      if (matchedGL) setGLNumber(matchedGL.glNumber);
+    }
+
+    if (fields.payeeName) {
+      const residentMatch = residents.find((resident) =>
+        String(resident.fullName || '').toLowerCase().includes(fields.payeeName.toLowerCase())
+      );
+
+      if (residentMatch) {
+        loadResident(residentMatch.id);
+        return;
+      }
+
+      const vendorMatch = vendors.find((vendor) =>
+        String(vendor.name || '').toLowerCase().includes(fields.payeeName.toLowerCase())
+      );
+
+      if (vendorMatch) {
+        loadVendor(vendorMatch.id);
+        return;
+      }
+
+      Swal.fire({
+        icon: 'warning',
+        title: 'Payee no encontrado',
+        text: `"${fields.payeeName}" no coincide con ningún residente/vendor. Selecciónalo manualmente en el buscador.`
+      });
+    }
+  };
+
+  const showConfirmOcr = (data) => {
+    Swal.fire({
+      title: 'Datos extraídos del cheque',
+      html: `
+        <div style="text-align:left;display:flex;flex-direction:column;gap:8px;">
+          <label>Check # <input id="ocr-checkNumber" class="swal2-input" value="${data.checkNumber || ''}"></label>
+          <label>Monto <input id="ocr-amount" class="swal2-input" value="${data.amount || ''}"></label>
+          <label>Fecha (MM/DD/YYYY) <input id="ocr-date" class="swal2-input" value="${data.date || ''}"></label>
+          <label>Beneficiario <input id="ocr-payeeName" class="swal2-input" value="${data.payeeName || ''}"></label>
+          <label>Bank Account <input id="ocr-bankAccount" class="swal2-input" value="${data.bankAccount || ''}"></label>
+          <label>G/L Account <input id="ocr-glNumber" class="swal2-input" value="${data.glNumber || ''}"></label>
+        </div>`,
+      showCancelButton: true,
+      confirmButtonText: 'Aplicar al formulario',
+      cancelButtonText: 'Cancelar',
+      width: '480px',
+      preConfirm: () => {
+        const popup = Swal.getPopup();
+
+        return {
+          checkNumber: popup.querySelector('#ocr-checkNumber').value,
+          amount: popup.querySelector('#ocr-amount').value,
+          date: popup.querySelector('#ocr-date').value,
+          payeeName: popup.querySelector('#ocr-payeeName').value,
+          bankAccount: popup.querySelector('#ocr-bankAccount').value,
+          glNumber: popup.querySelector('#ocr-glNumber').value
+        };
+      }
+    }).then((result) => {
+      console.log('[OCR] resultado del modal:', JSON.stringify(result));
+      if (result.isConfirmed) applyOcr(result.value);
+    });
+  };
+
+  const runOcr = async (file) => {
+    Swal.fire({
+      title: 'Procesando OCR...',
+      text: 'Analizando la imagen del cheque',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    try {
+      const image = await fileToBase64(file);
+      const res = await fetch(`${API_BASE_URL}/ocr/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      showConfirmOcr(data);
+    } catch (err) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error OCR',
+        text: err.message || 'No se pudo procesar la imagen'
+      });
+    }
+  };
+
+  const handleScanCheck = () => {
+    Swal.fire({
+      title: 'Escanear Check',
+      html: `
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <label style="cursor:pointer;padding:12px;border:1px solid #ccc;border-radius:6px;display:block;">
+            📷 Tomar foto (cámara)
+            <input type="file" id="ocr-file-camera" accept="image/*" capture="environment" style="display:none;">
+          </label>
+          <label style="cursor:pointer;padding:12px;border:1px solid #ccc;border-radius:6px;display:block;">
+            📎 Subir documento / imagen
+            <input type="file" id="ocr-file-upload" accept="image/*,application/pdf" style="display:none;">
+          </label>
+        </div>`,
+      showConfirmButton: false,
+      didOpen: () => {
+        const popup = Swal.getPopup();
+
+        popup.querySelector('#ocr-file-camera').addEventListener('change', (event) => {
+          const file = event.target.files[0];
+
+          if (file) runOcr(file);
+        });
+
+        popup.querySelector('#ocr-file-upload').addEventListener('change', (event) => {
+          const file = event.target.files[0];
+
+          if (file) runOcr(file);
+        });
+      }
+    });
+  };
+
   return (
     <div className="enter-deposit-uf">
       {showGLSelectionUF && (
@@ -917,6 +1090,14 @@ try {
               onClick={handleEnterDeposit}
             >
               ENTER DEPOSIT DATA
+            </button>
+
+            <button
+              type="button"
+              className="enter-deposit-scan"
+              onClick={handleScanCheck}
+            >
+              📷 Escanear Check
             </button>
           </div>
         </div>

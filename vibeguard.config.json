@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "debug": false,
+  "placeholder_prefix": "__VG_",
+  "session": {
+    "ttl": "1h",
+    "max_mappings": 100000
+  },
+  "patterns": {
+    "keywords": [
+      { "value": "Ricktest", "category": "DB_USER" },
+      { "value": "12345", "category": "DB_PASS" }
+    ],
+    "regex": [
+      { "pattern": "sk-or-v1-[A-Za-z0-9]{20,}", "category": "OPENROUTER_KEY" },
+      { "pattern": "sk-[A-Za-z0-9]{20,}", "category": "OPENAI_KEY" },
+      { "pattern": "(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}", "category": "GITHUB_TOKEN" },
+      { "pattern": "AKIA[0-9A-Z]{16}", "category": "AWS_ACCESS_KEY" },
+      { "pattern": "mysql://[^@\\s]+@", "category": "DB_URI" },
+      { "pattern": "eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", "category": "JWT" },
+      { "pattern": "[0-9]{8}[A-HJ-NP-TV-Z]", "category": "DNI" },
+      { "pattern": "[XYZ][0-9]{7}[A-HJ-NP-TV-Z]", "category": "NIE" },
+      { "pattern": "\\+?34[ -]?[6-9][0-9]{8}", "category": "PHONE_ES" }
+    ],
+    "builtin": ["email", "ipv4", "mac", "uuid"],
+    "exclude": ["example.com", "localhost", "127.0.0.1", "0.0.0.0"]
+  }
+}

@@ -20,6 +20,11 @@ const gitInfo = getGitInfo();
 export default defineConfig({
   plugins: [react()],
   base: process.env.VITE_BASE_PATH || '/managereactv1-backend/',
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3011'
+    }
+  },
   define: {
     'import.meta.env.VITE_GIT_BRANCH': JSON.stringify(gitInfo.branch),
     'import.meta.env.VITE_GIT_COMMIT': JSON.stringify(gitInfo.commit),

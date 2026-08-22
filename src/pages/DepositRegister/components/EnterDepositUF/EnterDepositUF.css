@@ -604,3 +604,28 @@
     min-width: 1260px;
   }
 }
+
+/* OCR scan button (portado de vivomysql-mcp) */
+.enter-deposit-scan {
+  position: absolute;
+  left: 105px;
+  top: 5px;
+
+  width: 95px;
+  height: 26px;
+  padding: 0;
+
+  border: 1px solid #2b579a;
+  background: #dce6f1;
+  color: #1a3a6b;
+
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.swal2-container {
+  z-index: 20000 !important;
+}
