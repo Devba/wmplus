@@ -3043,6 +3043,110 @@ const glAccounts = rows.map((row) => ({
   }
 });
 
+/* ===========================================================
+   SKELETON: APR ASSESSMENT PAYMENT REGISTER (V3)
+   Estado: Estructura preparada para Fase 1 / Core Cash Accounting.
+           No toca BD hasta aprobación del DDL (AssessmentRegister
+           unificado, AssessmentPaymentRegister, etc.).
+   Principio: tablas PERSISTIDAS, MANTENIDAS INCREMENTALMENTE.
+              Un APR posting actualiza SOLO el residente afectado.
+              Recalculate/Rebuild = utilidad de excepción.
+   Identidad: (MgtCoClientID, HOALicenseNumber, ResidentAccountID,
+               CurrentFiscalYearBegins, Frequency)
+   =========================================================== */
+
+// Helper: APR transaction number (server-assigned, V3 §2b)
+async function generateAprTransactionNumber(conn) {
+  // TODO: con DDL, usar AssessmentPaymentRegister.TransactionNumber
+  // Patrón APR-YYMMDD-SEQ, secuencial por día, multi-user safe vía SELECT MAX ... FOR UPDATE
+  const [rows] = await conn.query(
+    "SELECT TransactionNumber FROM AssessmentPaymentRegister WHERE TransactionNumber LIKE CONCAT('APR-', DATE_FORMAT(CURDATE(), '%y%m%d'), '-%') ORDER BY TransactionNumber DESC LIMIT 1 FOR UPDATE"
+  ).catch(() => [[]]);
+  const prefix = `APR-${new Date().toISOString().slice(2,10).replace(/-/g,'')}-`;
+  const maxSeq = rows && rows[0] ? parseInt(String(rows[0].TransactionNumber).slice(-4), 10) || 0 : 0;
+  return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+}
+
+// POST /api/apr/enter-payment — Fase 1: posting atómico APR → AssmtRegisters → CashFlow + ResidentMaster
+app.post('/api/apr/enter-payment', async (req, res) => {
+  try {
+    const { residentAccountId, paymentType, amount, annualDuesPayment, specialAssessmentPayment,
+            bankAccountId, glNumber, fiscalYearBegins, mgtCoClientId, hoaLicenseNumber } = req.body;
+
+    // Validación single-type-per-row (V3 §3/§4): AnnualDues y SpecialAssessment en filas SEPARADAS
+    const hasAnnual = (parseFloat(annualDuesPayment ?? amount) || 0) > 0;
+    const hasSpecial = (parseFloat(specialAssessmentPayment) || 0) > 0;
+    if ((paymentType === 'AnnualDues' && hasSpecial) || (paymentType === 'SpecialAssessment' && hasAnnual) || (hasAnnual && hasSpecial && !paymentType)) {
+      return res.status(400).json({ error: 'Annual Dues and Special Assessment cannot coexist on a single APR transaction row. Post them as separate rows.' });
+    }
+    if (!residentAccountId) return res.status(400).json({ error: 'residentAccountId is required' });
+
+    // Banking SA requerido (V3 §11): si SA y múltiples bancos elegibles, bankAccountId es obligatorio
+    if (paymentType === 'SpecialAssessment' && !bankAccountId) {
+      // TODO: con DDL, verificar en BankAccount / Settings→Banking si hay 1 o N bancos elegibles SA
+      // Por ahora, requerir bankAccountId para SA
+      return res.status(400).json({ error: 'BankAccountID is required for Special Assessment. Select the receiving bank.' });
+    }
+
+    // SKELETON: todo el posting en una sola transacción DB (V3 §2f, §12)
+    // Hoy las tablas AssessmentPaymentRegister / AssessmentRegister no existen → 501 hasta DDL
+    const result = await db.withTransaction(async (conn) => {
+      // 1) Validar residente, frecuencia HOA (DuesProgramming.AssessmentFrequency), fiscal year, banco
+      // const [freqRows] = await conn.query("SELECT AssessmentFrequency FROM DuesProgramming ... FOR UPDATE");
+      // 2) Generar TransactionNumber server-side
+      // const txn = await generateAprTransactionNumber(conn);
+      // 3) INSERT AssessmentPaymentRegister (fuente de verdad)
+      // 4) UPSERT AssessmentRegister (MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency) — solo residente afectado
+      // 5) INSERT AssessmentRegisterPeriod (periodNumber derivado de fecha)
+      // 6) UPDATE ResidentMaster (ResidentCreditBalance / PaidYTD / Balance) si aplica
+      // 7) INSERT CashFlowTransaction_<banco> + CashFlowPostingControl
+      // 8) COMMIT todo junto (db.withTransaction lo hace)
+      throw new Error('DDL_PENDING_APPROVAL');
+    }).catch((e) => {
+      if (e.message === 'DDL_PENDING_APPROVAL') throw e;
+      throw e;
+    });
+
+    return res.json(result);
+  } catch (err) {
+    if (err.message === 'DDL_PENDING_APPROVAL') {
+      return res.status(501).json({ error: 'APR posting not implemented — DDL pendiente de aprobación (AssessmentRegister unificado, AssessmentPaymentRegister)', details: 'Borrador en docs/APR_DDL_draft.sql' });
+    }
+    console.error('Error in /api/apr/enter-payment (skeleton):', err);
+    return res.status(500).json({ error: 'Failed to post APR payment', details: err.message });
+  }
+});
+
+// GET /api/apr/list — lista transacciones APR (fuente de verdad)
+app.get('/api/apr/list', async (req, res) => {
+  try {
+    // SKELETON: requiere AssessmentPaymentRegister
+    return res.status(501).json({ error: 'Not implemented — DDL pendiente (AssessmentPaymentRegister)', details: 'Borrador en docs/APR_DDL_draft.sql' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/apr/void — void server-side con reversión de agregados (V3 §10)
+app.post('/api/apr/void', async (req, res) => {
+  try {
+    const { transactionNumber } = req.body;
+    if (!transactionNumber) return res.status(400).json({ error: 'transactionNumber is required' });
+    // SKELETON: localizar APR row (FOR UPDATE), revertir AssessmentRegister/Period, ResidentMaster, CashFlow, marcar VOID
+    return res.status(501).json({ error: 'Not implemented — DDL pendiente (AssessmentPaymentRegister + void reversals)', details: 'Borrador en docs/APR_DDL_draft.sql' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/apr/recalculate — utilidad de excepción (reconciliación/reparación), no flujo normal
+app.post('/api/apr/recalculate', async (req, res) => {
+  return res.status(501).json({ error: 'Not implemented — utilidad de excepción para rebuild de AssessmentRegisters/CashFlow', details: 'V3 §6 y refinamiento incremental: no recalcular en flujo normal' });
+});
+
+// SKELETON: Cash Flow posting incremental para Fase 1 (CR→CF, DP→CF)
+// Los POST /api/check-register y /api/deposit-register actuales actualizan BankAccount
+// pero NO escriben CashFlowTransaction_* ni CashFlowPostingControl (grep=0).
+// Fase 1 debe añadir dentro de sus transacciones:
+//   INSERT CashFlowTransaction_<banco> + INSERT CashFlowPostingControl
+// Principio: posting incremental, no rebuild en flujo normal. Rebuild = excepción.
+
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 W M+ Express Backend API running on port ${PORT}`);

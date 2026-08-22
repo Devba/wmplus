@@ -27,4 +27,25 @@ const readOnlyPool = process.env.DB_READ_USER ? mysql.createPool({
 }) : pool;
 
 pool.readOnlyPool = readOnlyPool;
+
+// SKELETON: Transaction helper for APR / Cash Flow atomic posting (V3 §2f, §12)
+// Uso: await db.withTransaction(async (conn) => { await conn.query(...); });
+// Principio: tablas persistidas, mantenidas incrementalnente. Posting APR actualiza
+// SOLO el residente afectado (AssessmentRegister + Period + Cash Flow).
+// Recalculate/Rebuild = utilidad de excepción (reconciliación/reparación), no flujo normal.
+pool.withTransaction = async (callback) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const result = await callback(conn);
+    await conn.commit();
+    return result;
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
 module.exports = pool;
