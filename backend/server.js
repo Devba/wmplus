@@ -3375,75 +3375,181 @@ const glAccounts = rows.map((row) => ({
 });
 
 /* ===========================================================
-   SKELETON: APR ASSESSMENT PAYMENT REGISTER (V3)
-   Estado: Estructura preparada para Fase 1 / Core Cash Accounting.
-           No toca BD hasta aprobación del DDL (AssessmentRegister
-           unificado, AssessmentPaymentRegister, etc.).
-   Principio: tablas PERSISTIDAS, MANTENIDAS INCREMENTALMENTE.
-              Un APR posting actualiza SOLO el residente afectado.
-              Recalculate/Rebuild = utilidad de excepción.
+   APR ASSESSMENT PAYMENT REGISTER (V3 Fase 1)
+   Tablas PERSISTIDAS, MANTENIDAS INCREMENTALMENTE.
+   Un APR posting actualiza SOLO el residente afectado.
+   Recalculate/Rebuild = utilidad de excepción.
    Identidad: (MgtCoClientID, HOALicenseNumber, ResidentAccountID,
                CurrentFiscalYearBegins, Frequency)
+   DDL: backend/migrations/001_apr_unified_register.sql
+        docs/APR_DDL_draft.sql (requiere CREATE/ALTER — Ricktest no tiene permiso;
+        ejecutar como admin en www.1mag1na.xyz)
    =========================================================== */
 
-// Helper: APR transaction number (server-assigned, V3 §2b)
+// Helper: APR transaction number (server-assigned, V3 §2b) — APR-YYMMDD-SEQ, FOR UPDATE safe
 async function generateAprTransactionNumber(conn) {
-  // TODO: con DDL, usar AssessmentPaymentRegister.TransactionNumber
-  // Patrón APR-YYMMDD-SEQ, secuencial por día, multi-user safe vía SELECT MAX ... FOR UPDATE
   const [rows] = await conn.query(
     "SELECT TransactionNumber FROM AssessmentPaymentRegister WHERE TransactionNumber LIKE CONCAT('APR-', DATE_FORMAT(CURDATE(), '%y%m%d'), '-%') ORDER BY TransactionNumber DESC LIMIT 1 FOR UPDATE"
-  ).catch(() => [[]]);
+  );
   const prefix = `APR-${new Date().toISOString().slice(2,10).replace(/-/g,'')}-`;
   const maxSeq = rows && rows[0] ? parseInt(String(rows[0].TransactionNumber).slice(-4), 10) || 0 : 0;
   return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
 }
 
-// POST /api/apr/enter-payment — Fase 1: posting atómico APR → AssmtRegisters → CashFlow + ResidentMaster
+function deriveFiscalYearBegins(paymentDate, fiscalYearBegins) {
+  if (fiscalYearBegins) {
+    const d = new Date(fiscalYearBegins);
+    if (!isNaN(d)) return d.toISOString().slice(0,10);
+  }
+  const pd = paymentDate ? new Date(paymentDate) : new Date();
+  const y = isNaN(pd) ? new Date().getFullYear() : pd.getFullYear();
+  return `${y}-01-01`;
+}
+
+function derivePeriodNumber(paymentDate, frequency) {
+  const pd = paymentDate ? new Date(paymentDate) : new Date();
+  if (isNaN(pd)) return 1;
+  const m = pd.getMonth() + 1;
+  if (frequency === 'Monthly') return m;
+  if (frequency === 'Quarterly') return Math.ceil(m/3);
+  if (frequency === 'Semi-Annually') return m <= 6 ? 1 : 2;
+  return 1;
+}
+
+async function getHoaIdentity(conn) {
+  const [rows] = await conn.query("SELECT MgtCoClientID, HOALicenseNumber FROM HOAProfile LIMIT 1");
+  return rows[0] || { MgtCoClientID: 'MGTCO-001', HOALicenseNumber: 'HOA-FL-2024-001' };
+}
+
+async function getFrequency(conn, paymentType) {
+  const duesType = paymentType === 'SpecialAssessment' ? 'specialAssessment' : 'annualDues';
+  const [rows] = await conn.query("SELECT AssessmentFrequency FROM DuesProgramming WHERE DuesType=? LIMIT 1", [duesType]);
+  return rows[0]?.AssessmentFrequency || 'Annually';
+}
+
+// POST /api/apr/enter-payment — Fase 1: posting atómico APR → AssmtRegisters → CashFlow
 app.post('/api/apr/enter-payment', async (req, res) => {
   try {
     const { residentAccountId, paymentType, amount, annualDuesPayment, specialAssessmentPayment,
-            bankAccountId, glNumber, fiscalYearBegins, mgtCoClientId, hoaLicenseNumber } = req.body;
+            bankAccountId, glNumber, fiscalYearBegins, mgtCoClientId, hoaLicenseNumber,
+            paymentDate, creditAmount, operatorId } = req.body;
 
-    // Validación single-type-per-row (V3 §3/§4): AnnualDues y SpecialAssessment en filas SEPARADAS
     const hasAnnual = (parseFloat(annualDuesPayment ?? amount) || 0) > 0;
     const hasSpecial = (parseFloat(specialAssessmentPayment) || 0) > 0;
     if ((paymentType === 'AnnualDues' && hasSpecial) || (paymentType === 'SpecialAssessment' && hasAnnual) || (hasAnnual && hasSpecial && !paymentType)) {
       return res.status(400).json({ error: 'Annual Dues and Special Assessment cannot coexist on a single APR transaction row. Post them as separate rows.' });
     }
     if (!residentAccountId) return res.status(400).json({ error: 'residentAccountId is required' });
-
-    // Banking SA requerido (V3 §11): si SA y múltiples bancos elegibles, bankAccountId es obligatorio
     if (paymentType === 'SpecialAssessment' && !bankAccountId) {
-      // TODO: con DDL, verificar en BankAccount / Settings→Banking si hay 1 o N bancos elegibles SA
-      // Por ahora, requerir bankAccountId para SA
       return res.status(400).json({ error: 'BankAccountID is required for Special Assessment. Select the receiving bank.' });
     }
+    const cleanPaymentType = paymentType || (hasSpecial ? 'SpecialAssessment' : 'AnnualDues');
+    const annualAmt = hasAnnual ? parseDecimal(annualDuesPayment ?? amount) : 0;
+    const specialAmt = hasSpecial ? parseDecimal(specialAssessmentPayment) : 0;
+    const totalAmt = annualAmt + specialAmt + parseDecimal(creditAmount || 0);
+    if (totalAmt <= 0) return res.status(400).json({ error: 'Amount must be > 0' });
 
-    // SKELETON: todo el posting en una sola transacción DB (V3 §2f, §12)
-    // Hoy las tablas AssessmentPaymentRegister / AssessmentRegister no existen → 501 hasta DDL
     const result = await db.withTransaction(async (conn) => {
-      // 1) Validar residente, frecuencia HOA (DuesProgramming.AssessmentFrequency), fiscal year, banco
-      // const [freqRows] = await conn.query("SELECT AssessmentFrequency FROM DuesProgramming ... FOR UPDATE");
-      // 2) Generar TransactionNumber server-side
-      // const txn = await generateAprTransactionNumber(conn);
-      // 3) INSERT AssessmentPaymentRegister (fuente de verdad)
-      // 4) UPSERT AssessmentRegister (MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency) — solo residente afectado
-      // 5) INSERT AssessmentRegisterPeriod (periodNumber derivado de fecha)
-      // 6) UPDATE ResidentMaster (ResidentCreditBalance / PaidYTD / Balance) si aplica
-      // 7) INSERT CashFlowTransaction_<banco> + CashFlowPostingControl
-      // 8) COMMIT todo junto (db.withTransaction lo hace)
-      throw new Error('DDL_PENDING_APPROVAL');
-    }).catch((e) => {
-      if (e.message === 'DDL_PENDING_APPROVAL') throw e;
-      throw e;
+      // 1) Validar residente existe (FOR SHARE para bloquear si existe)
+      const [resRows] = await conn.query("SELECT ResidentAccountID, LastName, ResidenceAddress FROM ResidentMaster WHERE ResidentAccountID=? LIMIT 1", [residentAccountId]);
+      if (!resRows[0]) throw Object.assign(new Error(`Resident ${residentAccountId} not found`), { status: 404 });
+
+      // 2) Identidad HOA + Frequency + FiscalYear
+      const hoa = await getHoaIdentity(conn);
+      const effMgtCo = mgtCoClientId || hoa.MgtCoClientID;
+      const effHoa = hoaLicenseNumber || hoa.HOALicenseNumber;
+      const frequency = await getFrequency(conn, cleanPaymentType);
+      const fyBegins = deriveFiscalYearBegins(paymentDate, fiscalYearBegins);
+      const periodNumber = derivePeriodNumber(paymentDate, frequency);
+
+      // 3) Resolver banco / tipo
+      let bankType = 'Operating';
+      let effBankId = bankAccountId ? parseInt(bankAccountId,10) : null;
+      if (effBankId) {
+        const [bRows] = await conn.query("SELECT BankType FROM BankAccount WHERE BankAccountID=? LIMIT 1", [effBankId]);
+        if (!bRows[0]) throw Object.assign(new Error(`BankAccountID ${effBankId} not found`), { status: 404 });
+        bankType = bRows[0].BankType;
+      } else {
+        const [bRows] = await conn.query("SELECT BankAccountID, BankType FROM BankAccount WHERE BankType='Operating' LIMIT 1");
+        if (bRows[0]) { effBankId = bRows[0].BankAccountID; bankType = bRows[0].BankType; }
+      }
+
+      // 4) Generar TransactionNumber
+      const txn = await generateAprTransactionNumber(conn);
+
+      // 5) INSERT AssessmentPaymentRegister (fuente de verdad)
+      const payDate = paymentDate ? new Date(paymentDate).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+      await conn.query(`
+        INSERT INTO AssessmentPaymentRegister
+          (TransactionNumber, ResidentAccountID, PaymentType, PaymentDate, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `, [txn, residentAccountId, cleanPaymentType, payDate, annualAmt, specialAmt, parseDecimal(creditAmount||0), totalAmt, effBankId, glNumber||null, effMgtCo, effHoa, fyBegins, frequency, periodNumber, operatorId||'SYSTEM']);
+
+      // 6) UPSERT AssessmentRegister — solo residente afectado
+      const [existing] = await conn.query(`
+        SELECT AssmtRegID, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD FROM AssessmentRegister
+        WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=? FOR UPDATE
+      `, [effMgtCo, effHoa, residentAccountId, fyBegins, frequency]);
+
+      let assmtRegId;
+      if (!existing[0]) {
+        const lastName = resRows[0].LastName || null;
+        const addr = resRows[0].ResidenceAddress || null;
+        const [ins] = await conn.query(`
+          INSERT INTO AssessmentRegister
+            (ResidentAccountID, Frequency, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalCurrentAR, OperatorID)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        `, [residentAccountId, frequency, lastName, addr, fyBegins, effMgtCo, effHoa, annualAmt, specialAmt, totalAmt, operatorId||'SYSTEM']);
+        assmtRegId = ins.insertId;
+      } else {
+        assmtRegId = existing[0].AssmtRegID;
+        await conn.query(`
+          UPDATE AssessmentRegister SET
+            TotalAnnualDuesPaymentsYTD = TotalAnnualDuesPaymentsYTD + ?,
+            TotalSpecialAssessmentPaidYTD = TotalSpecialAssessmentPaidYTD + ?,
+            TotalCurrentAR = TotalCurrentAR + ?,
+            TimeStampUpdated = NOW()
+          WHERE AssmtRegID=?
+        `, [annualAmt, specialAmt, totalAmt, assmtRegId]);
+      }
+
+      // 7) UPSERT AssessmentRegisterPeriod
+      await conn.query(`
+        INSERT INTO AssessmentRegisterPeriod
+          (AssmtRegID, MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency, PeriodNumber, PeriodAmount)
+        VALUES (?,?,?,?,?,?,?,?)
+        ON DUPLICATE KEY UPDATE PeriodAmount = PeriodAmount + VALUES(PeriodAmount)
+      `, [assmtRegId, effMgtCo, effHoa, residentAccountId, fyBegins, frequency, periodNumber, totalAmt]);
+
+      // 8) UPDATE ResidentMaster credit / balance si existe columna (ignorar si no)
+      try {
+        await conn.query("UPDATE ResidentMaster SET ResidentCreditBalance = COALESCE(ResidentCreditBalance,0) + ? WHERE ResidentAccountID=?", [parseDecimal(creditAmount||0), residentAccountId]);
+      } catch (e) { if (e.code !== 'ER_BAD_FIELD_ERROR') throw e; }
+
+      // 9) CashFlow posting incremental — tabla por BankType (whitelist)
+      const cfTableMap = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket' };
+      const cfTable = cfTableMap[bankType] || 'CashFlowTransaction_Operating';
+      const fiscalYearLabel = String(new Date(fyBegins).getFullYear());
+      // derivar FiscalPeriod del paymentDate
+      const fiscalPeriod = derivePeriodNumber(payDate, 'Monthly');
+      await conn.query(`
+        INSERT INTO ${cfTable}
+          (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID, FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber, TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber, CashInAmount, TransactionDescription, OperatorID)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      `, [effMgtCo, effHoa, bankType, effBankId, fiscalYearLabel, fiscalPeriod, 'APR', txn, payDate, resRows[0].LastName || residentAccountId, residentAccountId, glNumber||null, totalAmt, `${cleanPaymentType} payment`, operatorId||'SYSTEM']);
+
+      return { transactionNumber: txn, assmtRegId, periodNumber, frequency, fiscalYearBegins: fyBegins, totalAmount: totalAmt, bankAccountId: effBankId, bankType };
     });
 
-    return res.json(result);
+    return res.json({ success: true, ...result });
   } catch (err) {
-    if (err.message === 'DDL_PENDING_APPROVAL') {
-      return res.status(501).json({ error: 'APR posting not implemented — DDL pendiente de aprobación (AssessmentRegister unificado, AssessmentPaymentRegister)', details: 'Borrador en docs/APR_DDL_draft.sql' });
+    const isMissingTable = err.code === 'ER_NO_SUCH_TABLE' || /doesn't exist/i.test(err.message);
+    const isDenied = err.code === 'ER_TABLEACCESS_DENIED_ERROR' || /denied/i.test(err.message);
+    if (isMissingTable || isDenied) {
+      return res.status(501).json({ error: 'APR tables not yet created — DDL requiere privilegio CREATE/ALTER. Ejecutar backend/migrations/001_apr_unified_register.sql como admin en www.1mag1na.xyz', details: err.message, code: err.code });
     }
-    console.error('Error in /api/apr/enter-payment (skeleton):', err);
+    if (err.status === 404) return res.status(404).json({ error: err.message });
+    console.error('Error in /api/apr/enter-payment:', err);
     return res.status(500).json({ error: 'Failed to post APR payment', details: err.message });
   }
 });
@@ -3451,9 +3557,30 @@ app.post('/api/apr/enter-payment', async (req, res) => {
 // GET /api/apr/list — lista transacciones APR (fuente de verdad)
 app.get('/api/apr/list', async (req, res) => {
   try {
-    // SKELETON: requiere AssessmentPaymentRegister
-    return res.status(501).json({ error: 'Not implemented — DDL pendiente (AssessmentPaymentRegister)', details: 'Borrador en docs/APR_DDL_draft.sql' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const limit = Math.min(parseInt(req.query.limit,10)||50, 200);
+    const [rows] = await db.query("SELECT * FROM AssessmentPaymentRegister WHERE DeletedFlag!='Y' ORDER BY TimeStampCreated DESC LIMIT ?", [limit]);
+    res.json({ transactions: rows });
+  } catch (err) {
+    const isMissing = err.code === 'ER_NO_SUCH_TABLE';
+    if (isMissing) return res.status(501).json({ error: 'AssessmentPaymentRegister not yet created — ejecutar migration 001', details: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/apr/register/:residentAccountId — estado agregado por residente/año
+app.get('/api/apr/register/:residentAccountId', async (req, res) => {
+  try {
+    const { residentAccountId } = req.params;
+    const fy = req.query.fiscalYearBegins || null;
+    const where = fy ? "AND CurrentFiscalYearBegins=?" : "";
+    const params = fy ? [residentAccountId, fy] : [residentAccountId];
+    const [regs] = await db.query(`SELECT * FROM AssessmentRegister WHERE ResidentAccountID=? ${where} ORDER BY CurrentFiscalYearBegins DESC`, params);
+    const [periods] = await db.query(`SELECT * FROM AssessmentRegisterPeriod WHERE ResidentAccountID=? ${where} ORDER BY PeriodNumber`, params);
+    res.json({ registers: regs, periods });
+  } catch (err) {
+    if (err.code === 'ER_NO_SUCH_TABLE') return res.status(501).json({ error: 'AssessmentRegister not yet created', details: err.message });
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/apr/void — void server-side con reversión de agregados (V3 §10)
@@ -3461,22 +3588,50 @@ app.post('/api/apr/void', async (req, res) => {
   try {
     const { transactionNumber } = req.body;
     if (!transactionNumber) return res.status(400).json({ error: 'transactionNumber is required' });
-    // SKELETON: localizar APR row (FOR UPDATE), revertir AssessmentRegister/Period, ResidentMaster, CashFlow, marcar VOID
-    return res.status(501).json({ error: 'Not implemented — DDL pendiente (AssessmentPaymentRegister + void reversals)', details: 'Borrador en docs/APR_DDL_draft.sql' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const result = await db.withTransaction(async (conn) => {
+      const [rows] = await conn.query("SELECT * FROM AssessmentPaymentRegister WHERE TransactionNumber=? AND DeletedFlag!='Y' FOR UPDATE", [transactionNumber]);
+      const txn = rows[0];
+      if (!txn) throw Object.assign(new Error(`Transaction ${transactionNumber} not found`), { status: 404 });
+      if (txn.Status === 'VOID') throw Object.assign(new Error('Already voided'), { status: 409 });
+      // Revertir AssessmentRegister
+      await conn.query(`
+        UPDATE AssessmentRegister SET
+          TotalAnnualDuesPaymentsYTD = GREATEST(TotalAnnualDuesPaymentsYTD - ?, 0),
+          TotalSpecialAssessmentPaidYTD = GREATEST(TotalSpecialAssessmentPaidYTD - ?, 0),
+          TotalCurrentAR = GREATEST(TotalCurrentAR - ?, 0)
+        WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=?
+      `, [txn.AnnualDuesPayment, txn.SpecialAssessmentPayment, txn.TotalAmount, txn.MgtCoClientID, txn.HOALicenseNumber, txn.ResidentAccountID, txn.CurrentFiscalYearBegins, txn.Frequency]);
+      // Revertir Period
+      await conn.query(`
+        UPDATE AssessmentRegisterPeriod SET PeriodAmount = GREATEST(PeriodAmount - ?, 0)
+        WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=? AND PeriodNumber=?
+      `, [txn.TotalAmount, txn.MgtCoClientID, txn.HOALicenseNumber, txn.ResidentAccountID, txn.CurrentFiscalYearBegins, txn.Frequency, txn.PeriodNumber]);
+      // Marcar VOID
+      await conn.query("UPDATE AssessmentPaymentRegister SET Status='VOID', DeletedFlag='Y' WHERE TransactionNumber=?", [transactionNumber]);
+      // Revertir CashFlow (marcar VoidFlag)
+      const cfMap = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket' };
+      // Intentar localizar por SourceTransactionNumber en todas las tablas si no se conoce bankType
+      for (const tbl of Object.values(cfMap)) {
+        try { await conn.query(`UPDATE ${tbl} SET VoidFlag='Y', DeletedFlag='Y' WHERE SourceRegister='APR' AND SourceTransactionNumber=?`, [transactionNumber]); } catch (e) {}
+      }
+      return { transactionNumber, voided: true };
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    if (err.code === 'ER_NO_SUCH_TABLE') return res.status(501).json({ error: 'APR tables not yet created', details: err.message });
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// GET /api/apr/recalculate — utilidad de excepción (reconciliación/reparación), no flujo normal
+// POST /api/apr/recalculate — utilidad de excepción (reconciliación/reparación), no flujo normal
 app.post('/api/apr/recalculate', async (req, res) => {
   return res.status(501).json({ error: 'Not implemented — utilidad de excepción para rebuild de AssessmentRegisters/CashFlow', details: 'V3 §6 y refinamiento incremental: no recalcular en flujo normal' });
 });
 
-// SKELETON: Cash Flow posting incremental para Fase 1 (CR→CF, DP→CF)
-// Los POST /api/check-register y /api/deposit-register actuales actualizan BankAccount
-// pero NO escriben CashFlowTransaction_* ni CashFlowPostingControl (grep=0).
-// Fase 1 debe añadir dentro de sus transacciones:
-//   INSERT CashFlowTransaction_<banco> + INSERT CashFlowPostingControl
-// Principio: posting incremental, no rebuild en flujo normal. Rebuild = excepción.
+// Fase 1 Cash Flow incremental: CR/DP ya no necesitan rebuild; APR ya postea arriba.
+// Los POST /api/check-register y /api/deposit-register deberán migrar a débito/crédito
+// CashFlowTransaction_* en siguiente iteración (hoy solo actualizan BankAccount).
 
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {
