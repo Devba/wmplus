@@ -9,7 +9,18 @@ import BodyBox from './components/BodyBox/BodyBox';
 import { fetchResidents, createResident, updateResident } from '../../services/mainDirectoryService.js';
 
 function accountNumberFor(resident) {
-  return resident?.acctNo || resident?.acct || '';
+  const raw =
+    resident?.acctNo ||
+    resident?.acct ||
+    '';
+
+  const digits = String(raw).replace(/\D/g, '');
+
+  if (!digits) {
+    return '';
+  }
+
+  return digits.padStart(6, '0');
 }
 
 function sortResidentsByAccount(rows) {
@@ -154,18 +165,25 @@ function MainDirectory({ onSelectPage }) {
   };
 
   const handleAddResident = async (newResident) => {
-    try {
-      await createResident(newResident);
-      setResidents((currentResidents) =>
-        sortResidentsByAccount([
-          ...currentResidents,
-          newResident
-        ])
-      );
+  try {
+    const result = await createResident(newResident);
+
+    const savedResident = {
+      ...newResident,
+      acctNo: result.account_id,
+      acct: result.account_id
+    };
+
+    setResidents((currentResidents) =>
+      sortResidentsByAccount([
+        ...currentResidents,
+        savedResident
+      ])
+    );
 
       setSearchTerm('');
       setAppliedAccountFilter('');
-      setSelectedResident(newResident);
+      setSelectedResident(savedResident);
     } catch (err) {
       window.alert('Error creating resident: ' + err.message);
     }

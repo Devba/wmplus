@@ -52,6 +52,7 @@
 .overlay-host .overlay-close {
   border: 1px solid #b0b0b0;
   background: #ffffff;
+  color: red;
   border-radius: 6px;
   padding: 4px 10px;
   cursor: pointer;

@@ -102,7 +102,7 @@ function App() {
   return (
     <div className="app-shell">
       <div className="top-ribbon">
-        <TopRibbon />
+        <TopRibbon onSelectPage={setCurrentPage} />
       </div>
 
       <div className="middle-content">

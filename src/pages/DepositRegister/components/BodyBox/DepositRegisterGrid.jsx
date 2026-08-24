@@ -25,7 +25,7 @@ function DepositRegisterGrid({ depositRows }) {
                 setSelectedRowIndex(index)
               }
             >
-              <td>{row.checkNumber || index + 1001}</td>
+              <td>{row.checkNumber || ''}</td>
               <td>{row.depositorName || 'Depositor Name'}</td>
               <td>{row.amount || row.depositAmount}</td>
               <td>{row.bankAccount || 'Operating'}</td>

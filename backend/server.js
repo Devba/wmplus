@@ -36,7 +36,7 @@ function parseDecimal(val, defaultVal = 0.00) {
 
 app.get('/api/residents', async (req, res) => {
   try {
-    const limit = 500;
+    const limit = 5000;
 
     const offset = Math.max(
       Number.parseInt(req.query.offset, 10) || 0,
@@ -175,6 +175,64 @@ app.get('/api/residents', async (req, res) => {
 app.post('/api/residents', async (req, res) => {
   try {
     const r = req.body;
+    const normalizeDateForDatabase = (value) => {
+  if (!value) return null;
+
+  const text = String(value).trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return text;
+  }
+
+  const parts = text.split('/');
+
+  if (parts.length === 3) {
+    const month = String(parts[0]).padStart(2, '0');
+    const day = String(parts[1]).padStart(2, '0');
+    const year = String(parts[2]);
+
+    return `${year}-${month}-${day}`;
+  }
+
+  return null;
+};
+
+
+
+
+
+
+
+const [existingResidentRows] = await db.query(`
+  SELECT MAX(
+    CASE
+      WHEN ResidentAccountID REGEXP '^[0-9]{1,6}$'
+        THEN CAST(ResidentAccountID AS UNSIGNED)
+
+      WHEN ResidentAccountID REGEXP '^RES-[0-9]{1,6}$'
+        THEN CAST(
+          SUBSTRING(ResidentAccountID, 5)
+          AS UNSIGNED
+        )
+
+      ELSE 0
+    END
+  ) AS maxResidentNumber
+  FROM ResidentMaster
+`);
+const maxResidentNumber =
+  Number(existingResidentRows[0]?.maxResidentNumber) || 0;
+
+const nextResidentNumber = maxResidentNumber + 1;
+
+if (nextResidentNumber > 999999) {
+  return res.status(409).json({
+    error: 'No available Resident Account numbers remain.'
+  });
+}
+
+const residentAccountId =
+  String(nextResidentNumber).padStart(6, '0');
     const [result] = await db.query(`
       INSERT INTO ResidentMaster (
         ResidentAccountID, FirstName, MiddleName, LastName, DisplayName, ResidenceAddress, BillingAddress,
@@ -185,7 +243,7 @@ app.post('/api/residents', async (req, res) => {
         MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
     `, [
-      r.account_id || `RES-${Date.now()}`,
+      residentAccountId,
       r.first_name || null,
       r.middle_name || null,
       r.last_name || null,
@@ -199,7 +257,7 @@ app.post('/api/residents', async (req, res) => {
       r.primary_cell || null,
       r.secondary_cell || null,
       r.email_address || null,
-      r.move_in_date || null,
+      normalizeDateForDatabase(r.move_in_date),
       r.resident_type || null,
       r.active_flag || 'Y',
       r.ach_flag || null,
@@ -215,7 +273,11 @@ app.post('/api/residents', async (req, res) => {
       parseDecimal(r.next_year_special_assmt_dues),
       r.resident_notes || null
     ]);
-    res.status(201).json({ success: true, insertedId: result.insertId, account_id: r.account_id });
+    res.status(201).json({
+  success: true,
+  insertedId: result.insertId,
+  account_id: residentAccountId
+});
   } catch (err) {
     console.error('Error inserting resident:', err);
     res.status(500).json({ error: 'Failed to insert resident', details: err.message });

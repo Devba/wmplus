@@ -72,6 +72,26 @@ function formatDateForTransaction(date) {
   return `CHK${month}${day}${year}-${hours}${minutes}${seconds}`;
 }
 
+function normalizeMoneyInput(value) {
+  let normalized = String(value || '').replace(/[^0-9.]/g, '');
+
+  const parts = normalized.split('.');
+
+  if (parts.length > 2) {
+    normalized = `${parts[0]}.${parts.slice(1).join('')}`;
+  }
+
+  if (normalized.includes('.')) {
+    const [whole, decimals = ''] = normalized.split('.');
+    normalized = `${whole}.${decimals.substring(0, 2)}`;
+  }
+
+  return normalized.substring(0, 12);
+}
+
+
+
+
 function EnterCheckUF({ onAddCheck }) {
   const [banks, setBanks] = useState([]);
   const [glAccounts, setGLAccounts] = useState([]);
@@ -391,6 +411,8 @@ const selectResidentFromAddressSearch = (resident) => {
   const [serverGLAccounts, setServerGLAccounts] = useState([]);
   const [autoWithdrawal, setAutoWithdrawal] = useState(false);
 
+  
+
   const [residentNameSearch, setResidentNameSearch] =
   useState('');
   const [residentNameQuery, setResidentNameQuery] = useState('');
@@ -408,6 +430,8 @@ const selectResidentFromAddressSearch = (resident) => {
   
   const residentNameComboRef = useRef(null);
 const residentAddressComboRef = useRef(null);
+
+const checkSubmitInProgressRef = useRef(false);
 
 useEffect(() => {
   const handleClickOutsideResidentLookups = (event) => {
@@ -728,6 +752,9 @@ const visibleGLChildren = useMemo(
 
   const handleEntryChoice = async (choice) => {
   if (!pendingCheck) return;
+  if (checkSubmitInProgressRef.current) return;
+
+  checkSubmitInProgressRef.current = true;
 
   const newCheck = pendingCheck;
 
@@ -788,7 +815,8 @@ const visibleGLChildren = useMemo(
       window.alert(
         'The check was saved. Enter the next check.'
       );
-
+      
+      checkSubmitInProgressRef.current = false;
       return;
     }
 
@@ -808,6 +836,7 @@ const visibleGLChildren = useMemo(
       'The check was NOT saved.\n\n' +
       error.message
     );
+    checkSubmitInProgressRef.current = false;
   }
 };
 
@@ -1063,7 +1092,7 @@ const handleEnterCheck = async () => {
                 inputMode="decimal"
                 value={checkAmount}
                 onChange={(event) => {
-                const value = event.target.value;
+                const value = normalizeMoneyInput(event.target.value);
 
                 setCheckAmount(value);
 
@@ -1169,6 +1198,7 @@ const handleEnterCheck = async () => {
             <input
               type="text"
               value={vendorInvoiceNo}
+              maxLength={25}
               onChange={(event) =>
                 setVendorInvoiceNo(event.target.value)
               }
@@ -1240,7 +1270,9 @@ onBlur={(event) => {
                 inputMode="decimal"
                 value={vendorInvoiceAmount}
                 onChange={(event) =>
-                  setVendorInvoiceAmount(event.target.value)
+                  setVendorInvoiceAmount(
+                    normalizeMoneyInput(event.target.value)
+                  )
                 }
               />
             </div>
