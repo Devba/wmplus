@@ -79,6 +79,8 @@ function EnterDepositUF({ onAddDeposit }) {
 
   const [showEntryChoice, setShowEntryChoice] = useState(false);
   const [pendingDeposit, setPendingDeposit] = useState(null);
+  const [depositSubmitInProgress, setDepositSubmitInProgress] = useState(false);
+
 
   const [entityType, setEntityType] = useState('');
   const [entityId, setEntityId] = useState('');
@@ -590,7 +592,10 @@ function EnterDepositUF({ onAddDeposit }) {
       depositDate,
       dateCleared: '',
       monthCleared: '',
-      ownerAccount: entityType === 'resident' ? entityId : '',
+      ownerAccount:
+      entityType === 'resident'
+        ? String(entityId).replace(/\D/g, '').padStart(6, '0')
+        : '',
       depositorId: entityId,
       vendorId: entityType === 'vendor' ? entityId : '',
       invoiceNumber: '',
@@ -617,6 +622,10 @@ function EnterDepositUF({ onAddDeposit }) {
 
   const handleEntryChoice = async (choice) => {
     if (!pendingDeposit) return;
+
+    if (depositSubmitInProgress) return;
+    setDepositSubmitInProgress(true);
+
     const newDeposit = pendingDeposit;
 
 setShowEntryChoice(false);
@@ -662,6 +671,7 @@ try {
       if (choice === 'continue') {
         clearForm();
         window.alert('The deposit was saved. Enter the next deposit.');
+        setDepositSubmitInProgress(false);
         return;
       }
 
@@ -672,6 +682,8 @@ try {
       window.alert(
         'The deposit was NOT saved.\n\n' + error.message
       );
+      setDepositSubmitInProgress(false);
+
     }
   };
 
@@ -811,6 +823,7 @@ try {
             <div className="enter-deposit-choice-buttons">
               <button
                 type="button"
+                disabled={depositSubmitInProgress}
                 onClick={() => handleEntryChoice('close')}
               >
                 ENTER DEPOSIT &amp; CLOSE
@@ -818,6 +831,7 @@ try {
 
               <button
                 type="button"
+                disabled={depositSubmitInProgress}
                 onClick={() => handleEntryChoice('continue')}
               >
                 ENTER DEPOSIT &amp; CONTINUE
@@ -825,6 +839,7 @@ try {
 
               <button
                 type="button"
+                disabled={depositSubmitInProgress}
                 onClick={() => {
                   setShowEntryChoice(false);
                   setPendingDeposit(null);

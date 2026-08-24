@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import './ModifyGLDepositUF.css';
+import { closeOverlay } from '../../../../engines/overlay/overlay-engine';
 import { API_BASE_URL } from '../../../../config/api';
 
 const temporaryDepositGLOptions = [
@@ -223,7 +224,9 @@ function normalizeGLOptions(payload) {
         value,
         glNo,
         classification,
-        label
+        label,
+        pc: String(item.pc || '').trim(),
+        parentGl: String(item.parentGl || '').trim()
       };
     })
     .filter(Boolean);
@@ -250,6 +253,21 @@ function ModifyGLDepositUF() {
 
   const [selectedGL, setSelectedGL] = useState('');
   const [selectedRefundGL, setSelectedRefundGL] = useState('');
+  const [selectedGLParent, setSelectedGLParent] = useState('');
+  const [selectedGLChild, setSelectedGLChild] = useState('');
+  const [showGLSelectionUF, setShowGLSelectionUF] = useState(false);
+
+  const parentGLOptions = glOptions.filter(
+  (option) => option.pc === 'P'
+  );
+
+  const childGLOptions = glOptions.filter(
+  (option) =>
+    option.pc === 'C' &&
+    option.parentGl === selectedGLParent
+  );
+
+
 
   const [loadingOptions, setLoadingOptions] = useState(false);
 
@@ -472,6 +490,20 @@ function ModifyGLDepositUF() {
     }
   };
 
+  const handleOpenGLSelection = () => {
+  setSelectedGLParent('');
+  setSelectedGLChild('');
+  setShowGLSelectionUF(true);
+};
+
+const handleConfirmGLSelection = () => {
+  if (!selectedGLChild) return;
+
+  setSelectedGL(selectedGLChild);
+  setShowGLSelectionUF(false);
+};
+
+
   const handleChangeGL = async () => {
     const row = locatedRowRef.current;
 
@@ -602,6 +634,11 @@ function ModifyGLDepositUF() {
 
       setSelectedGL('');
       setSelectedRefundGL('');
+      window.alert(
+  'Deposit Register GL classification changed successfully.'
+);
+
+closeOverlay();
     } catch (error) {
       console.error(
         'Unable to change Deposit Register GL:',
@@ -626,6 +663,96 @@ function ModifyGLDepositUF() {
 
   return (
     <div className="modify-gl-deposit-uf">
+
+     {showGLSelectionUF && (
+  <div className="enter-check-gl-overlay">
+    <div className="enter-check-gl-box">
+
+      <div className="enter-check-gl-title">
+        SELECT DEPOSIT G/L ACCOUNT
+      </div>
+
+      <div className="enter-check-gl-columns">
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Parent / Anchor GL Categories
+          </div>
+
+          <div className="enter-check-gl-list">
+            {parentGLOptions.map((gl) => (
+              <button
+                key={gl.glNo}
+                type="button"
+                className={
+                  selectedGLParent === gl.glNo
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() => {
+                  setSelectedGLParent(gl.glNo);
+                  setSelectedGLChild('');
+                }}
+              >
+                {gl.glNo} - {gl.classification}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Child GL Accounts
+          </div>
+
+          <div className="enter-check-gl-list">
+            {childGLOptions.map((gl) => (
+              <button
+                key={gl.glNo}
+                type="button"
+                className={
+                  selectedGLChild === gl.value
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() =>
+                  setSelectedGLChild(gl.value)
+                }
+              >
+                {gl.glNo} - {gl.classification}
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      <div className="enter-check-gl-actions">
+        <button
+          type="button"
+          disabled={!selectedGLChild}
+          onClick={handleConfirmGLSelection}
+        >
+          Select GL
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowGLSelectionUF(false);
+            setSelectedGLParent('');
+            setSelectedGLChild('');
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
+
       <div className="modify-gl-deposit-heading">
         {message}
       </div>
@@ -701,29 +828,19 @@ function ModifyGLDepositUF() {
           <label className="modify-gl-deposit-field deposit-new-gl-field">
             <span>Select New GL Classification:</span>
 
-            <select
-              value={selectedGL}
-              onChange={handleMainGLChange}
-              disabled={
-                !locatedRowRef.current ||
-                loadingOptions
-              }
-            >
-              <option value="">
-                {loadingOptions
-                  ? '-- Loading GL Options --'
-                  : '-- Select GL --'}
-              </option>
+          <button
+            type="button"
+            onClick={handleOpenGLSelection}
+            disabled={
+              !locatedRowRef.current ||
+              loadingOptions
+            }
+          >
+            {selectedGL
+              ? glOptions.find((option) => option.value === selectedGL)?.label
+              : '-- Select GL --'}
+          </button>
 
-              {glOptions.map((option) => (
-                <option
-                  key={`${option.value}-${option.label}`}
-                  value={option.value}
-                >
-                  {option.label}
-                </option>
-              ))}
-            </select>
           </label>
 
           <div className="modify-gl-deposit-note">

@@ -8,7 +8,13 @@ import './MonthlySummaryUF.css';
 import { useMemo, useState } from 'react';
 
 
-function MonthlySummaryUF({ onSelectPage }) {
+function MonthlySummaryUF({
+  onSelectPage,
+  depositRows = []
+}) {
+
+
+
   const [selectedMonth, setSelectedMonth] = useState('');
 
   const months = useMemo(
@@ -32,7 +38,26 @@ function MonthlySummaryUF({ onSelectPage }) {
   const currentMonth = new Date().getMonth();
 
   const handledpeateReport = () => {
-  if (!selectedMonth) {
+  const selectedMonthNumber = Number(selectedMonth);
+
+  if (!selectedMonthNumber) {
+    return;
+  }
+
+  const matches = depositRows.filter((row) => {
+  const monthCleared = Number(row.monthCleared);
+  const status = String(row.status || '').trim();
+
+  return (
+    status === 'Cleared' &&
+    monthCleared === selectedMonthNumber
+  );
+});
+
+  if (matches.length === 0) {
+    window.alert(
+      'No deposits found for selected month.'
+    );
     return;
   }
 

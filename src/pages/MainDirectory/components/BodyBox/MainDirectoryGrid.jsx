@@ -94,7 +94,11 @@ function MainDirectoryGrid({
                       onDoubleClickResident(row)
                     }
                   >
-                    <td>{row.acctNo || row.acct}</td>
+                    <td>
+                      {String(row.acctNo || row.acct || '')
+                        .replace(/\D/g, '')
+                        .padStart(6, '0')}
+                    </td>
                     <td>{row.lastName}</td>
                     <td>{row.firstName}</td>
                     <td>{row.middleName}</td>

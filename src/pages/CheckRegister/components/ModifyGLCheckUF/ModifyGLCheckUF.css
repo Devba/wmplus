@@ -3,13 +3,13 @@
 
 .modify-gl-check-uf {
   width: 100%;
-  min-height: 280px;
+  min-height: 600px;
   padding: 14px 32px 22px 32px;
   box-sizing: border-box;
   font-family: Arial, sans-serif;
   background: #ffffff;
 }
-
+.modify-gl-check-uf
 .modify-gl-check-message {
   margin: 0 0 16px 0;
   font-size: 18px;
@@ -118,8 +118,9 @@
 }
 
 .modify-gl-check-submit:not(:disabled) {
-  border-color: #777777;
-  background: #d9d9d9;
-  color: #111111;
+  border: 1px solid #000000;
+  background: #00c853;
+  color: #000000;
+  font-weight: 700;
   cursor: pointer;
 }

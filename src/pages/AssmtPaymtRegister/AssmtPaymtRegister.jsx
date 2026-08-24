@@ -6,15 +6,13 @@ import './AssmtPaymtRegister.css';
 import TopSection from './components/TopSection/TopSection';
 import BodyBox from './components/BodyBox/BodyBox';
 
-import assmtPaymtRegisterSampleData from './data/assmtPaymtRegisterSampleData.js';
+
 
 function AssmtPaymtRegister({ onSelectPage }) {
   const [
   paymentRows,
   setPaymentRows
-  ] = useState(
-  assmtPaymtRegisterSampleData
-  );
+] = useState([]);
 
   const [
     residentAccountFilter,

@@ -90,7 +90,7 @@ function AddResidentUF({
     closeButton?.click();
   };
 
-  const handleEnterData = () => {
+  const handleEnterData = async () => {
     const firstName =
       readValue('mdAddFirstName');
 
@@ -225,7 +225,7 @@ function AddResidentUF({
       return;
     }
 
-    onEnterData(enteredResident);
+    await onEnterData(enteredResident);
 
     window.alert(
       isEditMode

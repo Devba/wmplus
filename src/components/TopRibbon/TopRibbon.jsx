@@ -2,7 +2,7 @@
 import './TopRibbon.css'
 
 
-function TopRibbon() {
+function TopRibbon({ onSelectPage }) {
   return (
     <div className="top-ribbon">
     <div className="ribbon-inner">
@@ -171,7 +171,10 @@ function TopRibbon() {
 <div className="ribbon-group">
   <div className="ribbon-buttons">
 
-    <div className="ribbon-btn ribbon-btn-master">
+    <div
+  className="ribbon-btn ribbon-btn-master"
+  onClick={() => onSelectPage('master-navigation-panel')}
+    >
       <div className="label label-master">
         Go To<br />
         Master Nav<br />

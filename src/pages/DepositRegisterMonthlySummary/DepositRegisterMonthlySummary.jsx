@@ -16,7 +16,7 @@ function DepositRegisterMonthlySummary({ onSelectPage }) {
           <TopSection onSelectPage={onSelectPage} />
         </div>
 
-        <BodyBox />
+        <BodyBox depositRows={[]} />
 
       </div>
     </div>

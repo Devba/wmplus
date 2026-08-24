@@ -410,6 +410,8 @@ const selectResidentFromAddressSearch = (resident) => {
   const [serverGLAccounts, setServerGLAccounts] = useState([]);
   const [autoWithdrawal, setAutoWithdrawal] = useState(false);
 
+  
+
   const [residentNameSearch, setResidentNameSearch] =
   useState('');
   const [residentNameQuery, setResidentNameQuery] = useState('');
@@ -427,6 +429,8 @@ const selectResidentFromAddressSearch = (resident) => {
   
   const residentNameComboRef = useRef(null);
 const residentAddressComboRef = useRef(null);
+
+const checkSubmitInProgressRef = useRef(false);
 
 useEffect(() => {
   const handleClickOutsideResidentLookups = (event) => {
@@ -747,6 +751,9 @@ const visibleGLChildren = useMemo(
 
   const handleEntryChoice = async (choice) => {
   if (!pendingCheck) return;
+  if (checkSubmitInProgressRef.current) return;
+
+  checkSubmitInProgressRef.current = true;
 
   const newCheck = pendingCheck;
 
@@ -807,7 +814,8 @@ const visibleGLChildren = useMemo(
       window.alert(
         'The check was saved. Enter the next check.'
       );
-
+      
+      checkSubmitInProgressRef.current = false;
       return;
     }
 
@@ -827,6 +835,7 @@ const visibleGLChildren = useMemo(
       'The check was NOT saved.\n\n' +
       error.message
     );
+    checkSubmitInProgressRef.current = false;
   }
 };
 
@@ -1188,7 +1197,7 @@ const handleEnterCheck = async () => {
             <input
               type="text"
               value={vendorInvoiceNo}
-              maxLength={30}
+              maxLength={25}
               onChange={(event) =>
                 setVendorInvoiceNo(event.target.value)
               }

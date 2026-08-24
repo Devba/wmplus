@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import './AddVendorUF.css';
 import { API_BASE_URL } from '../../../../config/api';
+import '../../../CheckRegister/components/EnterCheckUF/EnterCheckUF.css';
 
 const VALID_STATE_CODES = new Set([
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -26,6 +27,24 @@ function AddVendorUF({
   const [glOptions, setGLOptions] = useState([]);
   const [selectedGLNumber, setSelectedGLNumber] = useState(
   vendor?.defaultGlNumber || ''
+);
+
+const [selectedGLName, setSelectedGLName] = useState(
+  vendor?.defaultGlName || ''
+);
+
+const [selectedGLParent, setSelectedGLParent] = useState('');
+const [selectedGLChild, setSelectedGLChild] = useState('');
+const [showGLSelectionUF, setShowGLSelectionUF] = useState(false);
+
+const parentGLOptions = glOptions.filter(
+  (gl) => String(gl.pc || '') === 'P'
+);
+
+const childGLOptions = glOptions.filter(
+  (gl) =>
+    String(gl.pc || '') === 'C' &&
+    String(gl.parentGl || '') === String(selectedGLParent || '')
 );
   
   const [eCheckYN, setECheckYN] = useState(
@@ -104,6 +123,36 @@ function AddVendorUF({
     return element?.value?.trim() || '';
   };
 
+  const handleOpenGLSelection = () => {
+
+  // window.alert('GL selector button clicked');
+
+  setSelectedGLParent('');
+  setSelectedGLChild('');
+  setShowGLSelectionUF(true);
+  };
+
+
+  const handleConfirmGLSelection = () => {
+  if (!selectedGLChild) return;
+
+  const selectedOption = glOptions.find(
+    (gl) => String(gl.glNumber) === String(selectedGLChild)
+  );
+
+  if (!selectedOption) return;
+
+  setSelectedGLNumber(
+    String(selectedOption.glNumber || '')
+  );
+
+  setSelectedGLName(
+  String(selectedOption.glName || '')
+  );
+
+  setShowGLSelectionUF(false);
+  };
+
   const closeOverlay = () => {
     const closeButton = document.querySelector('.overlay-close-btn, .overlay-close');
     closeButton?.click();
@@ -154,6 +203,95 @@ function AddVendorUF({
 
   return (
     <div className="vuf-container" ref={formRef}>
+
+     {showGLSelectionUF && (
+  <div className="enter-check-gl-overlay">
+    <div className="enter-check-gl-box">
+
+      <div className="enter-check-gl-title">
+        SELECT CHECK G/L ACCOUNT
+      </div>
+
+      <div className="enter-check-gl-columns">
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Parent / Anchor GL Categories
+          </div>
+
+          <div className="enter-check-gl-list">
+            {parentGLOptions.map((gl) => (
+              <button
+                key={gl.glNumber}
+                type="button"
+                className={
+                  selectedGLParent === String(gl.glNumber)
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() => {
+                  setSelectedGLParent(String(gl.glNumber));
+                  setSelectedGLChild('');
+                }}
+              >
+                {gl.glNumber} - {gl.glName}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Child GL Accounts
+          </div>
+
+          <div className="enter-check-gl-list">
+            {childGLOptions.map((gl) => (
+              <button
+                key={gl.glNumber}
+                type="button"
+                className={
+                  selectedGLChild === String(gl.glNumber)
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() =>
+                  setSelectedGLChild(String(gl.glNumber))
+                }
+              >
+                {gl.glNumber} - {gl.glName}
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      <div className="enter-check-gl-actions">
+        <button
+          type="button"
+          disabled={!selectedGLChild}
+          onClick={handleConfirmGLSelection}
+        >
+          Select GL
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowGLSelectionUF(false);
+            setSelectedGLParent('');
+            setSelectedGLChild('');
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
       <div className="vuf-grid">
         
         {/* CARD 1: General Info */}
@@ -715,35 +853,13 @@ if (!VALID_STATE_CODES.has(stateCode)) {
 <div className="vuf-form-group span-2">
   <label htmlFor="vdAddGLAccountName">Default GL Account Name</label>
 
-  <select
-    id="vdAddGLAccountName"
-    defaultValue={vendor?.defaultGlName || ''}
-    disabled={eCheckYN !== 'Y'}
-    onChange={(event) => {
-      const selectedName = event.target.value;
-
-      const selectedOption = glOptions.find(
-        (gl) => gl.glName === selectedName
-      );
-
-      setSelectedGLNumber(
-        selectedOption?.glNumber || ''
-      );
-    }}
+ <button
+  type="button"
+  id="vdAddGLAccountName"
+  onClick={handleOpenGLSelection}
   >
-    <option value="">
-      -- Select GL Account --
-    </option>
-
-    {glOptions.map((gl) => (
-      <option
-        key={gl.id}
-        value={gl.glName}
-      >
-        {gl.glName}
-      </option>
-    ))}
-  </select>
+  {selectedGLName || '-- Select GL Account --'}
+</button>
 </div>
 
             <div className="vuf-form-group span-3">

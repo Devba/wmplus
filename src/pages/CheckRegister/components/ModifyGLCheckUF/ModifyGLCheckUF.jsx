@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../../config/api';
 import './ModifyGLCheckUF.css';
+import { closeOverlay } from '../../../../engines/overlay/overlay-engine';
 
 const temporaryCheckGLOptions = [
   {
@@ -184,7 +185,9 @@ function normalizeGLOptions(payload) {
         value,
         label,
         glNo: String(glNo || '').trim(),
-        classification: String(classification || '').trim()
+        classification: String(classification || '').trim(),
+        pc: String(item.pc || '').trim(),
+        parentGl: String(item.parentGl || '').trim()
       };
     })
     .filter(Boolean);
@@ -207,7 +210,20 @@ function ModifyGLCheckUF() {
 
   const [glOptions, setGLOptions] = useState([]);
   const [selectedGL, setSelectedGL] = useState('');
+  const [selectedGLParent, setSelectedGLParent] = useState('');
+  const [showGLSelectionUF, setShowGLSelectionUF] = useState(false);
+  const [selectedGLChild, setSelectedGLChild] = useState('');
   const [loadingGLOptions, setLoadingGLOptions] = useState(false);
+
+  const parentGLOptions = glOptions.filter(
+  (option) => option.pc === 'P'
+  );
+
+  const childGLOptions = glOptions.filter(
+  (option) =>
+    option.pc === 'C' &&
+    option.parentGl === selectedGLParent
+  );
 
   const locatedRowRef = useRef(null);
   const transactionInputRef = useRef(null);
@@ -390,6 +406,20 @@ function ModifyGLCheckUF() {
     setSelectedGL(event.target.value);
   };
 
+  const handleOpenGLSelection = () => {
+  setSelectedGLParent('');
+  setSelectedGLChild('');
+  setShowGLSelectionUF(true);
+  };
+
+  const handleConfirmGLSelection = () => {
+  if (!selectedGLChild) return;
+
+  setSelectedGL(selectedGLChild);
+  setShowGLSelectionUF(false);
+  };
+
+
   const handleChangeGL = async () => {
     const row = locatedRowRef.current;
 
@@ -474,6 +504,7 @@ function ModifyGLCheckUF() {
 
       setSelectedGL('');
       setMessage('GL classification changed successfully.');
+      closeOverlay();
     } catch (error) {
       console.error('Unable to change Check Register GL:', error);
 
@@ -490,6 +521,95 @@ function ModifyGLCheckUF() {
 
   return (
     <div className="modify-gl-check-uf">
+
+     {showGLSelectionUF && (
+  <div className="enter-check-gl-overlay">
+    <div className="enter-check-gl-box">
+
+      <div className="enter-check-gl-title">
+        SELECT CHECK G/L ACCOUNT
+      </div>
+
+      <div className="enter-check-gl-columns">
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Parent / Anchor GL Categories
+          </div>
+
+          <div className="enter-check-gl-list">
+            {parentGLOptions.map((gl) => (
+              <button
+                key={gl.glNo}
+                type="button"
+                className={
+                  selectedGLParent === gl.glNo
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() => {
+                  setSelectedGLParent(gl.glNo);
+                  setSelectedGLChild('');
+                }}
+              >
+                {gl.glNo} - {gl.classification}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="enter-check-gl-column">
+          <div className="enter-check-gl-column-title">
+            Child GL Accounts
+          </div>
+
+          <div className="enter-check-gl-list">
+            {childGLOptions.map((gl) => (
+              <button
+                key={gl.glNo}
+                type="button"
+                className={
+                  selectedGLChild === gl.value
+                    ? 'enter-check-gl-option selected'
+                    : 'enter-check-gl-option'
+                }
+                onClick={() =>
+                  setSelectedGLChild(gl.value)
+                }
+              >
+                {gl.glNo} - {gl.classification}
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      <div className="enter-check-gl-actions">
+        <button
+          type="button"
+          disabled={!selectedGLChild}
+          onClick={handleConfirmGLSelection}
+        >
+          Select GL
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowGLSelectionUF(false);
+            setSelectedGLParent('');
+            setSelectedGLChild('');
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
       <div className="modify-gl-check-message">
         {message}
       </div>
@@ -538,29 +658,18 @@ function ModifyGLCheckUF() {
         <label className="modify-gl-check-field modify-gl-check-new-gl-field">
           <span>Select New GL# / Classification</span>
 
-          <select
-            value={selectedGL}
-            onChange={handleGLChange}
-            disabled={
-              !locatedRowRef.current ||
-              loadingGLOptions
-            }
-          >
-            <option value="">
-              {loadingGLOptions
-                ? '-- Loading GL Options --'
-                : '-- Select GL --'}
-            </option>
-
-            {glOptions.map((option) => (
-              <option
-                key={`${option.value}-${option.label}`}
-                value={option.value}
-              >
-                {option.label}
-              </option>
-            ))}
-          </select>
+ <button
+  type="button"
+  onClick={handleOpenGLSelection}
+  disabled={
+    !locatedRowRef.current ||
+    loadingGLOptions
+  }
+>
+  {selectedGL
+    ? glOptions.find((option) => option.value === selectedGL)?.label
+    : '-- Select GL --'}
+</button>
         </label>
       </div>
 

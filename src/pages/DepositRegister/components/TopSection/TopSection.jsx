@@ -27,6 +27,7 @@ function TopSection({
       <ButtonRow
         onSelectPage={onSelectPage}
         onAddDeposit={onAddDeposit}
+        depositRows={depositRows}
       />
     </div>
   );

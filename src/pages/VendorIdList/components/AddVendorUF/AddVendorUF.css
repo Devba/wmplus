@@ -1,3 +1,7 @@
+
+
+
+
 /* ===========================================================
    VENDOR ID LIST - ADD VENDOR USER FORM
    Modernized Premium CSS Grid & Card Styles
@@ -204,4 +208,11 @@
     width: 100%;
     text-align: center;
   }
+}
+
+
+
+.vuf-container .enter-check-gl-overlay {
+  position: fixed;
+  inset: 0;
 }

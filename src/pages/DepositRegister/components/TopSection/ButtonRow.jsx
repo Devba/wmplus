@@ -8,7 +8,11 @@ import MonthlySummaryUF from '../MonthlySummaryUF/MonthlySummaryUF';
 import VoidDepositUF from '../VoidDepositUF/VoidDepositUF.jsx';
 import ModifyGLDepositUF from '../ModifyGLDepositUF/ModifyGLDepositUF.jsx';
 
-function ButtonRow({ onSelectPage, onAddDeposit }) {
+function ButtonRow({
+  onSelectPage,
+  onAddDeposit,
+  depositRows
+}) {
 
 const handleEnterDeposits = () => {
   openOverlay({
@@ -27,7 +31,10 @@ const handleEnterDeposits = () => {
     openOverlay({
       title: 'DEPOSIT SUMMARY REPORT',
       component: (
-        <MonthlySummaryUF onSelectPage={onSelectPage} />
+        <MonthlySummaryUF
+          onSelectPage={onSelectPage}
+          depositRows={depositRows}
+        />
       ),
       width: '360px',
       maxWidth: '360px'

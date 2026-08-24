@@ -3,7 +3,7 @@
 
 .modify-gl-deposit-uf {
   width: 100%;
-  min-height: 350px;
+  min-height: 600px;
   padding: 14px 16px 20px 16px;
   box-sizing: border-box;
   background: #eeeeee;
@@ -139,8 +139,9 @@
 }
 
 .modify-gl-deposit-submit:not(:disabled) {
-  border-color: #777777;
-  background: #dddddd;
-  color: #111111;
+  border: 1px solid #000000;
+  background: #00c853;
+  color: #000000;
+  font-weight: 700;
   cursor: pointer;
 }
