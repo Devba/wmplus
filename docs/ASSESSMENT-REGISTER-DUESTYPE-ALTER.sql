@@ -14,9 +14,16 @@ ALTER TABLE AssessmentRegister
 ALTER TABLE AssessmentRegister DROP INDEX uq_res_freq;
 ALTER TABLE AssessmentRegister ADD UNIQUE KEY uq_res_freq (MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, DuesType, Frequency);
 
+-- Step 2b — Add DuesType to AssessmentRegisterPeriod and update its unique key (allows two Annually Period 1 rows)
+ALTER TABLE AssessmentRegisterPeriod ADD COLUMN DuesType ENUM('AnnualDues','SpecialAssessment') NOT NULL DEFAULT 'AnnualDues' AFTER Frequency;
+ALTER TABLE AssessmentRegisterPeriod DROP INDEX uq_per;
+ALTER TABLE AssessmentRegisterPeriod ADD UNIQUE KEY uq_per (MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, DuesType, Frequency, PeriodNumber);
+
 -- Verification
 -- SHOW CREATE TABLE AssessmentRegister;
+-- SHOW CREATE TABLE AssessmentRegisterPeriod;
 -- SELECT ResidentAccountID, Frequency, DuesType, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment FROM AssessmentRegister WHERE ResidentAccountID='001006';
+-- SELECT ResidentAccountID, Frequency, DuesType, PeriodNumber, PeriodAmount FROM AssessmentRegisterPeriod WHERE ResidentAccountID='001006';
 
 -- Step 3 — Correct 001006 / Jim Northrupt (currently 1 combined Annually $1,500) → 2 separate Annually $1,000 + $500
 -- Run only after Steps 1-2 succeed. Delete the combined row and recreate the two separate ones via the new logic.
@@ -32,3 +39,6 @@ ALTER TABLE AssessmentRegister ADD UNIQUE KEY uq_res_freq (MgtCoClientID, HOALic
 -- ALTER TABLE AssessmentRegister DROP INDEX uq_res_freq;
 -- ALTER TABLE AssessmentRegister ADD UNIQUE KEY uq_res_freq (MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency);
 -- ALTER TABLE AssessmentRegister DROP COLUMN DuesType;
+-- ALTER TABLE AssessmentRegisterPeriod DROP INDEX uq_per;
+-- ALTER TABLE AssessmentRegisterPeriod ADD UNIQUE KEY uq_per (MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency, PeriodNumber);
+-- ALTER TABLE AssessmentRegisterPeriod DROP COLUMN DuesType;
