@@ -162,15 +162,42 @@ app.get('/api/residents/:account_id/current', async (req, res) => {
     }
 
     const [rows] = await db.query(
-      `
-        SELECT *
-        FROM ResidentMaster
-        WHERE ResidentAccountID = ?
-          AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
-        LIMIT 1
-      `,
-      [accountId]
-    );
+  `
+    SELECT
+      rm.*,
+
+      ar.TotalAnnualDuesPaymentsYTD
+        AS AnnualDuesPaidYTD,
+
+      ar.CurrentAssessmentPaymentDue
+        AS AnnualDuesBalance,
+
+      ar.TotalSpecialAssessmentPaidYTD
+        AS SpecialAssessmentPaidYTD,
+
+      ar.SpecialAssessmentPaymentDue
+        AS SpecialAssessmentBalance,
+
+      ar.OtherFinesAndFeesDue
+        AS FinesFeesBalance
+
+    FROM ResidentMaster rm
+
+    LEFT JOIN AssessmentRegister ar
+      ON ar.ResidentAccountID = rm.ResidentAccountID
+     AND ar.ActiveFlag = 'Y'
+
+    WHERE rm.ResidentAccountID = ?
+      AND (
+        rm.DeletedFlag IS NULL
+        OR rm.DeletedFlag != 'Y'
+      )
+
+    ORDER BY ar.CurrentFiscalYearBegins DESC
+    LIMIT 1
+  `,
+  [accountId]
+);
 
     if (rows.length === 0) {
       return res.status(404).json({
