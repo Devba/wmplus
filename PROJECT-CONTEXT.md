@@ -219,6 +219,8 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
 
 **Siguiente paso sugerido (pendiente de confirmar con José):** crear `CashFlowTransaction` unificada, migrar datos de las 6 shards, y actualizar `server.js` para escribir/leer la tabla única. Las tablas de soporte (`LedgerMaster`, `MonthlyReportRow`, etc.) no están particionadas y no requieren cambio.
 
+**Enfoque preferido (sugerido 2026-08-27 — "una tabla + vistas"):** en lugar de migrar y eliminar los shards, crear UNA tabla física `CashFlowTransaction` (fuente de verdad, con `BankType` como discriminador y clave compuesta) y recrear las 6 tablas `CashFlowTransaction_*` como **VISTAS**: `CREATE VIEW CashFlowTransaction_<X> AS SELECT * FROM CashFlowTransaction WHERE BankType='<X>' WITH CHECK OPTION` (X = Operating/Capital/Escrow/MoneyMarket/Savings/CD). Ventajas: (1) compatibilidad total hacia atrás — queries/reportes existentes siguen funcionando contra los nombres de vista; (2) las vistas son actualizables en MySQL y el `INSERT` de `server.js` ya provee `BankType`, así que `cfTableMap` (server.js ~3530) sigue funcionando **sin cambios de código**; (3) una sola tabla física para índices/mantenimiento. Pasos: crear `CashFlowTransaction`, migrar datos de los 6 shards (`INSERT ... SELECT *`), renombrar shards a `_backup`, crear las vistas. Incluir `CashFlowTransaction_CD` (aunque hoy no esté en `cfTableMap`). Las tablas de soporte no requieren cambio.
+
 ---
 
 *(Este documento se actualiza conforme cambian los contratos, el despliegue y las decisiones. Mantener al día.)*
