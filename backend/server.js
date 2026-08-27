@@ -1386,7 +1386,7 @@ Rules:
    answerSql must be a SELECT that returns a single row (COUNT(*), COUNT(DISTINCT ...), SUM(...), etc.).
 4. "activo/activos/inactivos" -> ActiveResidentFlag='Y'/'N'. Always add DeletedFlag='N' to ResidentMaster filters.
 5. "estado de florida" -> StateCode='FL'. Use LIKE for partial text (EmailAddress LIKE '%x%', PrimaryPhone LIKE '%305%'). Starting letters -> LastName LIKE 'A%'.
-6. Real debt = AnnualDuesBalance>0 OR SpecialAssessmentBalance>0. "deudores/mayores deudores" -> that plus ORDER BY (AnnualDuesBalance+SpecialAssessmentBalance) DESC, LIMIT 10 when asked for "los 10".
+6. Real debt = AssessmentRegister TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0 (source: AssessmentRegister, not ResidentMaster legacy balances AnnualDuesBalance/SpecialAssessmentBalance which are deprecated). "deudores/mayores deudores" -> ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0) plus ORDER BY (SELECT COALESCE(SUM(TotalCurrentAR),0) FROM AssessmentRegister WHERE ResidentAccountID=ResidentMaster.ResidentAccountID) DESC, LIMIT 10 when asked for "los 10".
 7. Fines/violations ("multas", "multa", "violaciones", "fines"): to list residents with fines use
    ResidentAccountID IN (SELECT ResidentAccountID FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0)
    For counts ("cuantos han tenido multas") use SELECT COUNT(DISTINCT ResidentAccountID) FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0.
@@ -1395,8 +1395,8 @@ Rules:
 
 Examples:
 Input: "residentes de florida activos" -> {"mode":"filter","whereClause":"StateCode='FL' AND ActiveResidentFlag='Y' AND DeletedFlag='N'"}
-Input: "cuantos residentes tienen deudas" -> {"mode":"answer","answerSql":"SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND (AnnualDuesBalance>0 OR SpecialAssessmentBalance>0)","answerLabel":"Residentes con deuda"}
-Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesBalance>0 OR SpecialAssessmentBalance>0) AND DeletedFlag='N'","orderBy":"(AnnualDuesBalance+SpecialAssessmentBalance) DESC","limit":10}`;
+Input: "cuantos residentes tienen deudas" -> {"mode":"answer","answerSql":"SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0)","answerLabel":"Residentes con deuda"}
+Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0) AND DeletedFlag='N'","orderBy":"(SELECT COALESCE(SUM(TotalCurrentAR),0) FROM AssessmentRegister WHERE ResidentAccountID=ResidentMaster.ResidentAccountID) DESC","limit":10}`;
 
     function conditionsToSql(conditions) {
       if (!conditions || conditions.length === 0) return '1=1';
@@ -1449,7 +1449,7 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesB
         if (isDebt) {
           return {
             mode: 'answer',
-            answerSql: "SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND (AnnualDuesBalance>0 OR SpecialAssessmentBalance>0)",
+            answerSql: "SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0)",
             answerLabel: 'Residentes con deuda'
           };
         }
@@ -1468,9 +1468,9 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesB
         conditions.push({ raw: "ResidentAccountID IN (SELECT ResidentAccountID FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0)" });
       }
 
-      // Debt (real debt = dues + special assessment)
+      // Debt (real debt = AssessmentRegister TotalCurrentAR/due >0 - B6; legacy AnnualDuesBalance deprecated)
       if (isDebt) {
-        conditions.push({ raw: "(AnnualDuesBalance>0 OR SpecialAssessmentBalance>0) AND ActiveResidentFlag='Y' AND DeletedFlag='N'" });
+        conditions.push({ raw: "ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0) AND ActiveResidentFlag='Y' AND DeletedFlag='N'" });
       }
 
       // Names starting with a letter ("nombres que empiecen con a", "empiezan con la letra m")
@@ -1574,9 +1574,9 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesB
       let orderBy = '';
       let limit = null;
 
-      // Ordering for debtors
+      // Ordering for debtors (B6: sort by AssessmentRegister TotalCurrentAR)
       if (isDebt) {
-        orderBy = '(AnnualDuesBalance+SpecialAssessmentBalance) DESC';
+        orderBy = '(SELECT COALESCE(SUM(TotalCurrentAR),0) FROM AssessmentRegister WHERE ResidentAccountID=ResidentMaster.ResidentAccountID) DESC';
         if (lower.includes('10') || lower.includes('diez')) limit = 10;
       }
 
