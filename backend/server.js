@@ -851,6 +851,16 @@ app.post('/api/check-register', async (req, res) => {
       WHERE BankAccountID = ?
     `, [amount, bankAccountId]);
 
+    // CashFlow posting for CR (Cash Out) — bank-specific, traceable to CheckRegister
+    const [bankRowsCF_CR] = await connection.query("SELECT BankType FROM BankAccount WHERE BankAccountID=? LIMIT 1", [bankAccountId]);
+    const bankTypeCF_CR = bankRowsCF_CR[0]?.BankType || 'Operating';
+    const cfTableMapCR = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket', CD: 'CashFlowTransaction_CD' };
+    const cfTableCR = cfTableMapCR[bankTypeCF_CR] || 'CashFlowTransaction_Operating';
+    const txDateCR = c.date_issued || new Date().toISOString().slice(0, 10);
+    const fyLabelCR = String(new Date(txDateCR).getFullYear());
+    const fyPeriodCR = derivePeriodNumber(txDateCR, 'Monthly');
+    await connection.query(`INSERT INTO ${cfTableCR} (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID, FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber, TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber, CashOutAmount, TransactionDescription, OperatorID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ['MGTCO-001', 'HOA-FL-2024-001', bankTypeCF_CR, bankAccountId, fyLabelCR, fyPeriodCR, 'CR', txnNum, txDateCR, c.payee_id || '', c.payee_id || '', c.gl_number || 5000, amount, c.note || 'Check', 'SYSTEM']);
+
     await connection.commit();
     res.status(201).json({
       success: true,
@@ -1097,6 +1107,16 @@ app.post('/api/deposit-register', async (req, res) => {
       SET StartingBalance = StartingBalance + ?, TimeStampUpdated = NOW()
       WHERE BankAccountID = ?
     `, [amount, bankAccountId]);
+
+    // CashFlow posting for DP (Cash In) — bank-specific, traceable to DepositRegister
+    const [bankRowsCF_DP] = await connection.query("SELECT BankType FROM BankAccount WHERE BankAccountID=? LIMIT 1", [bankAccountId]);
+    const bankTypeCF_DP = bankRowsCF_DP[0]?.BankType || 'Operating';
+    const cfTableMapDP = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket', CD: 'CashFlowTransaction_CD' };
+    const cfTableDP = cfTableMapDP[bankTypeCF_DP] || 'CashFlowTransaction_Operating';
+    const txDateDP = d.date_deposited || new Date().toISOString().slice(0, 10);
+    const fyLabelDP = String(new Date(txDateDP).getFullYear());
+    const fyPeriodDP = derivePeriodNumber(txDateDP, 'Monthly');
+    await connection.query(`INSERT INTO ${cfTableDP} (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID, FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber, TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber, CashInAmount, TransactionDescription, OperatorID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ['MGTCO-001', 'HOA-FL-2024-001', bankTypeCF_DP, bankAccountId, fyLabelDP, fyPeriodDP, 'DP', txnNum, txDateDP, d.payer_name || '', d.resident_id || d.vendor_id || '', d.gl_number || 4000, amount, d.note || 'Deposit', 'SYSTEM']);
 
     await connection.commit();
     res.status(201).json({
