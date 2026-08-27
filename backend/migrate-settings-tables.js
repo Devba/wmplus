@@ -161,23 +161,43 @@ async function runMigration() {
 
     // ─────────────────────────────────────────────────────────
     // 4. DuesProgramming  (Annual / Special Dues page)
-    //    Two rows: one per section type
+    //    Rich schema matching live DB (HOA-wide schedule rules). B7: reconciled with AssessmentRegister flow.
+    //    Two rows: one per DuesType (annualDues / specialAssessment)
     // ─────────────────────────────────────────────────────────
     if (!(await tableExists('DuesProgramming'))) {
-      console.log('➕ Creating table DuesProgramming...');
+      console.log('➕ Creating table DuesProgramming (rich schema)...');
       await db.query(`
         CREATE TABLE DuesProgramming (
           DuesProgrammingID   INT AUTO_INCREMENT PRIMARY KEY,
-          SectionType         VARCHAR(20)   NOT NULL DEFAULT '',
-          PaymentFrequency    VARCHAR(20)   NOT NULL DEFAULT 'Annually',
-          DueDate             VARCHAR(10)   NOT NULL DEFAULT '',
-          TimeStampUpdated    DATETIME      DEFAULT NOW()
+          MgtCoClientID       VARCHAR(20)   NOT NULL DEFAULT 'MGTCO-001',
+          HOALicenseNumber    VARCHAR(20)   NOT NULL DEFAULT 'HOA-FL-2024-001',
+          DuesType            VARCHAR(20)   NOT NULL,
+          FiscalYearLabel     VARCHAR(20)           DEFAULT NULL,
+          AssessmentFrequency VARCHAR(20)           DEFAULT 'Annually',
+          DuesRate            DECIMAL(10,2)         DEFAULT NULL,
+          PaymentDueDate      DATE                  DEFAULT NULL,
+          FirstQuarterDueDate DATE                  DEFAULT NULL,
+          SecondQuarterDueDate DATE                 DEFAULT NULL,
+          ThirdQuarterDueDate DATE                  DEFAULT NULL,
+          FourthQuarterDueDate DATE                 DEFAULT NULL,
+          MonthlyDueDay       TINYINT               DEFAULT NULL,
+          InvoiceGLNumber     INT                   DEFAULT NULL,
+          RevenueGLNumber     INT                   DEFAULT NULL,
+          ActiveFlag          CHAR(1)       NOT NULL DEFAULT 'Y',
+          OperatorID          VARCHAR(20)           DEFAULT NULL,
+          TimeStampCreated    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          TimeStampUpdated    DATETIME              DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
-      await db.query(`INSERT INTO DuesProgramming (SectionType) VALUES ('annualDues'), ('specialAssessment')`);
-      console.log('✅ DuesProgramming created and seeded.');
+      await db.query(`
+        INSERT INTO DuesProgramming (MgtCoClientID, HOALicenseNumber, DuesType, AssessmentFrequency, ActiveFlag)
+        VALUES
+          ('MGTCO-001', 'HOA-FL-2024-001', 'annualDues', 'Annually', 'Y'),
+          ('MGTCO-001', 'HOA-FL-2024-001', 'specialAssessment', 'Annually', 'Y')
+      `);
+      console.log('✅ DuesProgramming created and seeded (rich schema, 2 rows).');
     } else {
-      console.log('ℹ️  Table DuesProgramming already exists.');
+      console.log('ℹ️  Table DuesProgramming already exists (rich schema expected).');
     }
 
     // ─────────────────────────────────────────────────────────

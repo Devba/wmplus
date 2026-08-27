@@ -2,8 +2,8 @@
 
 > **Para cualquier agente opencode (nuevo o existente):** lee este documento + `AGENTS.md` ANTES de trabajar. Contiene el historial, contratos de API, acuerdos del equipo y estado actual del despliegue.
 
-**Última actualización:** 2026-08-20
-**Rama de trabajo actual:** `features/vivomysql-mcp`
+**Última actualización:** 2026-08-27
+**Rama de trabajo actual:** `BravoFrontend` (APR Fase 1 + B1 integrados el 2026-08-27; rama de trabajo de APR: `feature/apr-unified-register`)
 **Branches relevantes:** `BravoFrontend` (integración principal), `feature/register-entry-wiring` (trabajo de Hal/frontend), `backend` (backend histórico), `main`
 
 ---
@@ -191,6 +191,35 @@ UseInXFER CHAR(1) NOT NULL DEFAULT 'N'
 - `PROJECT-CONTEXT.md`
 - `GL-DEPLOYMENT-REPORT.md`
 - `ROADMAP-2WEEKS.md`
+
+---
+
+## 13. APR Assessment Tables — Verificación y B1 (2026-08-27)
+
+**Verificación:** se revisó el esquema real de `hoamanager26` y el código `backend/server.js` contra el documento frontend "APR / Assessment Table Relationship". Reporte completo (inglés): `docs/APR-VERIFICATION-REPORT.en.md`. Resumen:
+- Las 7 tablas existen con esquemas acordes al rol previsto.
+- Gaps encontrados: `ResidentMaster` aún es fuente financiera (escribe importes en alta/edición); `AssessmentRegister`/`Period` solo se tocan en posting y **nunca se inicializan al crear residente**; `AssessmentPaymentSummary` existe en BD pero **cero referencias en código**; `DuesRates` desconectado del flujo.
+- `DuesProgramming` en BD tiene el esquema rico (`AssessmentFrequency`, `DuesType`); el lookup de frecuencia APR funciona. El DDL mínimo en `migrate-settings-tables.js` está desactualizado vs la BD (drift).
+
+**Decisiones de arquitectura confirmadas (José, 2026-08-27):** (1) split de 7 tablas confirmado; (2) Add Resident **inicializa** `AssessmentRegister` + `AssessmentRegisterPeriod`; (3) edición de Main Directory dispara recálculo solo si cambia `AnnualDuesRate`/`SpecialAssessmentRate` (preservando historia APR); (4) `AssessmentPaymentSummary` se mantiene **transaccionalmente en el posting APR**; (5) se retiene `ResidentMaster` (IDs/nombres/lookup) y Hal & Rick limpian importes legacy + sufijos `#` en DBeaver antes de init.
+
+**B1 implementado y mergeado:** `POST /api/residents` ahora crea `AssessmentRegister` + `AssessmentRegisterPeriod` en **una transacción** (`db.withTransaction`), derivando importes 100% de `DuesRates` por rate code, frecuencia desde `DuesProgramming`, y año fiscal desde `FiscalYearSetup` (fallback `año-01-01` + warning). Commit `d4d7cfd`, merge fast-forward y push a `origin/BravoFrontend`. Se corrigió bug: los rate codes se guardan como string (no `parseDecimal`→0). Probado contra BD real (residente `Type A` → `AssessmentRegister` 5000/500, 1 periodo). Backlog B2–B7 pendiente (posición, summary, sync edición, derivación rates, deuda, higiene migraciones).
+
+**Limpieza DBeaver (Hal & Rick):** field-list definido — reset de `AnnualDues`, `AnnualDuesPaidYTD`, `AnnualDuesBalance`, `SpecialAssessmentDues`, `SpecialAssessmentPaidYTD`, `SpecialAssessmentBalance`, `FinesFeesBalance`, `PriorYearCredit`, `ResidentCreditBalance`(→0), `NextYear*`, y remover sufijos `#xxx` de `ResidenceAddress`; mantener `AnnualDuesRate`/`SpecialAssessmentRate`. Backup previo de `ResidentMaster`.
+
+## 14. Consolidación de tablas CashFlow* → una sola `CashFlow` (2026-08-27)
+
+**Estado: NO INICIADO.** No existe una tabla única `CashFlow`/`CashFlowTransaction`; el código escribe en tablas particionadas por tipo de banco.
+
+**Tablas actuales (`hoamanager26`):**
+- Transacciones particionadas: `CashFlowTransaction_Operating`, `_Capital`, `_Escrow`, `_MoneyMarket`, `_Savings`, `_CD` (6 tablas).
+- Soporte: `CashFlowLedgerMaster` (maestro por banco), `CashFlowMonthlyReportRow`, `CashFlowPostingControl`, `CashFlowRowControl`, `CashFlow_Bank_Template`.
+
+**Factibilidad: ALTA.** Las 6 `CashFlowTransaction_*` son **idénticas en esquema**; cada una ya posee la columna `BankType` (solo difieren en su valor DEFAULT: Operating/Capital/Escrow/MoneyMarket/Savings/CD). Consolidar = una sola `CashFlowTransaction` (o `CashFlow`) con `BankType` como discriminador y clave compuesta. El `cfTableMap` en `server.js` (~línea 3530) despacha por banco a la tabla específica → debe eliminarse y escribir siempre a la tabla única. `CD` existe en BD pero no está en `cfTableMap` (el posting APR no lo usa hoy).
+
+**Siguiente paso sugerido (pendiente de confirmar con José):** crear `CashFlowTransaction` unificada, migrar datos de las 6 shards, y actualizar `server.js` para escribir/leer la tabla única. Las tablas de soporte (`LedgerMaster`, `MonthlyReportRow`, etc.) no están particionadas y no requieren cambio.
+
+**Enfoque preferido (sugerido 2026-08-27 — "una tabla + vistas"):** en lugar de migrar y eliminar los shards, crear UNA tabla física `CashFlowTransaction` (fuente de verdad, con `BankType` como discriminador y clave compuesta) y recrear las 6 tablas `CashFlowTransaction_*` como **VISTAS**: `CREATE VIEW CashFlowTransaction_<X> AS SELECT * FROM CashFlowTransaction WHERE BankType='<X>' WITH CHECK OPTION` (X = Operating/Capital/Escrow/MoneyMarket/Savings/CD). Ventajas: (1) compatibilidad total hacia atrás — queries/reportes existentes siguen funcionando contra los nombres de vista; (2) las vistas son actualizables en MySQL y el `INSERT` de `server.js` ya provee `BankType`, así que `cfTableMap` (server.js ~3530) sigue funcionando **sin cambios de código**; (3) una sola tabla física para índices/mantenimiento. Pasos: crear `CashFlowTransaction`, migrar datos de los 6 shards (`INSERT ... SELECT *`), renombrar shards a `_backup`, crear las vistas. Incluir `CashFlowTransaction_CD` (aunque hoy no esté en `cfTableMap`). Las tablas de soporte no requieren cambio.
 
 ---
 

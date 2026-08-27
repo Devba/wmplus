@@ -416,6 +416,13 @@ if (nextResidentNumber > 999999) {
     const residentAccountId =
       String(nextResidentNumber).padStart(6, '0');
     const result = await db.withTransaction(async (conn) => {
+      // B5: derivar importes 100% de DuesRates (fallback al valor del frontend si el rate no existe)
+      const [annRow] = await conn.query("SELECT CurrentRate, NextRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [r.annual_dues_rate || '']);
+      const [specRow] = await conn.query("SELECT CurrentRate, NextRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [r.special_assessment_rate || '']);
+      const annualReq = annRow && annRow[0] ? Number(annRow[0].CurrentRate) : parseDecimal(r.annual_dues);
+      const specialReq = specRow && specRow[0] ? Number(specRow[0].CurrentRate) : parseDecimal(r.special_assessment_dues);
+      const annualNextReq = annRow && annRow[0] ? Number(annRow[0].NextRate) : parseDecimal(r.next_year_annual_dues);
+      const specialNextReq = specRow && specRow[0] ? Number(specRow[0].NextRate) : parseDecimal(r.next_year_special_assmt_dues);
       const [insRes] = await conn.query(`
         INSERT INTO ResidentMaster (
           ResidentAccountID, FirstName, MiddleName, LastName, DisplayName, ResidenceAddress, BillingAddress,
@@ -449,11 +456,11 @@ if (nextResidentNumber > 999999) {
         r.addl_last_name || null,
         r.addl_email || null,
         r.annual_dues_rate || null,
-        parseDecimal(r.annual_dues),
+        annualReq,
         r.special_assessment_rate || null,
-        parseDecimal(r.special_assessment_dues),
-        parseDecimal(r.next_year_annual_dues),
-        parseDecimal(r.next_year_special_assmt_dues),
+        specialReq,
+        annualNextReq,
+        specialNextReq,
         r.resident_notes || null
       ]);
       await initializeAssessmentRegister(conn, {
@@ -503,6 +510,14 @@ if (duplicateAddressRows.length > 0) {
     error: 'That residence address is already assigned to another resident.'
   });
 }
+    const [oldRows] = await db.query("SELECT AnnualDuesRate, SpecialAssessmentRate, LastName, ResidenceAddress FROM ResidentMaster WHERE ResidentAccountID=? LIMIT 1", [account_id]);
+    // B5: derivar importes desde DuesRates para no depender del valor hand-entered del frontend
+    const [annUpRow] = await db.query("SELECT CurrentRate, NextRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [r.annual_dues_rate || '']);
+    const [specUpRow] = await db.query("SELECT CurrentRate, NextRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [r.special_assessment_rate || '']);
+    const annUpReq = annUpRow && annUpRow[0] ? Number(annUpRow[0].CurrentRate) : parseDecimal(r.annual_dues);
+    const specUpReq = specUpRow && specUpRow[0] ? Number(specUpRow[0].CurrentRate) : parseDecimal(r.special_assessment_dues);
+    const annUpNextReq = annUpRow && annUpRow[0] ? Number(annUpRow[0].NextRate) : parseDecimal(r.next_year_annual_dues);
+    const specUpNextReq = specUpRow && specUpRow[0] ? Number(specUpRow[0].NextRate) : parseDecimal(r.next_year_special_assmt_dues);
     await db.query(`
       UPDATE ResidentMaster SET
         FirstName = ?,
@@ -558,14 +573,72 @@ if (duplicateAddressRows.length > 0) {
       r.addl_last_name || null,
       r.addl_email || null,
       r.annual_dues_rate || null,
-      parseDecimal(r.annual_dues),
+      annUpReq,
       r.special_assessment_rate || null,
-      parseDecimal(r.special_assessment_dues),
-      r.next_year_annual_dues_rate || null,
-      parseDecimal(r.next_year_special_assmt_dues),
+      specUpReq,
+      annUpNextReq,
+      specUpNextReq,
       r.resident_notes || null,
       account_id
     ]);
+    // B4: sincronizar AssessmentRegister si cambió un valor relevante de assessment (preserva historial de pagos)
+    try {
+      const oldAnn = oldRows[0]?.AnnualDuesRate || null;
+      const oldSpec = oldRows[0]?.SpecialAssessmentRate || null;
+      const oldName = oldRows[0]?.LastName || null;
+      const oldAddr = oldRows[0]?.ResidenceAddress || null;
+      const newAnn = r.annual_dues_rate || null;
+      const newSpec = r.special_assessment_rate || null;
+      if (oldAnn !== newAnn || oldSpec !== newSpec || oldName !== (r.last_name || null) || oldAddr !== (r.residence_address || null)) {
+        const [annRate] = await db.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [newAnn || '']);
+        const [specRate] = await db.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [newSpec || '']);
+        const annualReq = annRate && annRate[0] ? Number(annRate[0].CurrentRate) || 0 : 0;
+        const specialReq = specRate && specRate[0] ? Number(specRate[0].CurrentRate) || 0 : 0;
+        const [aFreqRows] = await db.query("SELECT AssessmentFrequency FROM DuesProgramming WHERE DuesType='annualDues' LIMIT 1");
+        const [sFreqRows] = await db.query("SELECT AssessmentFrequency FROM DuesProgramming WHERE DuesType='specialAssessment' LIMIT 1");
+        const annualFreqB4 = aFreqRows[0]?.AssessmentFrequency || 'Annually';
+        const specialFreqB4 = sFreqRows[0]?.AssessmentFrequency || 'Annually';
+        let regs;
+        try {
+          const [rRows] = await db.query("SELECT AssmtRegID, Frequency, DuesType, CurrentFiscalYearBegins, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment FROM AssessmentRegister WHERE ResidentAccountID=?", [account_id]);
+          regs = rRows;
+        } catch (e) {
+          if (e.code === 'ER_BAD_FIELD_ERROR' && /DuesType/i.test(e.message)) {
+            const [rRows2] = await db.query("SELECT AssmtRegID, Frequency, CurrentFiscalYearBegins, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment FROM AssessmentRegister WHERE ResidentAccountID=?", [account_id]);
+            regs = rRows2;
+          } else throw e;
+        }
+        for (const reg of regs) {
+          const periodCount = { Annually: 1, 'Semi-Annually': 2, Quarterly: 4, Monthly: 12 }[reg.Frequency] || 1;
+          let regAnnualReq, regSpecialReq, periodic;
+          if (reg.DuesType === 'AnnualDues') {
+            regAnnualReq = annualReq; regSpecialReq = 0; periodic = annualReq / periodCount;
+          } else if (reg.DuesType === 'SpecialAssessment') {
+            regAnnualReq = 0; regSpecialReq = specialReq; periodic = specialReq / periodCount;
+          } else {
+            const wasCombined = (Number(reg.TotalYearlyRequiredAnnualDues) || 0) > 0 && (Number(reg.RequiredSpecialAssessment) || 0) > 0;
+            if (wasCombined) {
+              regAnnualReq = annualReq; regSpecialReq = specialReq; periodic = (annualReq + specialReq) / periodCount;
+            } else if (reg.Frequency === annualFreqB4) {
+              regAnnualReq = annualReq; regSpecialReq = 0; periodic = annualReq / periodCount;
+            } else if (reg.Frequency === specialFreqB4) {
+              regAnnualReq = 0; regSpecialReq = specialReq; periodic = specialReq / periodCount;
+            } else {
+              regAnnualReq = annualReq; regSpecialReq = specialReq; periodic = (annualReq + specialReq) / periodCount;
+            }
+          }
+          const aDue = regAnnualReq - (Number(reg.TotalAnnualDuesPaymentsYTD) || 0);
+          const sDue = regSpecialReq - (Number(reg.TotalSpecialAssessmentPaidYTD) || 0);
+          await db.query(`UPDATE AssessmentRegister SET LastName=?, ResidenceAddress=?, AssignedAnnualDuesRate=?, AssignedSpecialAssessmentRate=?, TotalYearlyRequiredAnnualDues=?, RequiredSpecialAssessment=?, RequiredPeriodicPayment=?, CurrentAssessmentPaymentDue=?, AssessmentPaidBalanceDue=GREATEST(0,-?), SpecialAssessmentPaymentDue=?, SpecialAssessmentPaidBalanceDue=GREATEST(0,-?), TotalCurrentAR=?, TimeStampUpdated=NOW() WHERE AssmtRegID=?`, [r.last_name || reg.LastName, r.residence_address || reg.ResidenceAddress, regAnnualReq, regSpecialReq, regAnnualReq, regSpecialReq, periodic, aDue, aDue, sDue, sDue, aDue + sDue, reg.AssmtRegID]);
+          await db.query(`UPDATE AssessmentRegisterPeriod SET PeriodAmount=? WHERE AssmtRegID=?`, [periodic, reg.AssmtRegID]);
+        }
+        if (regs.length) {
+          const [hoaRows2] = await db.query("SELECT MgtCoClientID, HOALicenseNumber FROM HOAProfile LIMIT 1");
+          const hoa2 = hoaRows2[0] || { MgtCoClientID: 'MGTCO-001', HOALicenseNumber: 'HOA-FL-2024-001' };
+          await refreshAssessmentPaymentSummary(db, { residentAccountId: account_id, mgt: hoa2.MgtCoClientID, hoa: hoa2.HOALicenseNumber, paymentDate: null });
+        }
+      }
+    } catch (e) { console.warn('[B4] register sync failed (non-fatal):', e.message); }
     res.json({ success: true, message: 'Resident updated successfully' });
   } catch (err) {
     console.error('Error updating resident:', err);
@@ -997,6 +1070,16 @@ app.post('/api/check-register', async (req, res) => {
       WHERE BankAccountID = ?
     `, [amount, bankAccountId]);
 
+    // CashFlow posting for CR (Cash Out) — bank-specific, traceable to CheckRegister
+    const [bankRowsCF_CR] = await connection.query("SELECT BankType FROM BankAccount WHERE BankAccountID=? LIMIT 1", [bankAccountId]);
+    const bankTypeCF_CR = bankRowsCF_CR[0]?.BankType || 'Operating';
+    const cfTableMapCR = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket', CD: 'CashFlowTransaction_CD' };
+    const cfTableCR = cfTableMapCR[bankTypeCF_CR] || 'CashFlowTransaction_Operating';
+    const txDateCR = c.date_issued || new Date().toISOString().slice(0, 10);
+    const fyLabelCR = String(new Date(txDateCR).getFullYear());
+    const fyPeriodCR = derivePeriodNumber(txDateCR, 'Monthly');
+    await connection.query(`INSERT INTO ${cfTableCR} (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID, FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber, TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber, CashOutAmount, TransactionDescription, OperatorID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ['MGTCO-001', 'HOA-FL-2024-001', bankTypeCF_CR, bankAccountId, fyLabelCR, fyPeriodCR, 'CR', txnNum, txDateCR, c.payee_id || '', c.payee_id || '', c.gl_number || 5000, amount, c.note || 'Check', 'SYSTEM']);
+
     await connection.commit();
     res.status(201).json({
       success: true,
@@ -1243,6 +1326,16 @@ app.post('/api/deposit-register', async (req, res) => {
       SET StartingBalance = StartingBalance + ?, TimeStampUpdated = NOW()
       WHERE BankAccountID = ?
     `, [amount, bankAccountId]);
+
+    // CashFlow posting for DP (Cash In) — bank-specific, traceable to DepositRegister
+    const [bankRowsCF_DP] = await connection.query("SELECT BankType FROM BankAccount WHERE BankAccountID=? LIMIT 1", [bankAccountId]);
+    const bankTypeCF_DP = bankRowsCF_DP[0]?.BankType || 'Operating';
+    const cfTableMapDP = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket', CD: 'CashFlowTransaction_CD' };
+    const cfTableDP = cfTableMapDP[bankTypeCF_DP] || 'CashFlowTransaction_Operating';
+    const txDateDP = d.date_deposited || new Date().toISOString().slice(0, 10);
+    const fyLabelDP = String(new Date(txDateDP).getFullYear());
+    const fyPeriodDP = derivePeriodNumber(txDateDP, 'Monthly');
+    await connection.query(`INSERT INTO ${cfTableDP} (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID, FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber, TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber, CashInAmount, TransactionDescription, OperatorID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ['MGTCO-001', 'HOA-FL-2024-001', bankTypeCF_DP, bankAccountId, fyLabelDP, fyPeriodDP, 'DP', txnNum, txDateDP, d.payer_name || '', d.resident_id || d.vendor_id || '', d.gl_number || 4000, amount, d.note || 'Deposit', 'SYSTEM']);
 
     await connection.commit();
     res.status(201).json({
@@ -1512,7 +1605,7 @@ Rules:
    answerSql must be a SELECT that returns a single row (COUNT(*), COUNT(DISTINCT ...), SUM(...), etc.).
 4. "activo/activos/inactivos" -> ActiveResidentFlag='Y'/'N'. Always add DeletedFlag='N' to ResidentMaster filters.
 5. "estado de florida" -> StateCode='FL'. Use LIKE for partial text (EmailAddress LIKE '%x%', PrimaryPhone LIKE '%305%'). Starting letters -> LastName LIKE 'A%'.
-6. Real debt = AnnualDuesBalance>0 OR SpecialAssessmentBalance>0. "deudores/mayores deudores" -> that plus ORDER BY (AnnualDuesBalance+SpecialAssessmentBalance) DESC, LIMIT 10 when asked for "los 10".
+6. Real debt = AssessmentRegister TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0 (source: AssessmentRegister, not ResidentMaster legacy balances AnnualDuesBalance/SpecialAssessmentBalance which are deprecated). "deudores/mayores deudores" -> ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0) plus ORDER BY (SELECT COALESCE(SUM(TotalCurrentAR),0) FROM AssessmentRegister WHERE ResidentAccountID=ResidentMaster.ResidentAccountID) DESC, LIMIT 10 when asked for "los 10".
 7. Fines/violations ("multas", "multa", "violaciones", "fines"): to list residents with fines use
    ResidentAccountID IN (SELECT ResidentAccountID FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0)
    For counts ("cuantos han tenido multas") use SELECT COUNT(DISTINCT ResidentAccountID) FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0.
@@ -1521,8 +1614,8 @@ Rules:
 
 Examples:
 Input: "residentes de florida activos" -> {"mode":"filter","whereClause":"StateCode='FL' AND ActiveResidentFlag='Y' AND DeletedFlag='N'"}
-Input: "cuantos residentes tienen deudas" -> {"mode":"answer","answerSql":"SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND (AnnualDuesBalance>0 OR SpecialAssessmentBalance>0)","answerLabel":"Residentes con deuda"}
-Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesBalance>0 OR SpecialAssessmentBalance>0) AND DeletedFlag='N'","orderBy":"(AnnualDuesBalance+SpecialAssessmentBalance) DESC","limit":10}`;
+Input: "cuantos residentes tienen deudas" -> {"mode":"answer","answerSql":"SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0)","answerLabel":"Residentes con deuda"}
+Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0) AND DeletedFlag='N'","orderBy":"(SELECT COALESCE(SUM(TotalCurrentAR),0) FROM AssessmentRegister WHERE ResidentAccountID=ResidentMaster.ResidentAccountID) DESC","limit":10}`;
 
     function conditionsToSql(conditions) {
       if (!conditions || conditions.length === 0) return '1=1';
@@ -1575,7 +1668,7 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesB
         if (isDebt) {
           return {
             mode: 'answer',
-            answerSql: "SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND (AnnualDuesBalance>0 OR SpecialAssessmentBalance>0)",
+            answerSql: "SELECT COUNT(*) AS total FROM ResidentMaster WHERE ActiveResidentFlag='Y' AND DeletedFlag='N' AND ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0)",
             answerLabel: 'Residentes con deuda'
           };
         }
@@ -1594,9 +1687,9 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesB
         conditions.push({ raw: "ResidentAccountID IN (SELECT ResidentAccountID FROM ViolationRegister WHERE WarningOrFineFlag='Fine' AND FineAmount>0)" });
       }
 
-      // Debt (real debt = dues + special assessment)
+      // Debt (real debt = AssessmentRegister TotalCurrentAR/due >0 - B6; legacy AnnualDuesBalance deprecated)
       if (isDebt) {
-        conditions.push({ raw: "(AnnualDuesBalance>0 OR SpecialAssessmentBalance>0) AND ActiveResidentFlag='Y' AND DeletedFlag='N'" });
+        conditions.push({ raw: "ResidentAccountID IN (SELECT ResidentAccountID FROM AssessmentRegister WHERE TotalCurrentAR>0 OR CurrentAssessmentPaymentDue>0 OR SpecialAssessmentPaymentDue>0) AND ActiveResidentFlag='Y' AND DeletedFlag='N'" });
       }
 
       // Names starting with a letter ("nombres que empiecen con a", "empiezan con la letra m")
@@ -1700,9 +1793,9 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"(AnnualDuesB
       let orderBy = '';
       let limit = null;
 
-      // Ordering for debtors
+      // Ordering for debtors (B6: sort by AssessmentRegister TotalCurrentAR)
       if (isDebt) {
-        orderBy = '(AnnualDuesBalance+SpecialAssessmentBalance) DESC';
+        orderBy = '(SELECT COALESCE(SUM(TotalCurrentAR),0) FROM AssessmentRegister WHERE ResidentAccountID=ResidentMaster.ResidentAccountID) DESC';
         if (lower.includes('10') || lower.includes('diez')) limit = 10;
       }
 
@@ -3655,31 +3748,173 @@ async function resolveFiscalYearBegins(conn) {
 async function initializeAssessmentRegister(conn, ctx) {
   const { residentAccountId, lastName, address, annualRateCode, specialRateCode, operatorId } = ctx;
   const hoa = await getHoaIdentity(conn);
-  const frequency = await getFrequency(conn, 'AnnualDues');
+  const annualFreq = await getFrequency(conn, 'AnnualDues');
+  const specialFreq = await getFrequency(conn, 'SpecialAssessment');
   const [annual] = await conn.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [annualRateCode || '']);
   const [special] = await conn.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [specialRateCode || '']);
   const annualAmt = annual && annual[0] ? Number(annual[0].CurrentRate) || 0 : 0;
   const specialAmt = special && special[0] ? Number(special[0].CurrentRate) || 0 : 0;
-  const periodCount = { Annually: 1, 'Semi-Annually': 2, Quarterly: 4, Monthly: 12 }[frequency] || 1;
-  const periodic = (annualAmt + specialAmt) / periodCount;
   const fyBegins = await resolveFiscalYearBegins(conn);
-  const [ins] = await conn.query(`
-    INSERT INTO AssessmentRegister
-      (ResidentAccountID, Frequency, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber,
-       AssignedAnnualDuesRate, AssignedSpecialAssessmentRate, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment,
-       RequiredPeriodicPayment, CurrentAssessmentPaymentDue, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalCurrentAR, OperatorID)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)
-  `, [residentAccountId, frequency, lastName || null, address || null, fyBegins, hoa.MgtCoClientID, hoa.HOALicenseNumber,
-      annualAmt, specialAmt, annualAmt, specialAmt, periodic, periodic, operatorId || 'SYSTEM']);
-  const assmtRegId = ins.insertId;
-  for (let p = 1; p <= periodCount; p++) {
-    await conn.query(`
-      INSERT INTO AssessmentRegisterPeriod
-        (AssmtRegID, MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency, PeriodNumber, PeriodAmount)
-      VALUES (?,?,?,?,?,?,?,?)
-    `, [assmtRegId, hoa.MgtCoClientID, hoa.HOALicenseNumber, residentAccountId, fyBegins, frequency, p, periodic]);
+  const periodMap = { Annually: 1, 'Semi-Annually': 2, Quarterly: 4, Monthly: 12 };
+  // Correccion Rick 2026-08-27: Annual y Special SIEMPRE separados, aunque frecuencias iguales
+  let firstId = null;
+  if (annualAmt > 0) {
+    const periodCount = periodMap[annualFreq] || 1;
+    const periodic = annualAmt / periodCount;
+    try {
+      const [ins] = await conn.query(`
+        INSERT INTO AssessmentRegister
+          (ResidentAccountID, Frequency, DuesType, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber,
+           AssignedAnnualDuesRate, AssignedSpecialAssessmentRate, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment,
+           RequiredPeriodicPayment, CurrentAssessmentPaymentDue, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalCurrentAR, OperatorID)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)
+      `, [residentAccountId, annualFreq, 'AnnualDues', lastName || null, address || null, fyBegins, hoa.MgtCoClientID, hoa.HOALicenseNumber,
+          annualAmt, 0, annualAmt, 0, periodic, periodic, operatorId || 'SYSTEM']);
+      firstId = firstId || ins.insertId;
+      for (let p = 1; p <= periodCount; p++) {
+        await conn.query(`
+          INSERT INTO AssessmentRegisterPeriod
+            (AssmtRegID, MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency, PeriodNumber, PeriodAmount)
+          VALUES (?,?,?,?,?,?,?,?)
+        `, [ins.insertId, hoa.MgtCoClientID, hoa.HOALicenseNumber, residentAccountId, fyBegins, annualFreq, p, periodic]);
+      }
+    } catch (e) {
+      if (e.code === 'ER_BAD_FIELD_ERROR' && /DuesType/i.test(e.message)) {
+        // Columna DuesType aun no existe (requiere ALTER DBA) — fallback sin DuesType
+        const [ins2] = await conn.query(`
+          INSERT INTO AssessmentRegister
+            (ResidentAccountID, Frequency, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber,
+             AssignedAnnualDuesRate, AssignedSpecialAssessmentRate, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment,
+             RequiredPeriodicPayment, CurrentAssessmentPaymentDue, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalCurrentAR, OperatorID)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)
+        `, [residentAccountId, annualFreq, lastName || null, address || null, fyBegins, hoa.MgtCoClientID, hoa.HOALicenseNumber,
+            annualAmt, 0, annualAmt, 0, periodic, periodic, operatorId || 'SYSTEM']);
+        firstId = firstId || ins2.insertId;
+        for (let p = 1; p <= periodCount; p++) {
+          await conn.query(`
+            INSERT INTO AssessmentRegisterPeriod
+              (AssmtRegID, MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency, PeriodNumber, PeriodAmount)
+            VALUES (?,?,?,?,?,?,?,?)
+          `, [ins2.insertId, hoa.MgtCoClientID, hoa.HOALicenseNumber, residentAccountId, fyBegins, annualFreq, p, periodic]);
+        }
+      } else throw e;
+    }
   }
-  return assmtRegId;
+  if (specialAmt > 0) {
+    const periodCount = periodMap[specialFreq] || 1;
+    const periodic = specialAmt / periodCount;
+    try {
+      const [ins] = await conn.query(`
+        INSERT INTO AssessmentRegister
+          (ResidentAccountID, Frequency, DuesType, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber,
+           AssignedAnnualDuesRate, AssignedSpecialAssessmentRate, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment,
+           RequiredPeriodicPayment, CurrentAssessmentPaymentDue, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalCurrentAR, OperatorID)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)
+      `, [residentAccountId, specialFreq, 'SpecialAssessment', lastName || null, address || null, fyBegins, hoa.MgtCoClientID, hoa.HOALicenseNumber,
+          0, specialAmt, 0, specialAmt, periodic, periodic, operatorId || 'SYSTEM']);
+      firstId = firstId || ins.insertId;
+      for (let p = 1; p <= periodCount; p++) {
+        await conn.query(`
+          INSERT INTO AssessmentRegisterPeriod
+            (AssmtRegID, MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency, PeriodNumber, PeriodAmount)
+          VALUES (?,?,?,?,?,?,?,?)
+        `, [ins.insertId, hoa.MgtCoClientID, hoa.HOALicenseNumber, residentAccountId, fyBegins, specialFreq, p, periodic]);
+      }
+    } catch (e) {
+      if (e.code === 'ER_BAD_FIELD_ERROR' && /DuesType/i.test(e.message)) {
+        try {
+          const [ins2] = await conn.query(`
+            INSERT INTO AssessmentRegister
+              (ResidentAccountID, Frequency, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber,
+               AssignedAnnualDuesRate, AssignedSpecialAssessmentRate, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment,
+               RequiredPeriodicPayment, CurrentAssessmentPaymentDue, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalCurrentAR, OperatorID)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)
+          `, [residentAccountId, specialFreq, lastName || null, address || null, fyBegins, hoa.MgtCoClientID, hoa.HOALicenseNumber,
+              0, specialAmt, 0, specialAmt, periodic, periodic, operatorId || 'SYSTEM']);
+          firstId = firstId || ins2.insertId;
+          for (let p = 1; p <= periodCount; p++) {
+            await conn.query(`
+              INSERT INTO AssessmentRegisterPeriod
+                (AssmtRegID, MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency, PeriodNumber, PeriodAmount)
+              VALUES (?,?,?,?,?,?,?,?)
+            `, [ins2.insertId, hoa.MgtCoClientID, hoa.HOALicenseNumber, residentAccountId, fyBegins, specialFreq, p, periodic]);
+          }
+        } catch (e2) {
+          if (e2.code === 'ER_DUP_ENTRY') {
+            // DuesType column missing and frequencies are same — fallback to combined register (update the annual one)
+            const combinedPeriodic = (annualAmt + specialAmt) / (periodMap[annualFreq] || 1);
+            await conn.query(`UPDATE AssessmentRegister SET AssignedSpecialAssessmentRate=?, RequiredSpecialAssessment=?, RequiredPeriodicPayment=?, CurrentAssessmentPaymentDue=?, TotalCurrentAR=? WHERE AssmtRegID=?`, [specialAmt, specialAmt, combinedPeriodic, combinedPeriodic, combinedPeriodic, firstId]);
+            await conn.query(`UPDATE AssessmentRegisterPeriod SET PeriodAmount=? WHERE AssmtRegID=?`, [combinedPeriodic, firstId]);
+          } else throw e2;
+        }
+      } else throw e;
+    }
+  }
+  return firstId;
+}
+
+async function refreshAssessmentPaymentSummary(conn, ctx) {
+  const { residentAccountId, mgt, hoa, paymentDate } = ctx;
+  const [maxFyRows] = await conn.query(`SELECT MAX(CurrentFiscalYearBegins) AS maxFy FROM AssessmentRegister WHERE ResidentAccountID=? AND MgtCoClientID=? AND HOALicenseNumber=?`, [residentAccountId, mgt, hoa]);
+  const maxFy = maxFyRows[0]?.maxFy;
+  if (!maxFy) return;
+  const [regRows] = await conn.query(`SELECT * FROM AssessmentRegister WHERE ResidentAccountID=? AND MgtCoClientID=? AND HOALicenseNumber=? AND CurrentFiscalYearBegins=?`, [residentAccountId, mgt, hoa, maxFy]);
+  if (!regRows.length) return;
+  // Sumar across frequencies (Annual y Special pueden tener frecuencias distintas)
+  let totalAnnualReq = 0, totalSpecialReq = 0, annualPaid = 0, specialPaid = 0, prevCredit = 0;
+  let totalAssignedAnnual = 0, totalAssignedSpecial = 0;
+  let otherFinesDue = 0, finesPaidBal = 0, creditAfter = 0, creditRefundYTD = 0;
+  let lastName = null, residenceAddress = null, operatorId = null, freqLabel = null;
+  for (const r of regRows) {
+    totalAnnualReq += Number(r.TotalYearlyRequiredAnnualDues) || 0;
+    totalSpecialReq += Number(r.RequiredSpecialAssessment) || 0;
+    annualPaid += Number(r.TotalAnnualDuesPaymentsYTD) || 0;
+    specialPaid += Number(r.TotalSpecialAssessmentPaidYTD) || 0;
+    totalAssignedAnnual += Number(r.AssignedAnnualDuesRate) || 0;
+    totalAssignedSpecial += Number(r.AssignedSpecialAssessmentRate) || 0;
+    prevCredit += Number(r.PreviousYearCredit) || 0;
+    otherFinesDue += Number(r.OtherFinesAndFeesDue) || 0;
+    finesPaidBal += Number(r.FinesFeesPaidOrBalanceDue) || 0;
+    creditAfter += Number(r.CreditAfterPaymentsFinesRefunds) || 0;
+    creditRefundYTD += Number(r.CreditRefundPaidYTD) || 0;
+    lastName = lastName || r.LastName; residenceAddress = residenceAddress || r.ResidenceAddress; operatorId = operatorId || r.OperatorID;
+    freqLabel = freqLabel ? `${freqLabel}/${r.Frequency}` : r.Frequency;
+  }
+  const reg = regRows[0];
+  const totalReqAfterCredit = totalAnnualReq + totalSpecialReq - prevCredit;
+  const annualDue = totalAnnualReq - annualPaid;
+  const specialDue = totalSpecialReq - specialPaid;
+  const latestPaid = paymentDate ? new Date(paymentDate).toISOString().slice(0, 10) : null;
+  const [sumRows] = await conn.query(`SELECT SummaryID FROM AssessmentPaymentSummary WHERE ResidentAccountID=? AND MgtCoClientID=? AND HOALicenseNumber=? LIMIT 1`, [residentAccountId, mgt, hoa]);
+  if (sumRows[0]) {
+    await conn.query(`UPDATE AssessmentPaymentSummary SET
+      LastName=?, ResidenceAddress=?, TotalAssessmentRequiredAfterPreviousYearCredit=?, TotalAnnualAssessmentPaidYTD=?,
+      AnnualAssessmentPaidDueAfterCreditDebitAdjustment=?, TotalSpecialAssessmentPaidYTD=?, SpecialAssessmentPaidDue=?,
+      CreditAfterAssessmentPaymentsFinePaymentsRefunds=?, OtherFinesFees=?, OtherFinesFeesPaidOrBalDue=?,
+      LatestDateAssessmentWasPaid=COALESCE(?, LatestDateAssessmentWasPaid), CreditRefundPaidYTD=?, PreviousYearCredit=?,
+      CurrentYearAssignedAnnualDuesRate=?, CurrentYearAssignedSpecialAssessmentDuesRate=?, PaymentSchedule=?,
+      SourceAssessmentTable=?, LastRefreshed=NOW(), OperatorID=?, TimeStampUpdated=NOW()
+      WHERE SummaryID=?`,
+      [lastName, residenceAddress, totalReqAfterCredit, annualPaid, annualDue, specialPaid, specialDue,
+       creditAfter, otherFinesDue, finesPaidBal,
+       latestPaid, creditRefundYTD, prevCredit,
+       totalAssignedAnnual, totalAssignedSpecial, freqLabel,
+       'AssessmentRegister', operatorId || 'SYSTEM', sumRows[0].SummaryID]);
+  } else {
+    await conn.query(`INSERT INTO AssessmentPaymentSummary
+      (ResidentAccountID, LastName, ResidenceAddress, TotalAssessmentRequiredAfterPreviousYearCredit, TotalAnnualAssessmentPaidYTD,
+       AnnualAssessmentPaidDueAfterCreditDebitAdjustment, TotalSpecialAssessmentPaidYTD, SpecialAssessmentPaidDue,
+       CreditAfterAssessmentPaymentsFinePaymentsRefunds, OtherFinesFees, OtherFinesFeesPaidOrBalDue,
+       LatestDateAssessmentWasPaid, CreditRefundPaidYTD, PreviousYearCredit,
+       CurrentYearAssignedAnnualDuesRate, CurrentYearAssignedSpecialAssessmentDuesRate, PaymentSchedule,
+       SourceAssessmentTable, MgtCoClientID, HOALicenseNumber, LastRefreshed, OperatorID)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? , NOW(), ?)`,
+      [residentAccountId, lastName, residenceAddress, totalReqAfterCredit, annualPaid, annualDue, specialPaid, specialDue,
+       creditAfter, otherFinesDue, finesPaidBal,
+       latestPaid, creditRefundYTD, prevCredit,
+       totalAssignedAnnual, totalAssignedSpecial, freqLabel,
+       'AssessmentRegister', mgt, hoa, operatorId || 'SYSTEM']);
+  }
 }
 
 // POST /api/apr/enter-payment — Fase 1: posting atómico APR → AssmtRegisters → CashFlow
@@ -3706,7 +3941,7 @@ app.post('/api/apr/enter-payment', async (req, res) => {
 
     const result = await db.withTransaction(async (conn) => {
       // 1) Validar residente existe (FOR SHARE para bloquear si existe)
-      const [resRows] = await conn.query("SELECT ResidentAccountID, LastName, ResidenceAddress FROM ResidentMaster WHERE ResidentAccountID=? LIMIT 1", [residentAccountId]);
+      const [resRows] = await conn.query("SELECT ResidentAccountID, LastName, ResidenceAddress, AnnualDuesRate, SpecialAssessmentRate FROM ResidentMaster WHERE ResidentAccountID=? LIMIT 1", [residentAccountId]);
       if (!resRows[0]) throw Object.assign(new Error(`Resident ${residentAccountId} not found`), { status: 404 });
 
       // 2) Identidad HOA + Frequency + FiscalYear
@@ -3740,32 +3975,86 @@ app.post('/api/apr/enter-payment', async (req, res) => {
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `, [txn, residentAccountId, cleanPaymentType, payDate, annualAmt, specialAmt, parseDecimal(creditAmount||0), totalAmt, effBankId, glNumber||null, effMgtCo, effHoa, fyBegins, frequency, periodNumber, operatorId||'SYSTEM']);
 
-      // 6) UPSERT AssessmentRegister — solo residente afectado
-      const [existing] = await conn.query(`
-        SELECT AssmtRegID, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD FROM AssessmentRegister
-        WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=? FOR UPDATE
-      `, [effMgtCo, effHoa, residentAccountId, fyBegins, frequency]);
+      // 6) UPSERT AssessmentRegister — solo residente afectado (B2: mantiene columnas de posicion)
+      const duesTypeVal = cleanPaymentType === 'AnnualDues' ? 'AnnualDues' : 'SpecialAssessment';
+      let existing;
+      try {
+        [existing] = await conn.query(`
+          SELECT AssmtRegID, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD,
+                 TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment
+          FROM AssessmentRegister
+          WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=? AND DuesType=? FOR UPDATE
+        `, [effMgtCo, effHoa, residentAccountId, fyBegins, frequency, duesTypeVal]);
+      } catch (e) {
+        if (e.code === 'ER_BAD_FIELD_ERROR' && /DuesType/i.test(e.message)) {
+          [existing] = await conn.query(`
+            SELECT AssmtRegID, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD,
+                   TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment
+            FROM AssessmentRegister
+            WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=? FOR UPDATE
+          `, [effMgtCo, effHoa, residentAccountId, fyBegins, frequency]);
+        } else throw e;
+      }
 
       let assmtRegId;
       if (!existing[0]) {
-        const lastName = resRows[0].LastName || null;
-        const addr = resRows[0].ResidenceAddress || null;
-        const [ins] = await conn.query(`
-          INSERT INTO AssessmentRegister
-            (ResidentAccountID, Frequency, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalCurrentAR, OperatorID)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        `, [residentAccountId, frequency, lastName, addr, fyBegins, effMgtCo, effHoa, annualAmt, specialAmt, totalAmt, operatorId||'SYSTEM']);
-        assmtRegId = ins.insertId;
+        // Residente sin register (p.ej. dado de alta antes de B1): derivar requeridos de DuesRates
+        // Soporta frecuencias independientes: si Annual y Special comparten frecuencia, un register combinado; si no, solo el tipo de este pago
+        const [ann] = await conn.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [resRows[0].AnnualDuesRate || '']);
+        const [spe] = await conn.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [resRows[0].SpecialAssessmentRate || '']);
+        const annualReqFull = ann && ann[0] ? Number(ann[0].CurrentRate) || 0 : 0;
+        const specialReqFull = spe && spe[0] ? Number(spe[0].CurrentRate) || 0 : 0;
+        const isAnnual = cleanPaymentType === 'AnnualDues';
+        const annualReq = isAnnual ? annualReqFull : 0;
+        const specialReq = !isAnnual ? specialReqFull : 0;
+        const duesTypeVal = isAnnual ? 'AnnualDues' : 'SpecialAssessment';
+        const newAnnualPaid = isAnnual ? annualAmt : 0;
+        const newSpecialPaid = !isAnnual ? specialAmt : 0;
+        const annualDue = annualReq - newAnnualPaid;
+        const specialDue = specialReq - newSpecialPaid;
+        try {
+          const [ins] = await conn.query(`
+            INSERT INTO AssessmentRegister
+              (ResidentAccountID, Frequency, DuesType, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber,
+               AssignedAnnualDuesRate, AssignedSpecialAssessmentRate, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment,
+               TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, CurrentAssessmentPaymentDue, AssessmentPaidBalanceDue,
+               SpecialAssessmentPaymentDue, SpecialAssessmentPaidBalanceDue, TotalCurrentAR, OperatorID)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          `, [residentAccountId, frequency, duesTypeVal, resRows[0].LastName || null, resRows[0].ResidenceAddress || null, fyBegins, effMgtCo, effHoa,
+              annualReq, specialReq, annualReq, specialReq, newAnnualPaid, newSpecialPaid, annualDue, Math.max(0, -annualDue), specialDue, Math.max(0, -specialDue), annualDue + specialDue, operatorId||'SYSTEM']);
+          assmtRegId = ins.insertId;
+        } catch (e) {
+          if (e.code === 'ER_BAD_FIELD_ERROR' && /DuesType/i.test(e.message)) {
+            const [ins2] = await conn.query(`
+              INSERT INTO AssessmentRegister
+                (ResidentAccountID, Frequency, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber,
+                 AssignedAnnualDuesRate, AssignedSpecialAssessmentRate, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment,
+                 TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, CurrentAssessmentPaymentDue, AssessmentPaidBalanceDue,
+                 SpecialAssessmentPaymentDue, SpecialAssessmentPaidBalanceDue, TotalCurrentAR, OperatorID)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            `, [residentAccountId, frequency, resRows[0].LastName || null, resRows[0].ResidenceAddress || null, fyBegins, effMgtCo, effHoa,
+                annualReq, specialReq, annualReq, specialReq, newAnnualPaid, newSpecialPaid, annualDue, Math.max(0, -annualDue), specialDue, Math.max(0, -specialDue), annualDue + specialDue, operatorId||'SYSTEM']);
+            assmtRegId = ins2.insertId;
+          } else throw e;
+        }
       } else {
         assmtRegId = existing[0].AssmtRegID;
+        const newAnnualPaid = (Number(existing[0].TotalAnnualDuesPaymentsYTD) || 0) + annualAmt;
+        const newSpecialPaid = (Number(existing[0].TotalSpecialAssessmentPaidYTD) || 0) + specialAmt;
+        const annualDue = (Number(existing[0].TotalYearlyRequiredAnnualDues) || 0) - newAnnualPaid;
+        const specialDue = (Number(existing[0].RequiredSpecialAssessment) || 0) - newSpecialPaid;
         await conn.query(`
           UPDATE AssessmentRegister SET
-            TotalAnnualDuesPaymentsYTD = TotalAnnualDuesPaymentsYTD + ?,
-            TotalSpecialAssessmentPaidYTD = TotalSpecialAssessmentPaidYTD + ?,
-            TotalCurrentAR = TotalCurrentAR + ?,
+            TotalAnnualDuesPaymentsYTD = ?,
+            TotalSpecialAssessmentPaidYTD = ?,
+            CurrentAssessmentPaymentDue = ?,
+            AssessmentPaidBalanceDue = GREATEST(0, -?),
+            SpecialAssessmentPaymentDue = ?,
+            SpecialAssessmentPaidBalanceDue = GREATEST(0, -?),
+            TotalCurrentAR = ?,
             TimeStampUpdated = NOW()
           WHERE AssmtRegID=?
-        `, [annualAmt, specialAmt, totalAmt, assmtRegId]);
+        `, [newAnnualPaid, newSpecialPaid, annualDue, annualDue, specialDue, specialDue, annualDue + specialDue, assmtRegId]);
       }
 
       // 7) UPSERT AssessmentRegisterPeriod
@@ -3776,12 +4065,15 @@ app.post('/api/apr/enter-payment', async (req, res) => {
         ON DUPLICATE KEY UPDATE PeriodAmount = PeriodAmount + VALUES(PeriodAmount)
       `, [assmtRegId, effMgtCo, effHoa, residentAccountId, fyBegins, frequency, periodNumber, totalAmt]);
 
-      // 8) UPDATE ResidentMaster credit / balance si existe columna (ignorar si no)
+      // 8) Refrescar AssessmentPaymentSummary (B3: transaccional en posting)
+      await refreshAssessmentPaymentSummary(conn, { residentAccountId, mgt: effMgtCo, hoa: effHoa, paymentDate: payDate });
+
+      // 9) UPDATE ResidentMaster credit / balance si existe columna (ignorar si no)
       try {
         await conn.query("UPDATE ResidentMaster SET ResidentCreditBalance = COALESCE(ResidentCreditBalance,0) + ? WHERE ResidentAccountID=?", [parseDecimal(creditAmount||0), residentAccountId]);
       } catch (e) { if (e.code !== 'ER_BAD_FIELD_ERROR') throw e; }
 
-      // 9) CashFlow posting incremental — tabla por BankType (whitelist)
+      // 10) CashFlow posting incremental — tabla por BankType (whitelist)
       const cfTableMap = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket' };
       const cfTable = cfTableMap[bankType] || 'CashFlowTransaction_Operating';
       const fiscalYearLabel = String(new Date(fyBegins).getFullYear());
@@ -3861,6 +4153,18 @@ app.post('/api/apr/void', async (req, res) => {
         UPDATE AssessmentRegisterPeriod SET PeriodAmount = GREATEST(PeriodAmount - ?, 0)
         WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=? AND PeriodNumber=?
       `, [txn.TotalAmount, txn.MgtCoClientID, txn.HOALicenseNumber, txn.ResidentAccountID, txn.CurrentFiscalYearBegins, txn.Frequency, txn.PeriodNumber]);
+      // B3: recalcular posicion del register tras el void y refrescar summary
+      try {
+        const [rv] = await conn.query(`SELECT TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD FROM AssessmentRegister WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=? LIMIT 1`, [txn.MgtCoClientID, txn.HOALicenseNumber, txn.ResidentAccountID, txn.CurrentFiscalYearBegins, txn.Frequency]);
+        if (rv[0]) {
+          const aPaid = Number(rv[0].TotalAnnualDuesPaymentsYTD) || 0;
+          const sPaid = Number(rv[0].TotalSpecialAssessmentPaidYTD) || 0;
+          const aDue = (Number(rv[0].TotalYearlyRequiredAnnualDues) || 0) - aPaid;
+          const sDue = (Number(rv[0].RequiredSpecialAssessment) || 0) - sPaid;
+          await conn.query(`UPDATE AssessmentRegister SET CurrentAssessmentPaymentDue=?, AssessmentPaidBalanceDue=GREATEST(0,-?), SpecialAssessmentPaymentDue=?, SpecialAssessmentPaidBalanceDue=GREATEST(0,-?), TotalCurrentAR=? WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Frequency=?`, [aDue, aDue, sDue, sDue, aDue + sDue, txn.MgtCoClientID, txn.HOALicenseNumber, txn.ResidentAccountID, txn.CurrentFiscalYearBegins, txn.Frequency]);
+        }
+      } catch (e) { /* no bloquea el void */ }
+      await refreshAssessmentPaymentSummary(conn, { residentAccountId: txn.ResidentAccountID, mgt: txn.MgtCoClientID, hoa: txn.HOALicenseNumber, paymentDate: null });
       // Marcar VOID
       await conn.query("UPDATE AssessmentPaymentRegister SET Status='VOID', DeletedFlag='Y' WHERE TransactionNumber=?", [transactionNumber]);
       // Revertir CashFlow (marcar VoidFlag)
