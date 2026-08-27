@@ -9,8 +9,15 @@ function MainDirectoryGrid({
   onDoubleClickResident
 }) {
   const scrollRef = useRef(null);
+  const verticalTrackRef = useRef(null);
+  const verticalDragRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
   const [scrollPercent, setScrollPercent] = useState(0);
+  const [verticalScrollPercent, setVerticalScrollPercent] =
+  useState(0);
+
+  const [verticalThumbPercent, setVerticalThumbPercent] =
+  useState(20);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -27,6 +34,29 @@ function MainDirectoryGrid({
       } else {
         setScrollPercent(0);
       }
+      const canScrollVertically =
+  el.scrollHeight > el.clientHeight;
+
+      if (canScrollVertically) {
+        const maxVerticalScroll =
+          el.scrollHeight - el.clientHeight;
+
+        const verticalPercent =
+          maxVerticalScroll > 0
+            ? (el.scrollTop / maxVerticalScroll) * 100
+            : 0;
+
+        const thumbPercent =
+          (el.clientHeight / el.scrollHeight) * 100;
+
+        setVerticalScrollPercent(verticalPercent);
+        setVerticalThumbPercent(
+          Math.max(12, thumbPercent)
+        );
+      } else {
+        setVerticalScrollPercent(0);
+        setVerticalThumbPercent(100);
+      }
     };
 
     el.addEventListener('scroll', check);
@@ -34,6 +64,111 @@ function MainDirectoryGrid({
 
     return () => el.removeEventListener('scroll', check);
   }, []);
+
+
+  const scrollVerticallyBy = (amount) => {
+  const el = scrollRef.current;
+
+  if (!el) {
+    return;
+  }
+
+  el.scrollBy({
+    top: amount,
+    behavior: 'smooth'
+  });
+};
+
+const handleVerticalTrackClick = (event) => {
+  const el = scrollRef.current;
+  const track = verticalTrackRef.current;
+
+  if (!el || !track) {
+    return;
+  }
+
+  const rect = track.getBoundingClientRect();
+  const clickY = event.clientY - rect.top;
+  const percent = clickY / rect.height;
+
+  const maxScroll =
+    el.scrollHeight - el.clientHeight;
+
+  el.scrollTop =
+    Math.max(
+      0,
+      Math.min(maxScroll, percent * maxScroll)
+    );
+};
+
+const handleVerticalThumbMouseDown = (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const el = scrollRef.current;
+  const track = verticalTrackRef.current;
+
+  if (!el || !track) {
+    return;
+  }
+
+  verticalDragRef.current = {
+    startY: event.clientY,
+    startScrollTop: el.scrollTop
+  };
+
+  const handleMouseMove = (moveEvent) => {
+    if (!verticalDragRef.current) {
+      return;
+    }
+
+    const maxScroll = el.scrollHeight - el.clientHeight;
+
+    const thumbHeight =
+      track.clientHeight * (verticalThumbPercent / 100);
+
+    const usableTrackHeight =
+      track.clientHeight - thumbHeight;
+
+    if (usableTrackHeight <= 0 || maxScroll <= 0) {
+      return;
+    }
+
+    const deltaY =
+      moveEvent.clientY - verticalDragRef.current.startY;
+
+    const scrollDelta =
+      deltaY * (maxScroll / usableTrackHeight);
+
+    el.scrollTop =
+      verticalDragRef.current.startScrollTop + scrollDelta;
+  };
+
+  const handleMouseUp = () => {
+    verticalDragRef.current = null;
+
+    document.removeEventListener(
+      'mousemove',
+      handleMouseMove
+    );
+
+    document.removeEventListener(
+      'mouseup',
+      handleMouseUp
+    );
+  };
+
+  document.addEventListener(
+    'mousemove',
+    handleMouseMove
+  );
+
+  document.addEventListener(
+    'mouseup',
+    handleMouseUp
+  );
+};
+
 
   return (
     <div className={`md-table-container ${hasScroll ? 'has-scroll' : ''}`}>
@@ -138,6 +273,43 @@ function MainDirectoryGrid({
           </table>
         </div>
       </div>
+
+      <div className="md-custom-vscroll">
+  <button
+    type="button"
+    className="md-vscroll-button"
+    onClick={() => scrollVerticallyBy(-120)}
+  >
+    ▲
+  </button>
+
+  <div
+    className="md-vscroll-track"
+    ref={verticalTrackRef}
+    onClick={handleVerticalTrackClick}
+  >
+    <div
+  className="md-vscroll-thumb"
+  onMouseDown={handleVerticalThumbMouseDown}
+  style={{
+        height: `${verticalThumbPercent}%`,
+        top: `${
+          (100 - verticalThumbPercent) *
+          (verticalScrollPercent / 100)
+        }%`
+      }}
+    />
+  </div>
+
+  <button
+    type="button"
+    className="md-vscroll-button"
+    onClick={() => scrollVerticallyBy(120)}
+  >
+    ▼
+  </button>
+</div>
+
       <div
         className="scroll-progress"
         style={{ width: `${scrollPercent}%` }}

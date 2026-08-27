@@ -96,6 +96,7 @@ function EnterCheckUF({ onAddCheck }) {
   const [banks, setBanks] = useState([]);
   const [glAccounts, setGLAccounts] = useState([]);
   const [residents, setResidents] = useState([]);
+  const [residentSearchRows, setResidentSearchRows] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [showEntryChoice, setShowEntryChoice] = useState(false);
   const [pendingCheck, setPendingCheck] = useState(null);
@@ -178,7 +179,7 @@ useEffect(() => {
   async function loadResidents() {
     try {
       const residentResponse = await fetch(
-        `${API_BASE_URL}/residents?offset=0`
+        `${API_BASE_URL}/residents?limit=1000&offset=0&sort=name`
       );
 
       if (!residentResponse.ok) {
@@ -189,9 +190,6 @@ useEffect(() => {
 
       const residentData = await residentResponse.json();
       const residentRows = residentData.residents || [];
-
-      setResidentOffset(residentData.offset || 0);
-      setResidentHasMore(Boolean(residentData.hasMore));
 
       const loadedResidents = residentRows.map((resident) => ({
         id: String(resident.account_id),
@@ -210,6 +208,7 @@ useEffect(() => {
       }));
 
       setResidents(loadedResidents);
+      setResidentSearchRows(loadedResidents);
 
     } catch (error) {
       console.error(
@@ -257,57 +256,14 @@ useEffect(() => {
 }, []);
 
 
-const loadNextResidentChunk = async () => {
-  if (!residentHasMore) return;
-
-  try {
-    const nextOffset = residentOffset + 500;
-
-    const response = await fetch(
-      `${API_BASE_URL}/residents?offset=${nextOffset}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Server returned ${response.status}`);
-    }
-
-    const data = await response.json();
-    const rows = data.residents || [];
-
-    const nextResidents = rows.map((resident) => ({
-      id: String(resident.account_id),
-      lastName:
-  resident.last_name ||
-  resident.display_name ||
-  resident.account_id ||
-  '',
-      fullName:
-        resident.display_name ||
-        `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
-      address: resident.residence_address || ''
-    }));
-
-    setResidents((currentResidents) => [
-      ...currentResidents,
-      ...nextResidents
-    ]);
-
-    setResidentOffset(data.offset || nextOffset);
-    setResidentHasMore(Boolean(data.hasMore));
-  } catch (error) {
-    console.error(
-      'Error loading next resident chunk:',
-      error
-    );
-  }
-};
-
 const searchResidents = async (searchText, sortMode = 'name') => {
   const trimmedSearch = String(searchText || '').trim();
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/residents?search=${encodeURIComponent(trimmedSearch)}&offset=0&sort=${sortMode}`
+      `${API_BASE_URL}/residents?search=${encodeURIComponent(
+        trimmedSearch
+      )}&limit=1000&offset=0&sort=${sortMode}`
     );
 
     if (!response.ok) {
@@ -320,35 +276,66 @@ const searchResidents = async (searchText, sortMode = 'name') => {
     const matchingResidents = rows.map((resident) => ({
       id: String(resident.account_id),
       lastName:
-  resident.last_name ||
-  resident.display_name ||
-  resident.account_id ||
-  '',
+        resident.last_name ||
+        resident.display_name ||
+        resident.account_id ||
+        '',
       fullName:
         resident.display_name ||
         `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
       address: resident.residence_address || ''
     }));
 
-    setResidents(matchingResidents);
-    setResidentOffset(data.offset || 0);
-    setResidentHasMore(Boolean(data.hasMore));
+    setResidents((currentResidents) => {
+      const byId = new Map(
+        currentResidents.map((resident) => [
+          resident.id,
+          resident
+        ])
+      );
+
+      matchingResidents.forEach((resident) => {
+        byId.set(resident.id, resident);
+      });
+
+      return Array.from(byId.values());
+    });
+
+    return matchingResidents;
   } catch (error) {
     console.error(
       'Error searching residents:',
       error
     );
+
+    return [];
   }
 };
 
-
 const handleResidentNameQueryChange = async (event) => {
   const value = event.target.value;
+  const searchText = value.trim().toLowerCase();
 
   setResidentNameQuery(value);
   setResidentNameDropdownOpen(true);
 
-  await searchResidents(value);
+  const localMatches = residents.filter((resident) => {
+    const searchableText =
+      `${resident.lastName || ''} ${resident.fullName || ''}`
+        .toLowerCase();
+
+    return searchableText.includes(searchText);
+  });
+
+  if (searchText.length < 3 || localMatches.length > 0) {
+    setResidentSearchRows(localMatches);
+    return;
+  }
+
+  const serverMatches =
+    await searchResidents(value, 'name');
+
+  setResidentSearchRows(serverMatches);
 };
 
 const selectResidentFromSearch = (resident) => {
@@ -363,11 +350,28 @@ const selectResidentFromSearch = (resident) => {
 
 const handleResidentAddressQueryChange = async (event) => {
   const value = event.target.value;
+  const searchText = value.trim().toLowerCase();
 
   setResidentAddressQuery(value);
   setResidentAddressDropdownOpen(true);
 
-  await searchResidents(value, 'address');
+  const localMatches = residents.filter((resident) => {
+    const searchableText =
+      `${resident.address || ''} ${resident.lastName || ''} ${resident.fullName || ''}`
+        .toLowerCase();
+
+    return searchableText.includes(searchText);
+  });
+
+  if (searchText.length < 3 || localMatches.length > 0) {
+    setResidentSearchRows(localMatches);
+    return;
+  }
+
+  const serverMatches =
+    await searchResidents(value, 'address');
+
+  setResidentSearchRows(serverMatches);
 };
 
 const selectResidentFromAddressSearch = (resident) => {
@@ -462,9 +466,6 @@ useEffect(() => {
     );
   };
 }, []);
-
-  const [residentOffset, setResidentOffset] = useState(0);
-  const [residentHasMore, setResidentHasMore] = useState(false);
 
   const [vendorNameSearch, setVendorNameSearch] =
   useState('');
@@ -694,7 +695,7 @@ const visibleGLChildren = useMemo(
     loadVendor(vendorId);
   };
 
-  const handleHelperIdKeyDown = (event) => {
+  const handleHelperIdKeyDown = async (event) => {
     if (event.key !== 'Enter') return;
 
     event.preventDefault();
@@ -716,6 +717,35 @@ const visibleGLChildren = useMemo(
 
     if (vendor) {
       loadVendor(vendor.id);
+      return;
+    }
+
+    const serverMatches =
+      await searchResidents(enteredId, 'name');
+
+    const exactResident = serverMatches.find(
+      (item) => item.id === enteredId
+    );
+
+    if (exactResident) {
+      setResidents((currentResidents) => {
+        const exists = currentResidents.some(
+          (item) => item.id === exactResident.id
+        );
+
+        return exists
+          ? currentResidents
+          : [...currentResidents, exactResident];
+      });
+
+      setEntityId(exactResident.id);
+      setEntityName(exactResident.fullName);
+      setResidentAddress(exactResident.address);
+      setHelperEntityId(exactResident.id);
+      setResidentNameSearch(exactResident.id);
+      setResidentAddressSearch(exactResident.id);
+      setVendorNameSearch('');
+      setVendorAccountSearch('');
       return;
     }
 
@@ -1408,14 +1438,17 @@ onBlur={(event) => {
     type="text"
     value={residentNameQuery}
     placeholder="Select resident"
-    onFocus={() => setResidentNameDropdownOpen(true)}
+    onFocus={() => {
+      setResidentSearchRows(residents);
+      setResidentNameDropdownOpen(true);
+    }}
     onChange={handleResidentNameQueryChange}
     autoComplete="off"
   />
 
   {residentNameDropdownOpen && (
     <div className="enter-check-resident-dropdown">
-      {residents.map((resident) => (
+      {residentSearchRows.map((resident) => (
         <button
           key={resident.id}
           type="button"
@@ -1426,15 +1459,6 @@ onBlur={(event) => {
         </button>
       ))}
 
-      {residentHasMore && (
-        <button
-          type="button"
-          className="enter-check-resident-option enter-check-load-more"
-          onClick={loadNextResidentChunk}
-        >
-          Load next 500 residents...
-        </button>
-      )}
     </div>
   )}
 </div>
@@ -1499,16 +1523,27 @@ onBlur={(event) => {
     value={residentAddressQuery}
     placeholder="Select resident address"
     onFocus={async () => {
-  setResidentAddressDropdownOpen(true);
-  await searchResidents(residentAddressQuery, 'address');
-}}
+      setResidentAddressDropdownOpen(true);
+
+      if (residentAddressQuery.trim()) {
+        const matches =
+          await searchResidents(
+            residentAddressQuery,
+            'address'
+          );
+
+        setResidentSearchRows(matches);
+      } else {
+        setResidentSearchRows(residents);
+      }
+    }}
     onChange={handleResidentAddressQueryChange}
     autoComplete="off"
   />
 
   {residentAddressDropdownOpen && (
     <div className="enter-check-resident-dropdown">
-      {residents.map((resident) => (
+      {residentSearchRows.map((resident) => (
         <button
           key={resident.id}
           type="button"
@@ -1521,15 +1556,6 @@ onBlur={(event) => {
         </button>
       ))}
 
-      {residentHasMore && (
-        <button
-          type="button"
-          className="enter-check-resident-option enter-check-load-more"
-          onClick={loadNextResidentChunk}
-        >
-          Load next 500 residents...
-        </button>
-      )}
     </div>
   )}
 </div>   

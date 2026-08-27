@@ -1,8 +1,7 @@
 
 
 
-import { useEffect, useState } from 'react';
-
+import { useEffect, useRef, useState } from 'react';
 import './HOAProfile.css';
 
 import {
@@ -23,8 +22,10 @@ function telephoneOnly(value) {
 function HOAProfile({
   requestedSettingsPanel,
   onSettingsNavigationApproved,
-  onSettingsNavigationCancelled
+  onSettingsNavigationCancelled,
+  registerNavigationGuard
 }) {
+
   const [activeSection, setActiveSection] = useState('hoa-profile');
   const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -73,6 +74,15 @@ function HOAProfile({
   });
 
 
+  const savedHOAProfileRef = useRef({
+  hoaProfile: hoaProfileData,
+  clientInfo: clientInfoData,
+  management: managementData
+  });
+
+
+
+
 useEffect(() => {
   let componentIsActive = true;
 
@@ -84,26 +94,33 @@ useEffect(() => {
         return;
       }
 
-      if (savedData.hoaProfile) {
-        setHoaProfileData((currentData) => ({
-          ...currentData,
-          ...savedData.hoaProfile
-        }));
-      }
+      const loadedHOAProfile = {
+  ...hoaProfileData,
+  ...(savedData.hoaProfile || {})
+};
 
-      if (savedData.clientInfo) {
-        setClientInfoData((currentData) => ({
-          ...currentData,
-          ...savedData.clientInfo
-        }));
-      }
+const loadedClientInfo = {
+  ...clientInfoData,
+  ...(savedData.clientInfo || {})
+};
 
-      if (savedData.management) {
-        setManagementData((currentData) => ({
-          ...currentData,
-          ...savedData.management
-        }));
-      }
+const loadedManagement = {
+  ...managementData,
+  ...(savedData.management || {})
+};
+
+savedHOAProfileRef.current = {
+  hoaProfile: loadedHOAProfile,
+  clientInfo: loadedClientInfo,
+  management: loadedManagement
+};
+
+setHoaProfileData(loadedHOAProfile);
+setClientInfoData(loadedClientInfo);
+setManagementData(loadedManagement);
+
+
+
     } catch (error) {
       console.error(error);
 
@@ -146,6 +163,25 @@ useEffect(() => {
   onSettingsNavigationApproved
 ]);
 
+  useEffect(() => {
+  if (!registerNavigationGuard) {
+    return;
+  }
+
+  registerNavigationGuard({
+    isDirty: () => hasUnsavedChanges,
+    save: saveCurrentHOAProfile
+  });
+
+  return () => {
+    registerNavigationGuard(null);
+  };
+}, [
+  registerNavigationGuard,
+  hasUnsavedChanges
+]);
+
+
   function selectSection(sectionName) {
   if (sectionName === activeSection) {
     return;
@@ -161,11 +197,28 @@ useEffect(() => {
   setActiveSection(sectionName);
 }
 
-function markFormChanged() {
-  setHasUnsavedChanges(true);
+function updateDirtyState(
+  nextHOAProfileData = hoaProfileData,
+  nextClientInfoData = clientInfoData,
+  nextManagementData = managementData
+) {
+  const currentData = {
+    hoaProfile: nextHOAProfileData,
+    clientInfo: nextClientInfoData,
+    management: nextManagementData
+  };
+
+  const isDirty =
+    JSON.stringify(currentData) !==
+    JSON.stringify(savedHOAProfileRef.current);
+
+  setHasUnsavedChanges(isDirty);
   setSaveMessage('');
   setSaveError('');
 }
+
+
+
 
 
 
@@ -178,12 +231,21 @@ function markFormChanged() {
       ? telephoneOnly(value)
       : value;
 
-  setHoaProfileData((currentData) => ({
+  setHoaProfileData((currentData) => {
+  const nextData = {
     ...currentData,
     [name]: nextValue
-  }));
+  };
 
-  markFormChanged();
+  updateDirtyState(
+    nextData,
+    clientInfoData,
+    managementData
+  );
+
+  return nextData;
+});
+
 }
 
 
@@ -191,12 +253,21 @@ function markFormChanged() {
   function changeClientInfoField(event) {
   const { name, value } = event.target;
 
-  setClientInfoData((currentData) => ({
+  setClientInfoData((currentData) => {
+  const nextData = {
     ...currentData,
     [name]: value
-    }));
+  };
 
-    markFormChanged();
+  updateDirtyState(
+    hoaProfileData,
+    nextData,
+    managementData
+  );
+
+  return nextData;
+});
+
     }
 
   function changeManagementField(event) {
@@ -212,12 +283,21 @@ function markFormChanged() {
     ? telephoneOnly(value)
     : value;
 
-  setManagementData((currentData) => ({
+  setManagementData((currentData) => {
+  const nextData = {
     ...currentData,
     [name]: nextValue
-  }));
+  };
 
-  markFormChanged();
+  updateDirtyState(
+    hoaProfileData,
+    clientInfoData,
+    nextData
+  );
+
+  return nextData;
+});
+
 }
 
 function buildCompleteHOAProfileData() {
@@ -238,8 +318,14 @@ async function saveCurrentHOAProfile() {
       buildCompleteHOAProfileData()
     );
 
-    setHasUnsavedChanges(false);
-    setSaveMessage('Changes saved.');
+  savedHOAProfileRef.current = {
+  hoaProfile: hoaProfileData,
+  clientInfo: clientInfoData,
+  management: managementData
+  };
+
+  setHasUnsavedChanges(false);
+  setSaveMessage('Changes saved.');
 
     return true;
   } catch (error) {

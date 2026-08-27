@@ -7,11 +7,14 @@ import TopSection from './components/TopSection/TopSection';
 import BodyBox from './components/BodyBox/BodyBox';
 
 import { fetchResidents, createResident, updateResident } from '../../services/mainDirectoryService.js';
+import { API_BASE_URL } from '../../config/api.js';
 
 function accountNumberFor(resident) {
   const raw =
     resident?.acctNo ||
     resident?.acct ||
+    resident?.account_id ||
+    resident?.ResidentAccountID ||
     '';
 
   const digits = String(raw).replace(/\D/g, '');
@@ -54,6 +57,213 @@ function sortResidentsByAccount(rows) {
       { numeric: true }
     );
   });
+}
+
+
+function mapCurrentResident(r) {
+  if (!r) {
+    return null;
+  }
+
+  return {
+    acctNo: r.ResidentAccountID || r.account_id || '',
+    acct: r.ResidentAccountID || r.account_id || '',
+    account_id: r.ResidentAccountID || r.account_id || '',
+
+    firstName: r.FirstName || r.first_name || '',
+    middleName: r.MiddleName || r.middle_name || '',
+    lastName: r.LastName || r.last_name || '',
+    prefix: r.Prefix || r.prefix || '',
+
+    name:
+      r.DisplayName ||
+      r.display_name ||
+      `${r.FirstName || r.first_name || ''} ${r.LastName || r.last_name || ''}`.trim(),
+
+    residence:
+      r.ResidenceAddress ||
+      r.residence_address ||
+      '',
+
+    address:
+      r.ResidenceAddress ||
+      r.residence_address ||
+      '',
+
+    billingAddress:
+      r.BillingAddress ||
+      r.billing_address ||
+      '',
+
+    city: r.City || r.city || '',
+    state: r.StateCode || r.state_code || '',
+    st: r.StateCode || r.state_code || '',
+    zip: r.ZipCode || r.zip_code || '',
+
+    phone:
+      r.PrimaryPhone ||
+      r.primary_phone ||
+      '',
+
+    email:
+      r.EmailAddress ||
+      r.email_address ||
+      '',
+
+    primaryCell:
+      r.PrimaryCell ||
+      r.primary_cell ||
+      '',
+
+    secondaryCell:
+      r.SecondaryCell ||
+      r.secondary_cell ||
+      '',
+
+    moveInDate:
+      r.MoveInDate ||
+      r.move_in_date ||
+      '',
+
+    type:
+      r.ResidentType ||
+      r.resident_type ||
+      '',
+
+    active:
+      r.ActiveResidentFlag ||
+      r.active_flag ||
+      'Y',
+
+    activeFlag:
+      r.ActiveResidentFlag ||
+      r.active_flag ||
+      'Y',
+
+    ach:
+      r.ACHFlag ||
+      r.ach_flag ||
+      '',
+
+    addlFirst:
+      r.AdditionalOwnerFirstName ||
+      r.addl_first_name ||
+      '',
+
+    addlMiddle:
+      r.AdditionalOwnerMiddleName ||
+      r.addl_middle_name ||
+      '',
+
+    addlLast:
+      r.AdditionalOwnerLastName ||
+      r.addl_last_name ||
+      '',
+
+    addlEmail:
+      r.AdditionalOwnerEmail ||
+      r.addl_email ||
+      '',
+
+    bothFirst:
+      `${r.FirstName || r.first_name || ''}${
+        (r.AdditionalOwnerFirstName || r.addl_first_name)
+          ? ' & ' + (r.AdditionalOwnerFirstName || r.addl_first_name)
+          : ''
+      }`.trim(),
+
+    annualRate:
+      r.AnnualDuesRate ||
+      r.annual_dues_rate ||
+      'Rate Code A',
+
+    annualDues:
+      r.AnnualDues !== null && r.AnnualDues !== undefined
+        ? String(r.AnnualDues)
+        : (
+            r.annual_dues !== null && r.annual_dues !== undefined
+              ? String(r.annual_dues)
+              : ''
+          ),
+
+    dues:
+      r.AnnualDues ??
+      r.annual_dues ??
+      0.00,
+
+    specialRate:
+      r.SpecialAssessmentRate ||
+      r.special_assessment_rate ||
+      'Rate Code A',
+
+    specialDues:
+      r.SpecialAssessmentDues !== null &&
+      r.SpecialAssessmentDues !== undefined
+        ? String(r.SpecialAssessmentDues)
+        : (
+            r.special_assessment_dues !== null &&
+            r.special_assessment_dues !== undefined
+              ? String(r.special_assessment_dues)
+              : ''
+          ),
+
+    nextAnnual:
+      r.NextYearAnnualDues !== null &&
+      r.NextYearAnnualDues !== undefined
+        ? String(r.NextYearAnnualDues)
+        : (
+            r.next_year_annual_dues !== null &&
+            r.next_year_annual_dues !== undefined
+              ? String(r.next_year_annual_dues)
+              : ''
+          ),
+
+    nextSpecial:
+      r.NextYearSpecialAssmtDues !== null &&
+      r.NextYearSpecialAssmtDues !== undefined
+        ? String(r.NextYearSpecialAssmtDues)
+        : (
+            r.next_year_special_assmt_dues !== null &&
+            r.next_year_special_assmt_dues !== undefined
+              ? String(r.next_year_special_assmt_dues)
+              : ''
+          ),
+
+    notes:
+      r.ResidentNotes ||
+      r.resident_notes ||
+      '',
+
+    proRata:
+      r.ProRata ??
+      r.pro_rata ??
+      ''
+  };
+}
+
+async function fetchCurrentResident(accountNumber) {
+  const accountId = String(accountNumber || '').trim();
+
+  const response = await fetch(
+    `${API_BASE_URL}/residents/${encodeURIComponent(accountId)}/current`
+  );
+
+  const result = await response.json();
+
+  if (!response.ok || !result?.ok || !result?.resident) {
+    const error = new Error(
+      result?.message ||
+      'Unable to retrieve the current resident record.'
+    );
+
+    error.code =
+      result?.code ||
+      'RESIDENT_LOOKUP_ERROR';
+
+    throw error;
+  }
+
+  return mapCurrentResident(result.resident);
 }
 
 function MainDirectory({ onSelectPage }) {
@@ -135,25 +345,52 @@ function MainDirectory({ onSelectPage }) {
     return result;
   }, [sortedResidents, appliedAccountFilter, aiResidents, searchTerm]);
 
-  const handleApplyResidentFilter = (
+  const handleApplyResidentFilter = async (
     accountNumber
   ) => {
-    const matchingResident = sortedResidents.find(
-      (resident) =>
-        String(accountNumberFor(resident)) ===
-        String(accountNumber)
-    );
+    const accountId =
+      String(accountNumber || '').trim();
 
-    if (!matchingResident) {
+    if (!accountId) {
       window.alert(
-        'No Main Directory resident found.'
+        'No resident account was selected.'
       );
       return;
     }
 
-    setAppliedAccountFilter(accountNumber);
-    setSearchTerm('');
-    setSelectedResident(matchingResident);
+    try {
+      const currentResident =
+        await fetchCurrentResident(accountId);
+
+      setResidents((currentResidents) =>
+        sortResidentsByAccount(
+          currentResidents.map((resident) =>
+            accountNumberFor(resident) ===
+            accountNumberFor(currentResident)
+              ? currentResident
+              : resident
+          )
+        )
+      );
+
+      setAppliedAccountFilter(
+        accountNumberFor(currentResident)
+      );
+
+      setSearchTerm('');
+      setSelectedResident(currentResident);
+
+    } catch (err) {
+      if (err.code === 'RESIDENT_NOT_FOUND') {
+        window.alert(
+          'This resident record is no longer current. Please select the current resident.'
+        );
+      } else {
+        window.alert(
+          'Unable to retrieve the current resident record.'
+        );
+      }
+    }
   };
 
   const handleResetFilter = () => {
@@ -185,8 +422,18 @@ function MainDirectory({ onSelectPage }) {
       setAppliedAccountFilter('');
       setSelectedResident(savedResident);
     } catch (err) {
-      window.alert('Error creating resident: ' + err.message);
-    }
+  if (err.message === 'HTTP 409') {
+    window.alert(
+      'That residence address is already assigned to another resident. Please select a different residence address.'
+    );
+  } else {
+    window.alert(
+      'Error creating resident: ' + err.message
+    );
+  }
+
+  throw err;
+}
   };
 
   const handleEditResident = async (
@@ -215,14 +462,62 @@ function MainDirectory({ onSelectPage }) {
         );
       }
     } catch (err) {
-      window.alert('Error updating resident: ' + err.message);
+      if (err.message === 'HTTP 409') {
+        window.alert(
+          'That residence address is already assigned to another resident. Please select a different residence address.'
+        );
+      } else {
+        window.alert(
+          'Error updating resident: ' + err.message
+        );
+      }
+
+      throw err;
     }
   };
 
-  const handleDoubleClickResident = (resident) => {
-    setSelectedResident(resident);
-    const event = new CustomEvent('edit-click', { detail: resident });
-    document.dispatchEvent(event);
+  const handleDoubleClickResident = async (resident) => {
+    const accountId = accountNumberFor(resident);
+
+    if (!accountId) {
+      return;
+    }
+
+    try {
+      const currentResident =
+        await fetchCurrentResident(accountId);
+
+      setResidents((currentResidents) =>
+        sortResidentsByAccount(
+          currentResidents.map((row) =>
+            accountNumberFor(row) ===
+            accountNumberFor(currentResident)
+              ? currentResident
+              : row
+          )
+        )
+      );
+
+      setSelectedResident(currentResident);
+
+      const event = new CustomEvent(
+        'edit-click',
+        { detail: currentResident }
+      );
+
+      document.dispatchEvent(event);
+
+    } catch (err) {
+      if (err.code === 'RESIDENT_NOT_FOUND') {
+        window.alert(
+          'This resident record is no longer current. Please select the current resident.'
+        );
+      } else {
+        window.alert(
+          'Unable to retrieve the current resident record.'
+        );
+      }
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import './DuesProgramming.css';
 
@@ -181,13 +181,16 @@ function normalizeSection(savedSection) {
 function DuesProgramming({
   requestedSettingsPanel,
   onSettingsNavigationApproved,
-  onSettingsNavigationCancelled
+  onSettingsNavigationCancelled,
+  registerNavigationGuard
 }) {
   const [activeSection, setActiveSection] =
     useState('annual-dues');
 
   const [duesData, setDuesData] =
     useState(DEFAULT_DATA);
+
+  const savedDuesRef = useRef(DEFAULT_DATA);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -265,14 +268,17 @@ function DuesProgramming({
           return;
         }
 
-        setDuesData({
+        const loadedDuesData = {
           annualDues:
             normalizeSection(savedData.annualDues),
           specialAssessment:
             normalizeSection(
               savedData.specialAssessment
             )
-        });
+        };
+
+        savedDuesRef.current = loadedDuesData;
+        setDuesData(loadedDuesData);
 
         if (savedData.activeSection) {
           setActiveSection(savedData.activeSection);
@@ -316,6 +322,32 @@ function DuesProgramming({
     requestedSettingsPanel,
     hasUnsavedChanges,
     onSettingsNavigationApproved
+  ]);
+
+  useEffect(() => {
+    const isDirty =
+      JSON.stringify(duesData) !==
+      JSON.stringify(savedDuesRef.current);
+
+    setHasUnsavedChanges(isDirty);
+  }, [duesData]);
+
+  useEffect(() => {
+    if (!registerNavigationGuard) {
+      return;
+    }
+
+    registerNavigationGuard({
+      isDirty: () => hasUnsavedChanges,
+      save: saveCurrentSettings
+    });
+
+    return () => {
+      registerNavigationGuard(null);
+    };
+  }, [
+    registerNavigationGuard,
+    hasUnsavedChanges
   ]);
 
   function markChanged() {
@@ -407,6 +439,7 @@ if (!isCurrentYearDate(currentSection.dueDate)) {
         buildCompleteData()
       );
 
+      savedDuesRef.current = duesData;
       setHasUnsavedChanges(false);
       setSaveMessage('Changes saved.');
 
@@ -435,12 +468,15 @@ if (!isCurrentYearDate(currentSection.dueDate)) {
       return;
     }
 
-    setDuesData({
+    const restoredDuesData = {
       annualDues:
         normalizeSection(savedData.annualDues),
       specialAssessment:
         normalizeSection(savedData.specialAssessment)
-    });
+    };
+
+    savedDuesRef.current = restoredDuesData;
+    setDuesData(restoredDuesData);
 
     setActiveSection(
       savedData.activeSection || 'annual-dues'

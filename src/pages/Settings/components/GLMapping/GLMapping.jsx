@@ -2638,7 +2638,8 @@ function bankIdOptions(bankType) {
 function GLMapping({
   requestedSettingsPanel,
   onSettingsNavigationApproved,
-  onSettingsNavigationCancelled
+  onSettingsNavigationCancelled,
+  registerNavigationGuard
 }) {
   const [activeSection, setActiveSection] =
     useState('expense');
@@ -2921,6 +2922,24 @@ const createParentEndingOptions = useMemo(() => {
     requestedSettingsPanel,
     hasUnsavedChanges,
     onSettingsNavigationApproved
+  ]);
+
+  useEffect(() => {
+    if (!registerNavigationGuard) {
+      return;
+    }
+
+    registerNavigationGuard({
+      isDirty: () => hasUnsavedChanges,
+      save: saveCurrentSettings
+    });
+
+    return () => {
+      registerNavigationGuard(null);
+    };
+  }, [
+    registerNavigationGuard,
+    hasUnsavedChanges
   ]);
 
   function setCurrentRows(nextRows) {

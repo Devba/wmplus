@@ -14,12 +14,20 @@ import FinesLateFees
 import GLMapping
   from './components/GLMapping/GLMapping';
 
-function Settings() {
+function Settings({ onSelectPage, registerNavigationGuard }) {
   const [activeSettingsPanel, setActiveSettingsPanel] =
     useState('');
 
   const [requestedSettingsPanel, setRequestedSettingsPanel] =
     useState('');
+
+
+   
+
+
+
+
+
 
   function openSettingsPanel(panelName) {
     if (panelName === activeSettingsPanel) {
@@ -50,6 +58,10 @@ function Settings() {
     setRequestedSettingsPanel('');
   }
 
+
+  
+
+
   function protectedNavigationProps() {
     return {
       requestedSettingsPanel,
@@ -64,8 +76,9 @@ function Settings() {
     if (activeSettingsPanel === 'hoa-profile') {
       return (
         <HOAProfile
-          {...protectedNavigationProps()}
-        />
+        {...protectedNavigationProps()}
+        registerNavigationGuard={registerNavigationGuard}
+      />
       );
     }
 
@@ -73,6 +86,7 @@ function Settings() {
       return (
         <Banking
           {...protectedNavigationProps()}
+          registerNavigationGuard={registerNavigationGuard}
         />
       );
     }
@@ -80,8 +94,9 @@ function Settings() {
     if (activeSettingsPanel === 'general-system') {
       return (
         <GeneralSystemProgramming
-          {...protectedNavigationProps()}
-        />
+        {...protectedNavigationProps()}
+        registerNavigationGuard={registerNavigationGuard}
+      />
       );
     }
 
@@ -89,6 +104,7 @@ function Settings() {
       return (
         <DuesProgramming
           {...protectedNavigationProps()}
+          registerNavigationGuard={registerNavigationGuard}
         />
       );
     }
@@ -97,6 +113,7 @@ function Settings() {
       return (
         <FinesLateFees
           {...protectedNavigationProps()}
+          registerNavigationGuard={registerNavigationGuard}
         />
       );
     }
@@ -105,6 +122,7 @@ function Settings() {
       return (
         <GLMapping
           {...protectedNavigationProps()}
+          registerNavigationGuard={registerNavigationGuard}
         />
       );
     }

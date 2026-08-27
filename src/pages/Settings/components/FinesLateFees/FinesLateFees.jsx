@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import './FinesLateFees.css';
 
@@ -142,7 +142,8 @@ function normalizeRows(savedRows, defaults) {
 function FinesLateFees({
   requestedSettingsPanel,
   onSettingsNavigationApproved,
-  onSettingsNavigationCancelled
+  onSettingsNavigationCancelled,
+  registerNavigationGuard
 }) {
   const [activeSection, setActiveSection] =
     useState('violation-fine-rules');
@@ -155,6 +156,8 @@ function FinesLateFees({
 
   const [finesData, setFinesData] =
     useState(DEFAULT_DATA);
+
+  const savedFinesRef = useRef(DEFAULT_DATA);
 
   const [duesDueDates, setDuesDueDates] = useState({
     annualDueDate: '',
@@ -224,7 +227,7 @@ function FinesLateFees({
           return;
         }
 
-        setFinesData({
+        const loadedFinesData = {
           violationFineRules: {
             ...DEFAULT_DATA.violationFineRules,
             ...(savedData.violationFineRules || {})
@@ -255,7 +258,10 @@ function FinesLateFees({
             ...DEFAULT_DATA.timingSchedule,
             ...(savedData.timingSchedule || {})
           }
-        });
+        };
+
+        savedFinesRef.current = loadedFinesData;
+        setFinesData(loadedFinesData);
 
         if (savedData.activeSection) {
           setActiveSection(savedData.activeSection);
@@ -317,6 +323,32 @@ function FinesLateFees({
     requestedSettingsPanel,
     hasUnsavedChanges,
     onSettingsNavigationApproved
+  ]);
+
+  useEffect(() => {
+    const isDirty =
+      JSON.stringify(finesData) !==
+      JSON.stringify(savedFinesRef.current);
+
+    setHasUnsavedChanges(isDirty);
+  }, [finesData]);
+
+  useEffect(() => {
+    if (!registerNavigationGuard) {
+      return;
+    }
+
+    registerNavigationGuard({
+      isDirty: () => hasUnsavedChanges,
+      save: saveCurrentSettings
+    });
+
+    return () => {
+      registerNavigationGuard(null);
+    };
+  }, [
+    registerNavigationGuard,
+    hasUnsavedChanges
   ]);
 
   function markChanged() {
@@ -497,6 +529,7 @@ function FinesLateFees({
     try {
       await saveFinesLateFees(buildCompleteData());
 
+      savedFinesRef.current = finesData;
       setHasUnsavedChanges(false);
       setSaveMessage('Changes saved.');
 
@@ -525,7 +558,7 @@ function FinesLateFees({
       return;
     }
 
-    setFinesData({
+    const restoredFinesData = {
       violationFineRules: {
         ...DEFAULT_DATA.violationFineRules,
         ...(savedData.violationFineRules || {})
@@ -556,7 +589,10 @@ function FinesLateFees({
         ...DEFAULT_DATA.timingSchedule,
         ...(savedData.timingSchedule || {})
       }
-    });
+    };
+
+    savedFinesRef.current = restoredFinesData;
+    setFinesData(restoredFinesData);
 
     setActiveSection(
       savedData.activeSection ||

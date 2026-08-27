@@ -206,29 +206,35 @@
   overflow-x: auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: #8fa4c8 #dce3f0;
+  scrollbar-width: auto;
+  scrollbar-color: #374151 #b8c0cc;
 }
 
 .md-table-scroll::-webkit-scrollbar {
-  height: 14px;
-  width: 14px;
+  height: 16px;
+  width: 16px;
 }
-
+    
 .md-table-scroll::-webkit-scrollbar-track {
-  background: #dce3f0;
-  border-radius: 7px;
-  border: 1px solid #b5c7e6;
+  background: #c7cdd6;
+  border: 1px solid #7f8a99;
+  border-radius: 6px;
 }
 
 .md-table-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #7a94c0, #5a7aaa);
-  border-radius: 7px;
-  border: 1px solid #4a6a9a;
+  background: #374151;
+  border-radius: 6px;
+  border: 2px solid #c7cdd6;
 }
 
+.md-table-scroll::-webkit-scrollbar-button {
+  background-color: #9ca3af;
+}
+
+
+
 .md-table-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #6a84b0, #4a6a9a);
+  background: #35465a;
 }
 
 .md-table-scroll::-webkit-scrollbar-corner {
@@ -268,7 +274,7 @@
   position: sticky;
   left: 0;
   z-index: 4;
-  background: inherit;
+  background: #ffffff;
 }
 
 .md-table tbody tr:nth-child(even) td:first-child {
@@ -276,6 +282,28 @@
 }
 
 .md-table tbody tr.is-selected td:first-child {
+  background: #dbeafe !important;
+}
+
+.md-table thead th:nth-child(2) {
+  position: sticky;
+  left: 90px;
+  z-index: 6;
+  background: #003b6f;
+}
+
+.md-table tbody td:nth-child(2) {
+  position: sticky;
+  left: 90px;
+  z-index: 4;
+  background: #ffffff;
+}
+
+.md-table tbody tr:nth-child(even) td:nth-child(2) {
+  background: #f7f9fc !important;
+}
+
+.md-table tbody tr.is-selected td:nth-child(2) {
   background: #dbeafe !important;
 }
 
@@ -486,4 +514,46 @@
 
 .md-table tbody tr.is-selected td:last-child {
   border-right: 1px solid #60a5fa;
+}
+
+/* Custom Main Directory vertical scrollbar */
+.md-custom-vscroll {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 16px;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  background: #d1d5db;
+  border-left: 1px solid #7f8a99;
+  z-index: 20;
+}
+
+.md-vscroll-button {
+  width: 22px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: #7b8794;
+  color: #000000;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.md-vscroll-track {
+  position: relative;
+  flex: 1;
+  background: #c7cdd6;
+  cursor: pointer;
+}
+
+.md-vscroll-thumb {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  min-height: 30px;
+  background: #374151;
+  border-radius: 6px;
+  cursor: pointer;
 }

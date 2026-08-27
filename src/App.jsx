@@ -1,6 +1,6 @@
 
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
 
 import TopRibbon from './components/TopRibbon/TopRibbon';
@@ -15,10 +15,19 @@ import {
 import { pageMap } from './pages/pageMap';
 import { API_BASE_URL, subscribeToConnectionStatus, setConnectionStatus } from './config/api.js';
 
+import UnsavedChangesPrompt
+  from './pages/Settings/components/UnsavedChangesPrompt/UnsavedChangesPrompt';
+
+
 function App() {
   const [currentPage, setCurrentPage] = useState(
     'master-navigation-panel'
   );
+
+ const navigationGuardRef = useRef(null);
+
+ const [pendingPage, setPendingPage] = useState(null);
+ const [showNavigationPrompt, setShowNavigationPrompt] = useState(false);
 
   const [activeOverlay, setActiveOverlay] = useState(null);
   const [showBadge, setShowBadge] = useState(
@@ -85,11 +94,71 @@ function App() {
     };
   }, [activeOverlay]);
 
+  function handleSelectPage(pageName) {
+  const guard = navigationGuardRef.current;
+
+  if (guard && guard.isDirty && guard.isDirty()) {
+    setPendingPage(pageName);
+    setShowNavigationPrompt(true);
+    return;
+  }
+
+  setCurrentPage(pageName);
+}
+
+function registerNavigationGuard(guard) {
+  navigationGuardRef.current = guard;
+}
+
+
+async function handleNavigationSave() {
+  const guard = navigationGuardRef.current;
+  const destination = pendingPage;
+
+  if (!guard || !guard.save) {
+    return;
+  }
+
+  const saved = await guard.save();
+
+  if (saved) {
+    setPendingPage(null);
+    setShowNavigationPrompt(false);
+    navigationGuardRef.current = null;
+
+    if (destination) {
+      setCurrentPage(destination);
+    }
+  }
+}
+
+function handleNavigationDiscard() {
+  const destination = pendingPage;
+
+  setPendingPage(null);
+  setShowNavigationPrompt(false);
+  navigationGuardRef.current = null;
+
+  if (destination) {
+    setCurrentPage(destination);
+  }
+}
+
+function handleNavigationCancel() {
+  setPendingPage(null);
+  setShowNavigationPrompt(false);
+}
+
   function renderPage() {
     const Page = pageMap[currentPage];
 
     if (Page) {
-      return <Page onSelectPage={setCurrentPage} />;
+  return (
+  <Page
+    onSelectPage={handleSelectPage}
+    registerNavigationGuard={registerNavigationGuard}
+  />
+);
     }
 
     return (
@@ -102,7 +171,7 @@ function App() {
   return (
     <div className="app-shell">
       <div className="top-ribbon">
-        <TopRibbon onSelectPage={setCurrentPage} />
+        <TopRibbon onSelectPage={handleSelectPage} />
       </div>
 
       <div className="middle-content">
@@ -126,7 +195,7 @@ function App() {
 
         <BottomTray
           currentPage={currentPage}
-          onSelectPage={setCurrentPage}
+          onSelectPage={handleSelectPage}
         />
       </div>
 
@@ -173,6 +242,21 @@ function App() {
           v
         </div>
       )}
+
+
+     <UnsavedChangesPrompt
+      isOpen={showNavigationPrompt}
+      isSaving={false}
+      isLoading={false}
+      errorMessage=""
+      onYes={handleNavigationSave}
+      onNo={handleNavigationDiscard}
+      onCancel={handleNavigationCancel}
+      yesLabel="Save"
+      noLabel="Discard"
+      cancelLabel="Cancel"
+    />
+
 
       {isOffline && (
         <div className="offline-status-badge">

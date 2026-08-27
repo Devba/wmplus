@@ -36,7 +36,7 @@ function parseDecimal(val, defaultVal = 0.00) {
 
 app.get('/api/residents', async (req, res) => {
   try {
-    const limit = 5000;
+    const limit = 1000;
 
     const offset = Math.max(
       Number.parseInt(req.query.offset, 10) || 0,
@@ -118,34 +118,9 @@ app.get('/api/residents', async (req, res) => {
         SELECT
           ResidentAccountID as account_id,
           FirstName as first_name,
-          MiddleName as middle_name,
           LastName as last_name,
-          DisplayName as display_name,
-          ResidenceAddress as residence_address,
-          BillingAddress as billing_address,
-          City as city,
-          StateCode as state_code,
-          ZipCode as zip_code,
-          PrimaryPhone as primary_phone,
-          PrimaryCell as primary_cell,
-          SecondaryCell as secondary_cell,
-          EmailAddress as email_address,
-          MoveInDate as move_in_date,
-          ResidentType as resident_type,
-          ActiveResidentFlag as active_flag,
-          ACHFlag as ach_flag,
-          AdditionalOwnerFirstName as addl_first_name,
-          AdditionalOwnerMiddleName as addl_middle_name,
-          AdditionalOwnerLastName as addl_last_name,
-          AdditionalOwnerEmail as addl_email,
-          AnnualDuesRate as annual_dues_rate,
-          AnnualDues as annual_dues,
-          SpecialAssessmentRate as special_assessment_rate,
-          SpecialAssessmentDues as special_assessment_dues,
-          NextYearAnnualDues as next_year_annual_dues,
-          NextYearSpecialAssmtDues as next_year_special_assmt_dues,
-          ResidentNotes as resident_notes
-        FROM ResidentMaster
+          ResidenceAddress as residence_address
+     FROM ResidentMaster
         WHERE ${whereClause}
         ${orderBy}
         LIMIT ? OFFSET ?
@@ -172,9 +147,189 @@ app.get('/api/residents', async (req, res) => {
   }
 });
 
+
+app.get('/api/residents/:account_id/current', async (req, res) => {
+  try {
+    const accountId =
+      String(req.params.account_id || '').trim();
+
+    if (!accountId) {
+      return res.status(400).json({
+        ok: false,
+        code: 'RESIDENT_ID_REQUIRED',
+        message: 'Resident Account ID is required.'
+      });
+    }
+
+    const [rows] = await db.query(
+      `
+        SELECT *
+        FROM ResidentMaster
+        WHERE ResidentAccountID = ?
+          AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+        LIMIT 1
+      `,
+      [accountId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        code: 'RESIDENT_NOT_FOUND',
+        message:
+          'This resident record is no longer current. Please select the current resident.'
+      });
+    }
+
+    return res.json({
+      ok: true,
+      resident: rows[0]
+    });
+
+  } catch (err) {
+    console.error(
+      'Error fetching current resident:',
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      code: 'RESIDENT_LOOKUP_ERROR',
+      message:
+        'Unable to retrieve the current resident record.'
+    });
+  }
+});
+
+app.get('/api/main-directory/residents', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        ResidentAccountID as account_id,
+        FirstName as first_name,
+        MiddleName as middle_name,
+        LastName as last_name,
+        DisplayName as display_name,
+        ResidenceAddress as residence_address,
+        BillingAddress as billing_address,
+        City as city,
+        StateCode as state_code,
+        ZipCode as zip_code,
+        PrimaryPhone as primary_phone,
+        PrimaryCell as primary_cell,
+        SecondaryCell as secondary_cell,
+        EmailAddress as email_address,
+        MoveInDate as move_in_date,
+        ResidentType as resident_type,
+        ActiveResidentFlag as active_flag,
+        ACHFlag as ach_flag,
+        AdditionalOwnerFirstName as addl_first_name,
+        AdditionalOwnerMiddleName as addl_middle_name,
+        AdditionalOwnerLastName as addl_last_name,
+        AdditionalOwnerEmail as addl_email,
+        AnnualDuesRate as annual_dues_rate,
+        AnnualDues as annual_dues,
+        SpecialAssessmentRate as special_assessment_rate,
+        SpecialAssessmentDues as special_assessment_dues,
+        NextYearAnnualDues as next_year_annual_dues,
+        NextYearSpecialAssmtDues as next_year_special_assmt_dues,
+        ResidentNotes as resident_notes
+      FROM ResidentMaster
+      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
+      ORDER BY
+        LastName ASC,
+        FirstName ASC,
+        ResidentAccountID ASC
+    `);
+
+    res.json({
+      residents: rows
+    });
+  } catch (err) {
+    console.error(
+      'Error fetching Main Directory residents:',
+      err
+    );
+
+    res.status(500).json({
+      error: 'Failed to fetch Main Directory residents',
+      details: err.message
+    });
+  }
+});
+
+
+
+app.get('/api/residents/check-address', async (req, res) => {
+  try {
+    const residenceAddress =
+      String(req.query.address || '')
+        .trim()
+        .replace(/\s+/g, ' ');
+
+    const excludeAccount =
+      String(req.query.excludeAccount || '').trim();
+
+    if (!residenceAddress) {
+      return res.json({ duplicate: false });
+    }
+
+    let sql = `
+      SELECT ResidentAccountID
+      FROM ResidentMaster
+      WHERE LOWER(TRIM(ResidenceAddress)) = LOWER(?)
+        AND (DeletedFlag IS NULL OR DeletedFlag <> 'Y')
+    `;
+
+    const params = [residenceAddress];
+
+    if (excludeAccount) {
+      sql += ` AND ResidentAccountID <> ?`;
+      params.push(excludeAccount);
+    }
+
+    sql += ` LIMIT 1`;
+
+    const [rows] = await db.query(sql, params);
+
+    res.json({
+      duplicate: rows.length > 0
+    });
+  } catch (err) {
+    console.error('Error checking residence address:', err);
+
+    res.status(500).json({
+      error: 'Unable to check residence address.'
+    });
+  }
+});
+
+
+
 app.post('/api/residents', async (req, res) => {
   try {
     const r = req.body;
+    const residenceAddress =
+  String(r.residence_address || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+const [duplicateAddressRows] = await db.query(
+  `
+    SELECT ResidentAccountID
+    FROM ResidentMaster
+    WHERE LOWER(TRIM(ResidenceAddress)) = LOWER(?)
+      AND (DeletedFlag IS NULL OR DeletedFlag <> 'Y')
+    LIMIT 1
+  `,
+  [residenceAddress]
+);
+
+if (duplicateAddressRows.length > 0) {
+  return res.status(409).json({
+    error: 'That residence address is already assigned to another resident.'
+  });
+}
     const normalizeDateForDatabase = (value) => {
   if (!value) return null;
 
@@ -265,11 +420,11 @@ const residentAccountId =
       r.addl_middle_name || null,
       r.addl_last_name || null,
       r.addl_email || null,
-      parseDecimal(r.annual_dues_rate),
+      r.annual_dues_rate || null,
       parseDecimal(r.annual_dues),
-      parseDecimal(r.special_assessment_rate),
+      r.special_assessment_rate || null,
       parseDecimal(r.special_assessment_dues),
-      parseDecimal(r.next_year_annual_dues),
+      r.next_year_annual_dues_rate || null,
       parseDecimal(r.next_year_special_assmt_dues),
       r.resident_notes || null
     ]);
@@ -288,6 +443,28 @@ app.put('/api/residents/:account_id', async (req, res) => {
   try {
     const { account_id } = req.params;
     const r = req.body;
+    const residenceAddress =
+  String(r.residence_address || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+const [duplicateAddressRows] = await db.query(
+  `
+    SELECT ResidentAccountID
+    FROM ResidentMaster
+    WHERE LOWER(TRIM(ResidenceAddress)) = LOWER(?)
+      AND ResidentAccountID <> ?
+      AND (DeletedFlag IS NULL OR DeletedFlag <> 'Y')
+    LIMIT 1
+  `,
+  [residenceAddress, account_id]
+);
+
+if (duplicateAddressRows.length > 0) {
+  return res.status(409).json({
+    error: 'That residence address is already assigned to another resident.'
+  });
+}
     await db.query(`
       UPDATE ResidentMaster SET
         FirstName = ?,
@@ -342,11 +519,11 @@ app.put('/api/residents/:account_id', async (req, res) => {
       r.addl_middle_name || null,
       r.addl_last_name || null,
       r.addl_email || null,
-      parseDecimal(r.annual_dues_rate),
+      r.annual_dues_rate || null,
       parseDecimal(r.annual_dues),
-      parseDecimal(r.special_assessment_rate),
+      r.special_assessment_rate || null,
       parseDecimal(r.special_assessment_dues),
-      parseDecimal(r.next_year_annual_dues),
+      r.next_year_annual_dues_rate || null,
       parseDecimal(r.next_year_special_assmt_dues),
       r.resident_notes || null,
       account_id

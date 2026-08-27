@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import './GeneralSystemProgramming.css';
 
@@ -103,14 +103,18 @@ function stateCodeOnly(value) {
 function GeneralSystemProgramming({
   requestedSettingsPanel,
   onSettingsNavigationApproved,
-  onSettingsNavigationCancelled
+  onSettingsNavigationCancelled,
+  registerNavigationGuard
 }) {
+
+
   const [activeSection, setActiveSection] =
     useState('printing');
 
   const [settingsData, setSettingsData] =
     useState(DEFAULT_DATA);
 
+  const savedSettingsRef = useRef(DEFAULT_DATA);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] =
@@ -140,36 +144,39 @@ function GeneralSystemProgramming({
           return;
         }
 
-        setSettingsData({
-          printing: {
-            ...DEFAULT_DATA.printing,
-            ...(savedData.printing || {})
-          },
-          numbering: {
-            ...DEFAULT_DATA.numbering,
-            ...(savedData.numbering || {})
-          },
-          streetNames: {
-            ...DEFAULT_DATA.streetNames,
-            ...(savedData.streetNames || {})
-          },
-          webPlus: {
-            ...DEFAULT_DATA.webPlus,
-            ...(savedData.webPlus || {})
-          },
-          cfoManage: {
-            ...DEFAULT_DATA.cfoManage,
-            ...(savedData.cfoManage || {})
-          },
-          easyPay: {
-            ...DEFAULT_DATA.easyPay,
-            ...(savedData.easyPay || {})
-          },
-          estoppel: {
-            ...DEFAULT_DATA.estoppel,
-            ...(savedData.estoppel || {})
-          }
-        });
+        const loadedSettings = {
+  printing: {
+    ...DEFAULT_DATA.printing,
+    ...(savedData.printing || {})
+  },
+  numbering: {
+    ...DEFAULT_DATA.numbering,
+    ...(savedData.numbering || {})
+  },
+  streetNames: {
+    ...DEFAULT_DATA.streetNames,
+    ...(savedData.streetNames || {})
+  },
+  webPlus: {
+    ...DEFAULT_DATA.webPlus,
+    ...(savedData.webPlus || {})
+  },
+  cfoManage: {
+    ...DEFAULT_DATA.cfoManage,
+    ...(savedData.cfoManage || {})
+  },
+  easyPay: {
+    ...DEFAULT_DATA.easyPay,
+    ...(savedData.easyPay || {})
+  },
+  estoppel: {
+    ...DEFAULT_DATA.estoppel,
+    ...(savedData.estoppel || {})
+  }
+};
+
+        savedSettingsRef.current = loadedSettings;
+        setSettingsData(loadedSettings);
 
         if (savedData.activeSection) {
           setActiveSection(savedData.activeSection);
@@ -215,6 +222,27 @@ function GeneralSystemProgramming({
     onSettingsNavigationApproved
   ]);
 
+  useEffect(() => {
+  if (!registerNavigationGuard) {
+    return;
+  }
+
+  registerNavigationGuard({
+    isDirty: () => hasUnsavedChanges,
+    save: saveCurrentSettings
+  });
+
+  return () => {
+    registerNavigationGuard(null);
+  };
+}, [
+  registerNavigationGuard,
+  hasUnsavedChanges
+]);
+
+
+  
+
   function markChanged() {
     setHasUnsavedChanges(true);
     setSaveMessage('');
@@ -236,22 +264,32 @@ function GeneralSystemProgramming({
   }
 
   function updateSectionField(
-    sectionName,
-    fieldName,
-    value
-  ) {
-    const key = sectionKey(sectionName);
+  sectionName,
+  fieldName,
+  value
+) {
+  const key = sectionKey(sectionName);
 
-    setSettingsData((currentData) => ({
+  setSettingsData((currentData) => {
+    const nextData = {
       ...currentData,
       [key]: {
         ...currentData[key],
         [fieldName]: value
       }
-    }));
+    };
 
-    markChanged();
-  }
+    const isDirty =
+      JSON.stringify(nextData) !==
+      JSON.stringify(savedSettingsRef.current);
+
+    setHasUnsavedChanges(isDirty);
+    setSaveMessage('');
+    setSaveError('');
+
+    return nextData;
+  });
+}
 
   function handleFieldChange(event) {
     const { name, value } = event.target;
@@ -321,6 +359,7 @@ function GeneralSystemProgramming({
         buildCompleteData()
       );
 
+      savedSettingsRef.current = settingsData;
       setHasUnsavedChanges(false);
       setSaveMessage('Changes saved.');
 

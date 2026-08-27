@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import './Banking.css';
 
@@ -202,7 +202,8 @@ function telephoneOnly(value) {
 function Banking({
   requestedSettingsPanel,
   onSettingsNavigationApproved,
-  onSettingsNavigationCancelled
+  onSettingsNavigationCancelled,
+  registerNavigationGuard
 }) {
   const [selectedRowId, setSelectedRowId] =
     useState('operating-101');
@@ -212,6 +213,11 @@ function Banking({
 
   const [fiscalData, setFiscalData] =
     useState(DEFAULT_FISCAL_DATA);
+
+  const savedBankingRef = useRef({
+    bankRows: DEFAULT_BANK_ROWS,
+    fiscalData: DEFAULT_FISCAL_DATA
+  });
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -248,19 +254,24 @@ function Banking({
           return;
         }
 
-        if (
+        const loadedBankRows =
           Array.isArray(savedData.bankRows) &&
           savedData.bankRows.length > 0
-        ) {
-          setBankRows(savedData.bankRows);
-        }
+            ? savedData.bankRows
+            : DEFAULT_BANK_ROWS;
 
-        if (savedData.fiscalData) {
-          setFiscalData({
-            ...DEFAULT_FISCAL_DATA,
-            ...savedData.fiscalData
-          });
-        }
+        const loadedFiscalData = {
+          ...DEFAULT_FISCAL_DATA,
+          ...(savedData.fiscalData || {})
+        };
+
+        savedBankingRef.current = {
+          bankRows: loadedBankRows,
+          fiscalData: loadedFiscalData
+        };
+
+        setBankRows(loadedBankRows);
+        setFiscalData(loadedFiscalData);
 
         if (savedData.selectedRowId) {
           setSelectedRowId(savedData.selectedRowId);
@@ -306,6 +317,35 @@ function Banking({
     onSettingsNavigationApproved
   ]);
 
+  useEffect(() => {
+    const isDirty =
+      JSON.stringify({
+        bankRows,
+        fiscalData
+      }) !==
+      JSON.stringify(savedBankingRef.current);
+
+    setHasUnsavedChanges(isDirty);
+  }, [bankRows, fiscalData]);
+
+  useEffect(() => {
+    if (!registerNavigationGuard) {
+      return;
+    }
+
+    registerNavigationGuard({
+      isDirty: () => hasUnsavedChanges,
+      save: saveCurrentBankingSettings
+    });
+
+    return () => {
+      registerNavigationGuard(null);
+    };
+  }, [
+    registerNavigationGuard,
+    hasUnsavedChanges
+  ]);
+
   function markChanged() {
     setHasUnsavedChanges(true);
     setSaveMessage('');
@@ -345,6 +385,11 @@ function Banking({
     banks: selectedBank ? [selectedBank] : []
   });
 }
+
+      savedBankingRef.current = {
+        bankRows,
+        fiscalData
+      };
 
       setHasUnsavedChanges(false);
       setSaveMessage('Changes saved.');
@@ -389,6 +434,18 @@ function Banking({
     setSelectedRowId(
       savedData.selectedRowId || 'operating-101'
     );
+
+    savedBankingRef.current = {
+      bankRows:
+        Array.isArray(savedData.bankRows) &&
+        savedData.bankRows.length > 0
+          ? savedData.bankRows
+          : DEFAULT_BANK_ROWS,
+      fiscalData: {
+        ...DEFAULT_FISCAL_DATA,
+        ...(savedData.fiscalData || {})
+      }
+    };
   }
 
   function completePendingNavigation() {

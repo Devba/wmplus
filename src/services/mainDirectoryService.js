@@ -3,7 +3,7 @@ import mainDirectorySampleData from '../pages/MainDirectory/data/mainDirectorySa
 
 export async function fetchResidents() {
   try {
-    const response = await fetch(`${API_BASE_URL}/residents`);
+    const response = await fetch(`${API_BASE_URL}/main-directory/residents`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     const residentsArray = Array.isArray(data) ? data : (data && Array.isArray(data.residents) ? data.residents : null);
@@ -128,4 +128,25 @@ export async function updateResident(accountId, residentData) {
   }
 }
 
+export async function checkResidenceAddress(
+  address,
+  excludeAccount = ''
+) {
+  const params = new URLSearchParams({
+    address
+  });
 
+  if (excludeAccount) {
+    params.set('excludeAccount', excludeAccount);
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/residents/check-address?${params.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  return await response.json();
+}

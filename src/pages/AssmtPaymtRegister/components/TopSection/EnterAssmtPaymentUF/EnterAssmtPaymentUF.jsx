@@ -2,7 +2,7 @@
 
 
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../../../config/api';
 import { closeOverlay } from '../../../../../engines';
 import './EnterAssmtPaymentUF.css';
@@ -105,8 +105,12 @@ function EnterAssmtPaymentUF({
   residents = [],
   onAddPayment
 }) {
+
   const [selectedAccount, setSelectedAccount] =
     useState('');
+
+  const [selectedResident, setSelectedResident] =
+    useState(null);
 
   const [annualPayment, setAnnualPayment] =
     useState('');
@@ -119,6 +123,182 @@ function EnterAssmtPaymentUF({
 
   const [checkNumber, setCheckNumber] =
     useState('');
+
+    const [residentNameQuery, setResidentNameQuery] =
+  useState('');
+
+  const [residentNameDropdownOpen, setResidentNameDropdownOpen] =
+  useState(false);
+
+  const [residentAddressQuery, setResidentAddressQuery] =
+  useState('');
+
+  const [residentAddressDropdownOpen, setResidentAddressDropdownOpen] =
+  useState(false);
+
+  const residentNameComboRef = useRef(null);
+  const residentAddressComboRef = useRef(null);
+
+  const [searchResidentRows, setSearchResidentRows] =
+  useState([]);
+
+  const searchResidents = async (
+  searchText,
+  sortMode = 'name'
+) => {
+  const trimmedSearch =
+    String(searchText || '').trim();
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/residents?search=${encodeURIComponent(
+        trimmedSearch
+      )}&offset=0&sort=${sortMode}`
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Server returned ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+    const rows = data.residents || [];
+
+    return rows.map((resident) => ({
+      acctNo: String(resident.account_id || ''),
+      firstName: resident.first_name || '',
+      lastName: resident.last_name || '',
+      displayName:
+        `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
+      residence: resident.residence_address || ''
+    }));
+  } catch (error) {
+    console.error(
+      'APR resident search error:',
+      error
+    );
+
+    return [];
+  }
+};
+
+
+  const handleResidentNameQueryChange = async (event) => {
+  const value = event.target.value;
+  const searchText = value.trim().toLowerCase();
+
+  setResidentNameQuery(value);
+  setResidentNameDropdownOpen(true);
+
+  const localMatches = sortedByName.filter((resident) => {
+    const searchableText =
+      `${resident.lastName || ''} ${resident.firstName || ''} ${nameFor(resident)}`
+        .toLowerCase();
+
+    return searchableText.includes(searchText);
+  });
+
+  if (searchText.length < 3 || localMatches.length > 0) {
+    setSearchResidentRows(localMatches);
+    return;
+  }
+
+  const serverMatches =
+  await searchResidents(value, 'name');
+
+
+setSearchResidentRows(serverMatches);
+};
+
+const handleResidentAddressQueryChange = async (event) => {
+  const value = event.target.value;
+  const searchText = value.trim().toLowerCase();
+
+  setResidentAddressQuery(value);
+  setResidentAddressDropdownOpen(true);
+
+  const localMatches = sortedByAddress.filter((resident) => {
+    const searchableText =
+      `${addressFor(resident)} ${resident.lastName || ''} ${resident.firstName || ''}`
+        .toLowerCase();
+
+    return searchableText.includes(searchText);
+  });
+
+  if (searchText.length < 3 || localMatches.length > 0) {
+    setSearchResidentRows(localMatches);
+    return;
+  }
+
+  const serverMatches =
+    await searchResidents(value, 'address');
+
+  setSearchResidentRows(serverMatches);
+};
+
+
+   const selectResidentFromNameSearch = (resident) => {
+  handleResidentSelection(
+    accountFor(resident)
+  );
+
+  setResidentNameQuery(
+    `${resident.lastName}, ${resident.firstName} — ${addressFor(resident)} — ${accountFor(resident)}`
+  );
+
+  setResidentAddressQuery(
+    addressFor(resident)
+  );
+
+  setResidentNameDropdownOpen(false);
+};
+
+const selectResidentFromAddressSearch = (resident) => {
+  handleResidentSelection(
+    accountFor(resident)
+  );
+
+  setResidentNameQuery(
+    `${resident.lastName}, ${resident.firstName} — ${addressFor(resident)} — ${accountFor(resident)}`
+  );
+
+  setResidentAddressQuery(
+    addressFor(resident)
+  );
+
+  setResidentAddressDropdownOpen(false);
+};
+
+  useEffect(() => {
+  const handleClickOutsideResidentLookups = (event) => {
+    if (
+      residentNameComboRef.current &&
+      !residentNameComboRef.current.contains(event.target)
+    ) {
+      setResidentNameDropdownOpen(false);
+    }
+
+    if (
+      residentAddressComboRef.current &&
+      !residentAddressComboRef.current.contains(event.target)
+    ) {
+      setResidentAddressDropdownOpen(false);
+    }
+  };
+
+  document.addEventListener(
+    'mousedown',
+    handleClickOutsideResidentLookups
+  );
+
+  return () => {
+    document.removeEventListener(
+      'mousedown',
+      handleClickOutsideResidentLookups
+    );
+  };
+}, []);
 
   const sortedByAccount = useMemo(
     () =>
@@ -133,14 +313,27 @@ function EnterAssmtPaymentUF({
   );
 
   const sortedByName = useMemo(
-    () =>
-      [...residents].sort((a, b) =>
-        nameFor(a).localeCompare(
-          nameFor(b)
-        )
-      ),
-    [residents]
-  );
+  () =>
+    [...residents].sort((a, b) => {
+      const lastCompare =
+        String(a.lastName || '').localeCompare(
+          String(b.lastName || ''),
+          undefined,
+          { sensitivity: 'base' }
+        );
+
+      if (lastCompare !== 0) {
+        return lastCompare;
+      }
+
+      return String(a.firstName || '').localeCompare(
+        String(b.firstName || ''),
+        undefined,
+        { sensitivity: 'base' }
+      );
+    }),
+  [residents]
+);
 
   const sortedByAddress = useMemo(
     () =>
@@ -154,13 +347,6 @@ function EnterAssmtPaymentUF({
     [residents]
   );
 
-  const selectedResident =
-    residents.find(
-      (resident) =>
-        accountFor(resident) ===
-        selectedAccount
-    ) || null;
-
   const residentName =
     nameFor(selectedResident);
 
@@ -169,12 +355,98 @@ function EnterAssmtPaymentUF({
     lastName
   } = splitResidentName(residentName);
 
-  const handleResidentSelection = (
+  const mapCurrentResident = (resident) => ({
+    acctNo: String(resident?.ResidentAccountID || ''),
+    firstName: resident?.FirstName || '',
+    lastName: resident?.LastName || '',
+    displayName:
+      resident?.DisplayName ||
+      `${resident?.FirstName || ''} ${resident?.LastName || ''}`.trim(),
+    residence: resident?.ResidenceAddress || '',
+    email: resident?.EmailAddress || '',
+    addlFirst: resident?.AdditionalOwnerFirstName || '',
+    addlLast: resident?.AdditionalOwnerLastName || '',
+    addlEmail: resident?.AdditionalOwnerEmail || '',
+    assmtPaidYTD: resident?.AnnualDuesPaidYTD ?? '',
+    assmtDue: resident?.AnnualDuesBalance ?? '',
+    specialPaidYTD: resident?.SpecialAssessmentPaidYTD ?? '',
+    specialDue: resident?.SpecialAssessmentBalance ?? '',
+    annualRate: resident?.AnnualDuesRate ?? '',
+    specialRate: resident?.SpecialAssessmentRate ?? '',
+    finesDue: resident?.FinesFeesBalance ?? '',
+    totalPaidYTD:
+      Number(resident?.AnnualDuesPaidYTD || 0) +
+      Number(resident?.SpecialAssessmentPaidYTD || 0),
+    totalAnnual: resident?.AnnualDuesPaidYTD ?? '',
+    totalSpecial: resident?.SpecialAssessmentPaidYTD ?? '',
+    totalCredits:
+      resident?.ResidentCreditBalance ??
+      resident?.PriorYearCredit ??
+      ''
+  });
+
+  const handleResidentSelection = async (
     accountNumber
   ) => {
-    setSelectedAccount(
-      String(accountNumber || '')
-    );
+    const accountId =
+      String(accountNumber || '').trim();
+
+    setSelectedAccount(accountId);
+    setSelectedResident(null);
+
+    if (!accountId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/residents/${encodeURIComponent(
+          accountId
+        )}/current`
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result?.ok || !result?.resident) {
+        if (result?.code === 'RESIDENT_NOT_FOUND') {
+          window.alert(
+            result.message ||
+            'This resident record is no longer current. Please select the current resident.'
+          );
+        } else {
+          window.alert(
+            result?.message ||
+            'Unable to retrieve the current resident record.'
+          );
+        }
+
+        setSelectedAccount('');
+        setSelectedResident(null);
+        setResidentNameQuery('');
+        setResidentAddressQuery('');
+        return;
+      }
+
+      const currentResident =
+        mapCurrentResident(result.resident);
+
+      setSelectedResident(currentResident);
+      setSelectedAccount(
+        accountFor(currentResident)
+      );
+    } catch (error) {
+      console.error(
+        'APR current resident load error:',
+        error
+      );
+
+      window.alert(
+        'Unable to retrieve the current resident record.'
+      );
+
+      setSelectedAccount('');
+      setSelectedResident(null);
+    }
   };
 
   const handleMoneyChange = (
@@ -219,6 +491,9 @@ function EnterAssmtPaymentUF({
 
   const clearForNextPayment = () => {
   setSelectedAccount('');
+  setSelectedResident(null);
+  setResidentNameQuery('');
+  setResidentAddressQuery('');
   setAnnualPayment('');
   setSpecialPayment('');
   setCheckNumber('');
@@ -775,55 +1050,86 @@ const payload = {
         Resident Name
       </label>
 
-      <select
-        className="apr-enter-search-input apr-enter-name-search"
-        value={selectedAccount}
-        onChange={(event) =>
-          handleResidentSelection(
-            event.target.value
-          )
-        }
-      >
-        <option value=""></option>
+      <div
+          className="apr-enter-resident-combo apr-enter-name-combo"
+          ref={residentNameComboRef}
+        >
+  <input
+    type="text"
+    className="apr-enter-search-input apr-enter-name-search"
+    value={residentNameQuery}
+    placeholder="Select resident"
+    onFocus={() => {
+      setSearchResidentRows(sortedByName);
+      setResidentNameDropdownOpen(true);
+    }}
+    onChange={handleResidentNameQueryChange}
+    autoComplete="off"
+  />
 
-        {sortedByName.map(
-          (resident) => (
-            <option
-              key={`name-${accountFor(resident)}`}
-              value={accountFor(resident)}
-            >
-              {nameFor(resident)}
-            </option>
-          )
-        )}
-      </select>
+  {residentNameDropdownOpen && (
+    <div className="apr-enter-resident-dropdown">
+      {searchResidentRows.map((resident) => (
+        <button
+          key={accountFor(resident)}
+          type="button"
+          className="apr-enter-resident-option"
+          onClick={() =>
+            selectResidentFromNameSearch(resident)
+          }
+        >
+          {resident.lastName}, {resident.firstName} — {addressFor(resident)} — {accountFor(resident)}
+        </button>
+      ))}
+    </div>
+  )}
+</div>
 
       <label className="apr-enter-search-label apr-enter-address-search-label">
         Resident Address
       </label>
 
-      <select
-        className="apr-enter-search-input apr-enter-address-search"
-        value={selectedAccount}
-        onChange={(event) =>
-          handleResidentSelection(
-            event.target.value
-          )
-        }
-      >
-        <option value=""></option>
+      <div
+  className="apr-enter-resident-combo apr-enter-address-combo"
+  ref={residentAddressComboRef}
+>
+  <input
+    type="text"
+    className="apr-enter-search-input apr-enter-address-search"
+    value={residentAddressQuery}
+    placeholder="Select resident address"
+    onFocus={() => {
+      setSearchResidentRows(sortedByAddress);
+      setResidentAddressDropdownOpen(true);
+    }}
 
-        {sortedByAddress.map(
-          (resident) => (
-            <option
-              key={`address-${accountFor(resident)}`}
-              value={accountFor(resident)}
-            >
-              {addressFor(resident)}
-            </option>
-          )
-        )}
-      </select>
+    onChange={
+      handleResidentAddressQueryChange
+    }
+    autoComplete="off"
+  />
+
+  {residentAddressDropdownOpen && (
+    <div className="apr-enter-resident-dropdown">
+      {searchResidentRows.map((resident) => (
+        <button
+          key={accountFor(resident)}
+          type="button"
+          className="apr-enter-resident-option"
+          onClick={() =>
+            selectResidentFromAddressSearch(
+              resident
+            )
+          }
+        >
+          {addressFor(resident)} — {resident.lastName}, {resident.firstName} — {accountFor(resident)}
+        </button>
+      ))}
+    </div>
+  )}
+</div>
+
+
 
       <label className="apr-enter-search-label apr-enter-account-result-label">
         Resident Acct#

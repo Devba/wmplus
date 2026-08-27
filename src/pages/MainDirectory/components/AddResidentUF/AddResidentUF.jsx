@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import './AddResidentUF.css';
 import AddressMap from './AddressMap';
-
+import { loadDuesProgramming } from '../../../Settings/services/duesProgrammingService.js';
+import { loadGeneralSystemSettings } from '../../../Settings/services/generalSystemService.js';
+import { checkResidenceAddress } from '../../../../services/mainDirectoryService.js';
 function AddResidentUF({
   mode = 'add',
   resident = null,
@@ -10,6 +12,127 @@ function AddResidentUF({
 }) {
   const formRef = useRef(null);
   const isEditMode = mode === 'edit';
+
+  const [duesProgramming, setDuesProgramming] =
+  useState(null);
+
+  const [generalSystemSettings, setGeneralSystemSettings] =
+  useState(null);
+
+
+  useEffect(() => {
+  let componentIsActive = true;
+
+  async function loadResidentDuesProgramming() {
+    try {
+      const savedData =
+        await loadDuesProgramming();
+
+      if (
+        componentIsActive &&
+        savedData
+      ) {
+        setDuesProgramming(savedData);
+      }
+    } catch (error) {
+      console.error(
+        'Unable to load dues programming:',
+        error
+      );
+    }
+  }
+
+  loadResidentDuesProgramming();
+
+  return () => {
+    componentIsActive = false;
+  };
+}, []);
+
+
+useEffect(() => {
+  let componentIsActive = true;
+
+  async function loadResidentGeneralSettings() {
+    try {
+      const savedData =
+        await loadGeneralSystemSettings();
+
+      if (
+        componentIsActive &&
+        savedData
+      ) {
+        setGeneralSystemSettings(savedData);
+      }
+    } catch (error) {
+      console.error(
+        'Unable to load General System settings:',
+        error
+      );
+    }
+  }
+
+  loadResidentGeneralSettings();
+
+  return () => {
+    componentIsActive = false;
+  };
+}, []);
+
+useEffect(() => {
+  if (!generalSystemSettings || isEditMode) {
+    return;
+  }
+
+  setBillingCityValue(
+    generalSystemSettings?.streetNames?.defaultCity || ''
+  );
+
+  setBillingStateValue(
+    generalSystemSettings?.streetNames?.defaultState || ''
+  );
+
+  setBillingZipValue(
+    generalSystemSettings?.streetNames?.defaultZip || ''
+  );
+}, [
+  generalSystemSettings,
+  isEditMode
+]);
+
+  const initialAnnualRateType =
+  String(
+    resident?.annualRate || 'Type A'
+  ).replace('Rate Code ', 'Type ');
+
+  const [annualRateType, setAnnualRateType] =
+  useState(initialAnnualRateType);
+
+ 
+
+const initialSpecialRateType =
+  String(
+    resident?.specialRate || 'Type A'
+  ).replace('Rate Code ', 'Type ');
+
+const [specialRateType, setSpecialRateType] =
+  useState(initialSpecialRateType);
+
+const currentAnnualDues =
+  duesProgramming?.annualDues?.rates?.[
+    annualRateType
+  ]?.currentRate ||
+  resident?.annualDues ||
+  '';
+
+const currentSpecialDues =
+  duesProgramming?.specialAssessment?.rates?.[
+    specialRateType
+  ]?.currentRate ||
+  resident?.specialDues ||
+  '';
+
+
 
   const residenceParts = String(
     resident?.residence || ''
@@ -37,6 +160,19 @@ function AddResidentUF({
   const [billingAddressValue, setBillingAddressValue] =
     useState(resident?.billingAddress || '');
 
+  const [billingCityValue, setBillingCityValue] =
+  useState(resident?.city || '');
+
+  const [billingStateValue, setBillingStateValue] =
+  useState(resident?.state || resident?.st || '');
+
+  const [billingZipValue, setBillingZipValue] =
+  useState(resident?.zip || '');
+
+
+
+
+
   const achValue =
     resident?.ach === 'Y'
       ? 'Yes'
@@ -44,22 +180,15 @@ function AddResidentUF({
         ? 'No'
         : resident?.ach || '';
 
-  const streetNames = [
-    'Hanover St',
-    'Pine Rd',
-    'Lake View Dr',
-    'Insurance Way',
-    'Anywhere Lane'
-  ];
+  const streetNames =
+  String(
+    generalSystemSettings?.streetNames?.streetNames || ''
+  )
+    .split(/\r?\n/)
+    .map((street) => street.trim())
+    .filter(Boolean);
 
-  const availableStreetNames = initialStreetName
-    ? Array.from(
-        new Set([
-          initialStreetName,
-          ...streetNames
-        ])
-      )
-    : streetNames;
+  const availableStreetNames = streetNames;
 
   const updateBillingAddress = (
     nextStreetNumber,
@@ -74,6 +203,67 @@ function AddResidentUF({
 
     setBillingAddressValue(combinedAddress);
   };
+
+
+  const checkForDuplicateResidence = async (
+  streetNumber,
+  streetName
+) => {
+  const cleanNumber = String(streetNumber || '').trim();
+  const cleanStreet = String(streetName || '').trim();
+
+  if (!cleanNumber || !cleanStreet) {
+    return false;
+  }
+
+  const fullAddress =
+    `${cleanNumber} ${cleanStreet}`.trim();
+
+  const excludeAccount =
+    isEditMode
+      ? (resident?.acctNo || resident?.acct || '')
+      : '';
+
+  try {
+    const result =
+      await checkResidenceAddress(
+        fullAddress,
+        excludeAccount
+      );
+
+    if (result?.duplicate) {
+  window.alert(
+    'That residence address is already assigned to another resident.'
+  );
+
+  setStreetNumberValue('');
+  setStreetNameValue('');
+
+  if (!isEditMode) {
+    setBillingAddressValue('');
+  }
+
+  setTimeout(() => {
+    const streetNumberInput =
+      formRef.current?.querySelector('#mdAddStreetNum');
+
+    streetNumberInput?.focus();
+  }, 0);
+
+  return true;
+}
+
+
+  } catch (error) {
+    console.error(
+      'Unable to check residence address:',
+      error
+    );
+  }
+
+  return false;
+};
+
 
   const readValue = (id) => {
     const element =
@@ -99,6 +289,22 @@ function AddResidentUF({
 
     const enteredACH =
       readValue('mdAddACH');
+
+    const propertyType =
+     readValue('mdAddPropertyType');
+
+      if (!propertyType) {
+        window.alert(
+          'Property Type is required. Please select Lot, House, or Rental.'
+        );
+
+        const propertyTypeSelect =
+          formRef.current?.querySelector('#mdAddPropertyType');
+
+        propertyTypeSelect?.focus();
+
+        return;
+      }
 
     const existingAccountNumber =
       resident?.acctNo ||
@@ -159,7 +365,7 @@ function AddResidentUF({
         readValue('mdAddMoveIn'),
 
       type:
-        readValue('mdAddPropertyType'),
+        propertyType,
 
       annualRate:
         readValue('mdAddAnnualRate'),
@@ -339,6 +545,12 @@ function AddResidentUF({
                     updateBillingAddress(nextValue, streetNameValue);
                   }
                 }}
+                   onBlur={() =>
+                  checkForDuplicateResidence(
+                    streetNumberValue,
+                    streetNameValue
+                  )
+                }
               />
             </div>
 
@@ -356,8 +568,12 @@ function AddResidentUF({
                   if (!isEditMode) {
                     updateBillingAddress(streetNumberValue, nextValue);
                   }
+                              checkForDuplicateResidence(
+                  streetNumberValue,
+                  nextValue
+                );
                 }}
-              >
+               >
                 <option value=""></option>
                 {availableStreetNames.map((street) => (
                   <option key={street} value={street}>
@@ -394,7 +610,8 @@ function AddResidentUF({
                 className="md-add-input"
                 id="mdAddBillingCity"
                 type="text"
-                defaultValue={resident?.city || (isEditMode ? '' : 'Mount Pleasant')}
+                value={billingCityValue}
+                onChange={(event) => setBillingCityValue(event.target.value)}
               />
             </div>
 
@@ -406,7 +623,8 @@ function AddResidentUF({
                 className="md-add-input"
                 id="mdAddBillingState"
                 type="text"
-                defaultValue={resident?.state || resident?.st || (isEditMode ? '' : 'SC')}
+                value={billingStateValue}
+                onChange={(event) => setBillingStateValue(event.target.value)}
               />
             </div>
 
@@ -418,7 +636,8 @@ function AddResidentUF({
                 className="md-add-input"
                 id="mdAddBillingZip"
                 type="text"
-                defaultValue={resident?.zip || (isEditMode ? '' : '29466')}
+                value={billingZipValue}
+                onChange={(event) => setBillingZipValue(event.target.value)}
               />
             </div>
           </div>
@@ -564,9 +783,21 @@ function AddResidentUF({
               <select
                 className="md-add-input"
                 id="mdAddAnnualRate"
-                defaultValue={resident?.annualRate || 'Rate Code A'}
+                value={annualRateType}
+                onChange={(event) =>
+                  setAnnualRateType(event.target.value)
+                }
               >
-                <option value="Rate Code A">Rate Code A</option>
+                <option value="Type A">Type A</option>
+                <option value="Type B">Type B</option>
+                <option value="Type C">Type C</option>
+                <option value="Type D">Type D</option>
+                <option value="Type E">Type E</option>
+                <option value="Type F">Type F</option>
+                <option value="Type G">Type G</option>
+                <option value="Type H">Type H</option>
+                <option value="Type I">Type I</option>
+                <option value="Type J">Type J</option>
               </select>
             </div>
 
@@ -576,7 +807,8 @@ function AddResidentUF({
                 className="md-add-input center-text font-bold"
                 id="mdAddAnnualDues"
                 type="text"
-                defaultValue={resident?.annualDues || (isEditMode ? '' : '1800')}
+                value={currentAnnualDues}
+                readOnly
               />
             </div>
 
@@ -587,9 +819,21 @@ function AddResidentUF({
               <select
                 className="md-add-input"
                 id="mdAddSpecialRate"
-                defaultValue={resident?.specialRate || 'Rate Code A'}
+                value={specialRateType}
+                  onChange={(event) =>
+                    setSpecialRateType(event.target.value)
+                  }
               >
-                <option value="Rate Code A">Rate Code A</option>
+                <option value="Type A">Rate Code A</option>
+                <option value="Type B">Rate Code B</option>
+                <option value="Type C">Rate Code C</option>
+                <option value="Type D">Rate Code D</option>
+                <option value="Type E">Rate Code E</option>
+                <option value="Type F">Rate Code F</option>
+                <option value="Type G">Rate Code G</option>
+                <option value="Type H">Rate Code H</option>
+                <option value="Type I">Rate Code I</option>
+                <option value="Type J">Rate Code J</option>
               </select>
             </div>
 
@@ -599,7 +843,8 @@ function AddResidentUF({
                 className="md-add-input center-text font-bold"
                 id="mdAddSpecialDues"
                 type="text"
-                defaultValue={resident?.specialDues || (isEditMode ? '' : '75')}
+                value={currentSpecialDues}
+                readOnly
               />
             </div>
 
@@ -608,7 +853,7 @@ function AddResidentUF({
               <select
                 className="md-add-input"
                 id="mdAddACH"
-                defaultValue={achValue}
+                defaultValue={isEditMode ? achValue : 'No'}
               >
                 <option value=""></option>
                 <option value="Yes">Yes</option>
@@ -622,7 +867,7 @@ function AddResidentUF({
                 className="md-add-input"
                 id="mdAddProRata"
                 type="text"
-                defaultValue={resident?.proRata || ''}
+                defaultValue={resident?.proRata || '1'}
               />
             </div>
           </div>
