@@ -299,6 +299,7 @@ app.put('/api/residents/:account_id', async (req, res) => {
   try {
     const { account_id } = req.params;
     const r = req.body;
+    const [oldRows] = await db.query("SELECT AnnualDuesRate, SpecialAssessmentRate, LastName, ResidenceAddress FROM ResidentMaster WHERE ResidentAccountID=? LIMIT 1", [account_id]);
     await db.query(`
       UPDATE ResidentMaster SET
         FirstName = ?,
@@ -362,6 +363,35 @@ app.put('/api/residents/:account_id', async (req, res) => {
       r.resident_notes || null,
       account_id
     ]);
+    // B4: sincronizar AssessmentRegister si cambió un valor relevante de assessment (preserva historial de pagos)
+    try {
+      const oldAnn = oldRows[0]?.AnnualDuesRate || null;
+      const oldSpec = oldRows[0]?.SpecialAssessmentRate || null;
+      const oldName = oldRows[0]?.LastName || null;
+      const oldAddr = oldRows[0]?.ResidenceAddress || null;
+      const newAnn = r.annual_dues_rate || null;
+      const newSpec = r.special_assessment_rate || null;
+      if (oldAnn !== newAnn || oldSpec !== newSpec || oldName !== (r.last_name || null) || oldAddr !== (r.residence_address || null)) {
+        const [annRate] = await db.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [newAnn || '']);
+        const [specRate] = await db.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [newSpec || '']);
+        const annualReq = annRate && annRate[0] ? Number(annRate[0].CurrentRate) || 0 : 0;
+        const specialReq = specRate && specRate[0] ? Number(specRate[0].CurrentRate) || 0 : 0;
+        const [regs] = await db.query("SELECT AssmtRegID, Frequency, CurrentFiscalYearBegins, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD FROM AssessmentRegister WHERE ResidentAccountID=?", [account_id]);
+        for (const reg of regs) {
+          const periodCount = { Annually: 1, 'Semi-Annually': 2, Quarterly: 4, Monthly: 12 }[reg.Frequency] || 1;
+          const periodic = (annualReq + specialReq) / periodCount;
+          const aDue = annualReq - (Number(reg.TotalAnnualDuesPaymentsYTD) || 0);
+          const sDue = specialReq - (Number(reg.TotalSpecialAssessmentPaidYTD) || 0);
+          await db.query(`UPDATE AssessmentRegister SET LastName=?, ResidenceAddress=?, AssignedAnnualDuesRate=?, AssignedSpecialAssessmentRate=?, TotalYearlyRequiredAnnualDues=?, RequiredSpecialAssessment=?, RequiredPeriodicPayment=?, CurrentAssessmentPaymentDue=?, AssessmentPaidBalanceDue=GREATEST(0,-?), SpecialAssessmentPaymentDue=?, SpecialAssessmentPaidBalanceDue=GREATEST(0,-?), TotalCurrentAR=?, TimeStampUpdated=NOW() WHERE AssmtRegID=?`, [r.last_name || reg.LastName, r.residence_address || reg.ResidenceAddress, annualReq, specialReq, annualReq, specialReq, periodic, aDue, aDue, sDue, sDue, aDue + sDue, reg.AssmtRegID]);
+          await db.query(`UPDATE AssessmentRegisterPeriod SET PeriodAmount=? WHERE AssmtRegID=?`, [periodic, reg.AssmtRegID]);
+        }
+        if (regs.length) {
+          const [hoaRows2] = await db.query("SELECT MgtCoClientID, HOALicenseNumber FROM HOAProfile LIMIT 1");
+          const hoa2 = hoaRows2[0] || { MgtCoClientID: 'MGTCO-001', HOALicenseNumber: 'HOA-FL-2024-001' };
+          await refreshAssessmentPaymentSummary(db, { residentAccountId: account_id, mgt: hoa2.MgtCoClientID, hoa: hoa2.HOALicenseNumber, paymentDate: null });
+        }
+      }
+    } catch (e) { console.warn('[B4] register sync failed (non-fatal):', e.message); }
     res.json({ success: true, message: 'Resident updated successfully' });
   } catch (err) {
     console.error('Error updating resident:', err);
