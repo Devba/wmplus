@@ -213,9 +213,12 @@ function EnterDepositUF({ onAddDeposit }) {
               resident.display_name ||
               `${resident.first_name || ''} ${resident.last_name || ''}`.trim(),
             address: resident.residence_address || ''
-          }))
-        );
-      } catch (error) {
+      }));
+
+      setResidents(loadedResidents);
+      setResidentSearchRows(loadedResidents);
+
+    } catch (error) {
         console.error('Error loading residents:', error);
         setResidents([]);
       }
