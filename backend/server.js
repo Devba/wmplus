@@ -234,6 +234,13 @@ if (nextResidentNumber > 999999) {
     const residentAccountId =
       String(nextResidentNumber).padStart(6, '0');
     const result = await db.withTransaction(async (conn) => {
+      // B5: derivar importes 100% de DuesRates (fallback al valor del frontend si el rate no existe)
+      const [annRow] = await conn.query("SELECT CurrentRate, NextRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [r.annual_dues_rate || '']);
+      const [specRow] = await conn.query("SELECT CurrentRate, NextRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [r.special_assessment_rate || '']);
+      const annualReq = annRow && annRow[0] ? Number(annRow[0].CurrentRate) : parseDecimal(r.annual_dues);
+      const specialReq = specRow && specRow[0] ? Number(specRow[0].CurrentRate) : parseDecimal(r.special_assessment_dues);
+      const annualNextReq = annRow && annRow[0] ? Number(annRow[0].NextRate) : parseDecimal(r.next_year_annual_dues);
+      const specialNextReq = specRow && specRow[0] ? Number(specRow[0].NextRate) : parseDecimal(r.next_year_special_assmt_dues);
       const [insRes] = await conn.query(`
         INSERT INTO ResidentMaster (
           ResidentAccountID, FirstName, MiddleName, LastName, DisplayName, ResidenceAddress, BillingAddress,
@@ -267,11 +274,11 @@ if (nextResidentNumber > 999999) {
         r.addl_last_name || null,
         r.addl_email || null,
         r.annual_dues_rate || null,
-        parseDecimal(r.annual_dues),
+        annualReq,
         r.special_assessment_rate || null,
-        parseDecimal(r.special_assessment_dues),
-        parseDecimal(r.next_year_annual_dues),
-        parseDecimal(r.next_year_special_assmt_dues),
+        specialReq,
+        annualNextReq,
+        specialNextReq,
         r.resident_notes || null
       ]);
       await initializeAssessmentRegister(conn, {
@@ -300,6 +307,13 @@ app.put('/api/residents/:account_id', async (req, res) => {
     const { account_id } = req.params;
     const r = req.body;
     const [oldRows] = await db.query("SELECT AnnualDuesRate, SpecialAssessmentRate, LastName, ResidenceAddress FROM ResidentMaster WHERE ResidentAccountID=? LIMIT 1", [account_id]);
+    // B5: derivar importes desde DuesRates para no depender del valor hand-entered del frontend
+    const [annUpRow] = await db.query("SELECT CurrentRate, NextRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [r.annual_dues_rate || '']);
+    const [specUpRow] = await db.query("SELECT CurrentRate, NextRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [r.special_assessment_rate || '']);
+    const annUpReq = annUpRow && annUpRow[0] ? Number(annUpRow[0].CurrentRate) : parseDecimal(r.annual_dues);
+    const specUpReq = specUpRow && specUpRow[0] ? Number(specUpRow[0].CurrentRate) : parseDecimal(r.special_assessment_dues);
+    const annUpNextReq = annUpRow && annUpRow[0] ? Number(annUpRow[0].NextRate) : parseDecimal(r.next_year_annual_dues);
+    const specUpNextReq = specUpRow && specUpRow[0] ? Number(specUpRow[0].NextRate) : parseDecimal(r.next_year_special_assmt_dues);
     await db.query(`
       UPDATE ResidentMaster SET
         FirstName = ?,
@@ -355,11 +369,11 @@ app.put('/api/residents/:account_id', async (req, res) => {
       r.addl_last_name || null,
       r.addl_email || null,
       r.annual_dues_rate || null,
-      parseDecimal(r.annual_dues),
+      annUpReq,
       r.special_assessment_rate || null,
-      parseDecimal(r.special_assessment_dues),
-      parseDecimal(r.next_year_annual_dues),
-      parseDecimal(r.next_year_special_assmt_dues),
+      specUpReq,
+      annUpNextReq,
+      specUpNextReq,
       r.resident_notes || null,
       account_id
     ]);
