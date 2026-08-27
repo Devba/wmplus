@@ -231,53 +231,64 @@ if (nextResidentNumber > 999999) {
   });
 }
 
-const residentAccountId =
-  String(nextResidentNumber).padStart(6, '0');
-    const [result] = await db.query(`
-      INSERT INTO ResidentMaster (
-        ResidentAccountID, FirstName, MiddleName, LastName, DisplayName, ResidenceAddress, BillingAddress,
-        City, StateCode, ZipCode, PrimaryPhone, PrimaryCell, SecondaryCell, EmailAddress, MoveInDate,
-        ResidentType, ActiveResidentFlag, ACHFlag, AdditionalOwnerFirstName, AdditionalOwnerMiddleName,
-        AdditionalOwnerLastName, AdditionalOwnerEmail, AnnualDuesRate, AnnualDues, SpecialAssessmentRate,
-        SpecialAssessmentDues, NextYearAnnualDues, NextYearSpecialAssmtDues, ResidentNotes,
-        MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
-    `, [
-      residentAccountId,
-      r.first_name || null,
-      r.middle_name || null,
-      r.last_name || null,
-      r.display_name || null,
-      r.residence_address || null,
-      r.billing_address || null,
-      r.city || null,
-      r.state_code || null,
-      r.zip_code || null,
-      r.primary_phone || null,
-      r.primary_cell || null,
-      r.secondary_cell || null,
-      r.email_address || null,
-      normalizeDateForDatabase(r.move_in_date),
-      r.resident_type || null,
-      r.active_flag || 'Y',
-      r.ach_flag || null,
-      r.addl_first_name || null,
-      r.addl_middle_name || null,
-      r.addl_last_name || null,
-      r.addl_email || null,
-      parseDecimal(r.annual_dues_rate),
-      parseDecimal(r.annual_dues),
-      parseDecimal(r.special_assessment_rate),
-      parseDecimal(r.special_assessment_dues),
-      parseDecimal(r.next_year_annual_dues),
-      parseDecimal(r.next_year_special_assmt_dues),
-      r.resident_notes || null
-    ]);
+    const residentAccountId =
+      String(nextResidentNumber).padStart(6, '0');
+    const result = await db.withTransaction(async (conn) => {
+      const [insRes] = await conn.query(`
+        INSERT INTO ResidentMaster (
+          ResidentAccountID, FirstName, MiddleName, LastName, DisplayName, ResidenceAddress, BillingAddress,
+          City, StateCode, ZipCode, PrimaryPhone, PrimaryCell, SecondaryCell, EmailAddress, MoveInDate,
+          ResidentType, ActiveResidentFlag, ACHFlag, AdditionalOwnerFirstName, AdditionalOwnerMiddleName,
+          AdditionalOwnerLastName, AdditionalOwnerEmail, AnnualDuesRate, AnnualDues, SpecialAssessmentRate,
+          SpecialAssessmentDues, NextYearAnnualDues, NextYearSpecialAssmtDues, ResidentNotes,
+          MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+      `, [
+        residentAccountId,
+        r.first_name || null,
+        r.middle_name || null,
+        r.last_name || null,
+        r.display_name || null,
+        r.residence_address || null,
+        r.billing_address || null,
+        r.city || null,
+        r.state_code || null,
+        r.zip_code || null,
+        r.primary_phone || null,
+        r.primary_cell || null,
+        r.secondary_cell || null,
+        r.email_address || null,
+        normalizeDateForDatabase(r.move_in_date),
+        r.resident_type || null,
+        r.active_flag || 'Y',
+        r.ach_flag || null,
+        r.addl_first_name || null,
+        r.addl_middle_name || null,
+        r.addl_last_name || null,
+        r.addl_email || null,
+        r.annual_dues_rate || null,
+        parseDecimal(r.annual_dues),
+        r.special_assessment_rate || null,
+        parseDecimal(r.special_assessment_dues),
+        parseDecimal(r.next_year_annual_dues),
+        parseDecimal(r.next_year_special_assmt_dues),
+        r.resident_notes || null
+      ]);
+      await initializeAssessmentRegister(conn, {
+        residentAccountId,
+        lastName: r.last_name,
+        address: r.residence_address,
+        annualRateCode: r.annual_dues_rate,
+        specialRateCode: r.special_assessment_rate,
+        operatorId: 'SYSTEM'
+      });
+      return insRes;
+    });
     res.status(201).json({
-  success: true,
-  insertedId: result.insertId,
-  account_id: residentAccountId
-});
+      success: true,
+      insertedId: result.insertId,
+      account_id: residentAccountId
+    });
   } catch (err) {
     console.error('Error inserting resident:', err);
     res.status(500).json({ error: 'Failed to insert resident', details: err.message });
@@ -342,9 +353,9 @@ app.put('/api/residents/:account_id', async (req, res) => {
       r.addl_middle_name || null,
       r.addl_last_name || null,
       r.addl_email || null,
-      parseDecimal(r.annual_dues_rate),
+      r.annual_dues_rate || null,
       parseDecimal(r.annual_dues),
-      parseDecimal(r.special_assessment_rate),
+      r.special_assessment_rate || null,
       parseDecimal(r.special_assessment_dues),
       parseDecimal(r.next_year_annual_dues),
       parseDecimal(r.next_year_special_assmt_dues),
@@ -3425,6 +3436,46 @@ async function getFrequency(conn, paymentType) {
   const duesType = paymentType === 'SpecialAssessment' ? 'specialAssessment' : 'annualDues';
   const [rows] = await conn.query("SELECT AssessmentFrequency FROM DuesProgramming WHERE DuesType=? LIMIT 1", [duesType]);
   return rows[0]?.AssessmentFrequency || 'Annually';
+}
+
+// B1: inicializa AssessmentRegister + AssessmentRegisterPeriod al crear residente (importes 100% desde DuesRates)
+async function resolveFiscalYearBegins(conn) {
+  try {
+    const [rows] = await conn.query("SELECT FiscalYearStartDate FROM FiscalYearSetup WHERE CurrentFiscalYearFlag='Y' LIMIT 1");
+    if (rows && rows[0] && rows[0].FiscalYearStartDate) return String(rows[0].FiscalYearStartDate);
+  } catch (e) { /* FiscalYearSetup puede no existir aún */ }
+  console.warn('[APR init] FiscalYearSetup sin fila actual; usando default año-01-01');
+  return deriveFiscalYearBegins(null, null);
+}
+
+async function initializeAssessmentRegister(conn, ctx) {
+  const { residentAccountId, lastName, address, annualRateCode, specialRateCode, operatorId } = ctx;
+  const hoa = await getHoaIdentity(conn);
+  const frequency = await getFrequency(conn, 'AnnualDues');
+  const [annual] = await conn.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='annualDues' AND RateType=? LIMIT 1", [annualRateCode || '']);
+  const [special] = await conn.query("SELECT CurrentRate FROM DuesRates WHERE SectionType='specialAssessment' AND RateType=? LIMIT 1", [specialRateCode || '']);
+  const annualAmt = annual && annual[0] ? Number(annual[0].CurrentRate) || 0 : 0;
+  const specialAmt = special && special[0] ? Number(special[0].CurrentRate) || 0 : 0;
+  const periodCount = { Annually: 1, 'Semi-Annually': 2, Quarterly: 4, Monthly: 12 }[frequency] || 1;
+  const periodic = (annualAmt + specialAmt) / periodCount;
+  const fyBegins = await resolveFiscalYearBegins(conn);
+  const [ins] = await conn.query(`
+    INSERT INTO AssessmentRegister
+      (ResidentAccountID, Frequency, LastName, ResidenceAddress, CurrentFiscalYearBegins, MgtCoClientID, HOALicenseNumber,
+       AssignedAnnualDuesRate, AssignedSpecialAssessmentRate, TotalYearlyRequiredAnnualDues, RequiredSpecialAssessment,
+       RequiredPeriodicPayment, CurrentAssessmentPaymentDue, TotalAnnualDuesPaymentsYTD, TotalSpecialAssessmentPaidYTD, TotalCurrentAR, OperatorID)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)
+  `, [residentAccountId, frequency, lastName || null, address || null, fyBegins, hoa.MgtCoClientID, hoa.HOALicenseNumber,
+      annualAmt, specialAmt, annualAmt, specialAmt, periodic, periodic, operatorId || 'SYSTEM']);
+  const assmtRegId = ins.insertId;
+  for (let p = 1; p <= periodCount; p++) {
+    await conn.query(`
+      INSERT INTO AssessmentRegisterPeriod
+        (AssmtRegID, MgtCoClientID, HOALicenseNumber, ResidentAccountID, CurrentFiscalYearBegins, Frequency, PeriodNumber, PeriodAmount)
+      VALUES (?,?,?,?,?,?,?,?)
+    `, [assmtRegId, hoa.MgtCoClientID, hoa.HOALicenseNumber, residentAccountId, fyBegins, frequency, p, periodic]);
+  }
+  return assmtRegId;
 }
 
 // POST /api/apr/enter-payment — Fase 1: posting atómico APR → AssmtRegisters → CashFlow
