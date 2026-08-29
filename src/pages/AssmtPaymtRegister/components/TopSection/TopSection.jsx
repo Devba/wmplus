@@ -9,7 +9,9 @@ function TopSection({
   residents,
   onApplyResidentFilter,
   onResetResidentFilter,
-  onAddPayment
+  onAddPayment,
+  selectedPaymentRow,
+  allResidentTotals
 }) {
   return (
     <div className="apr-topsection">
@@ -29,7 +31,10 @@ function TopSection({
         }
       />
 
-      <TotalsRow />
+      <TotalsRow 
+      selectedPaymentRow={selectedPaymentRow}
+       allResidentTotals={allResidentTotals}
+      />
     </div>
   );
 }

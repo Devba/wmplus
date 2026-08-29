@@ -15,6 +15,12 @@ function AssmtPaymtRegister({ onSelectPage }) {
   setPaymentRows
 ] = useState([]);
 
+const [selectedPaymentRow, setSelectedPaymentRow] = useState(null);
+
+const [aprReloadKey, setAprReloadKey] = useState(0);
+
+const [pendingTransactionNumber, setPendingTransactionNumber] = useState('');
+
 useEffect(() => {
   let componentIsActive = true;
 
@@ -30,11 +36,136 @@ useEffect(() => {
         return;
       }
 
-      setPaymentRows(
-        Array.isArray(result?.transactions)
-          ? result.transactions
-          : []
-      );
+const mappedPaymentRows =
+  Array.isArray(result?.transactions)
+    ? result.transactions.map((row) => {
+        const annualPaid =
+          Number(row.TotalAnnualAssessmentPaidYTD || 0);
+
+        const specialPaid =
+          Number(row.TotalSpecialAssessmentPaidYTD || 0);
+
+        const creditsReceived =
+          Number(row.TotalCreditsReceived || 0);
+
+        const totalPaid =
+          annualPaid +
+          specialPaid +
+          creditsReceived;
+
+        const ownerName =
+          row.DisplayName ||
+          [
+            row.FirstName,
+            row.MiddleName,
+            row.LastName
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+        return {
+          ownerAcct:
+            row.ResidentAccountID || '',
+
+          ownerName:
+            ownerName || '',
+
+          address:
+            row.ResidenceAddress || '',
+
+          amount:
+            Number(row.TotalAmount || 0).toFixed(2),
+
+          dateDeposited:
+            row.PaymentDate
+              ? String(row.PaymentDate).slice(0, 10)
+              : '',
+
+          dateCleared:
+            '',
+
+          monthCleared:
+            '',
+
+          annualPayment:
+            Number(
+              row.AnnualDuesPayment || 0
+            ).toFixed(2),
+
+          specialPayment:
+            Number(
+              row.SpecialAssessmentPayment || 0
+            ).toFixed(2),
+
+          credit:
+            Number(
+              row.CreditAmount || 0
+            ).toFixed(2),
+
+          totalPaidYTD:
+            totalPaid.toFixed(2),
+
+          totalAnnual:
+            annualPaid.toFixed(2),
+
+          totalSpecial:
+            specialPaid.toFixed(2),
+
+          totalCredits:
+            creditsReceived.toFixed(2),
+
+          transaction:
+            row.TransactionNumber || '',
+
+          yeCreditUsed:
+            '',
+
+          yeAnnual:
+            '',
+
+          yeSpecial:
+            '',
+
+          paidPrior:
+            '',
+
+          excessCredit:
+            Number(
+              row.CreditAfterAssessmentPaymentsFinePaymentsRefunds || 0
+            ).toFixed(2),
+
+          annualRate:
+            row.AnnualRateType || '',
+
+          specialRate:
+            row.SpecialRateType || '',
+
+          depositInvoice:
+            '',
+
+          electronic:
+            row.ElectronicPaymentID || '',
+
+          uploaded:
+            'No'
+        };
+      })
+    : [];
+
+setPaymentRows(mappedPaymentRows);
+
+if (pendingTransactionNumber) {
+  const matchingRow = mappedPaymentRows.find(
+    (row) =>
+      row.transaction === pendingTransactionNumber
+  );
+
+  if (matchingRow) {
+    setSelectedPaymentRow(matchingRow);
+    setPendingTransactionNumber('');
+  }
+}
+
     } catch (error) {
       console.error(
         'APR transaction load error:',
@@ -48,7 +179,7 @@ useEffect(() => {
   return () => {
     componentIsActive = false;
   };
-}, []);
+}, [aprReloadKey]);
 
 
   const [
@@ -156,18 +287,34 @@ const residentLookupRows = useMemo(
 
 
    const handleAddPayment = (
-  newPayment
-    ) => {
-      setPaymentRows((rows) => [
-        ...rows,
-        newPayment
-      ]);
+  newPayment,
+  newTransactionNumber
+  ) => {
+      
+
+      setSelectedPaymentRow(newPayment);
+
+      setPendingTransactionNumber(newTransactionNumber || '');
+
+      setAprReloadKey((key) => key + 1);
 
       setResidentAccountFilter('');
     };
 
 
-
+   const allResidentTotals = paymentRows.reduce(
+  (totals, row) => {
+    totals.annual += Number(row.annualPayment || 0);
+    totals.special += Number(row.specialPayment || 0);
+    totals.credits += Number(row.credit || 0);
+    return totals;
+  },
+  {
+    annual: 0,
+    special: 0,
+    credits: 0
+  }
+);
 
   return (
     <div className="apr-page">
@@ -185,6 +332,8 @@ const residentLookupRows = useMemo(
           onAddPayment={
             handleAddPayment
           }
+          selectedPaymentRow={selectedPaymentRow}
+          allResidentTotals={allResidentTotals}
         />
         </div>
 
@@ -192,6 +341,8 @@ const residentLookupRows = useMemo(
           paymentRows={
             displayedPaymentRows
           }
+          onSelectPaymentRow={setSelectedPaymentRow}
+          selectedPaymentRow={selectedPaymentRow}
         />
       </div>
     </div>

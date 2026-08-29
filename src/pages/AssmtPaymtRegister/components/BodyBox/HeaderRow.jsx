@@ -15,10 +15,6 @@ function HeaderRow() {
         <th>ANNUAL DUES PAY'MT</th>
         <th>SPECIAL ASS'MT PAY'MT</th>
         <th>CREDIT ASSMT $$</th>
-        <th>TOTAL PAY'MTS YTD</th>
-        <th>TOTAL ANNUAL DUES PAY'MTS</th>
-        <th>TOTAL SPECIAL ASS'MT PAY'MTS</th>
-        <th>TOTAL CREDITS RECEIVED</th>
         <th>ASSMT PAYMT TRANSACTION #</th>
         <th>YE CREDIT $$ USED</th>
         <th>YE CREDIT $$ USED ANNUAL</th>

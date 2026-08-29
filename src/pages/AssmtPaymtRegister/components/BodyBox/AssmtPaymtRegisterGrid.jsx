@@ -6,7 +6,9 @@ import { useState } from 'react';
 import HeaderRow from './HeaderRow';
 
 function AssmtPaymtRegisterGrid({
-  paymentRows = []
+  paymentRows = [],
+  onSelectPaymentRow,
+  selectedPaymentRow
 }) {
   const [
     selectedTransaction,
@@ -38,10 +40,6 @@ function AssmtPaymtRegisterGrid({
           <col className="c19" />
           <col className="c20" />
           <col className="c21" />
-          <col className="c22" />
-          <col className="c23" />
-          <col className="c24" />
-          <col className="c25" />
         </colgroup>
 
         <HeaderRow />
@@ -52,16 +50,14 @@ function AssmtPaymtRegisterGrid({
               <tr
                 key={`${row.transaction}-${index}`}
                 className={
-                  selectedTransaction ===
-                  row.transaction
+                  selectedPaymentRow === row
                     ? 'is-selected'
                     : ''
                 }
-                onClick={() =>
-                  setSelectedTransaction(
-                    row.transaction
-                  )
-                }
+                onClick={() => {
+                setSelectedTransaction(row.transaction);
+                onSelectPaymentRow?.(row);
+              }}
               >
                 <td>{row.ownerAcct}</td>
                 <td>{row.ownerName}</td>
@@ -73,10 +69,6 @@ function AssmtPaymtRegisterGrid({
                 <td>{row.annualPayment}</td>
                 <td>{row.specialPayment}</td>
                 <td>{row.credit}</td>
-                <td>{row.totalPaidYTD}</td>
-                <td>{row.totalAnnual}</td>
-                <td>{row.totalSpecial}</td>
-                <td>{row.totalCredits}</td>
                 <td>{row.transaction}</td>
                 <td>{row.yeCreditUsed}</td>
                 <td>{row.yeAnnual}</td>

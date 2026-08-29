@@ -1,7 +1,24 @@
 
 
 
-function TotalsRow() {
+function TotalsRow({
+  selectedPaymentRow,
+  allResidentTotals
+}) {
+
+const displayAnnual = selectedPaymentRow
+  ? Number(selectedPaymentRow.totalAnnual || 0)
+  : Number(allResidentTotals?.annual || 0);
+
+const displaySpecial = selectedPaymentRow
+  ? Number(selectedPaymentRow.totalSpecial || 0)
+  : Number(allResidentTotals?.special || 0);
+
+const displayCredits = selectedPaymentRow
+  ? Number(selectedPaymentRow.totalCredits || 0)
+  : Number(allResidentTotals?.credits || 0);
+
+
   return (
     <div className="apr-totals-row">
 
@@ -13,7 +30,7 @@ function TotalsRow() {
         <input
           id="aprTotalDuesYTD"
           className="apr-total-input"
-          value="1,665.00"
+          value={displayAnnual.toFixed(2)}
           readOnly
         />
       </div>
@@ -26,7 +43,7 @@ function TotalsRow() {
         <input
           id="aprTotalSpecialDues"
           className="apr-total-input"
-          value=""
+          value={displaySpecial.toFixed(2)}
           readOnly
         />
       </div>
@@ -39,7 +56,7 @@ function TotalsRow() {
         <input
           id="aprTotalCredits"
           className="apr-total-input"
-          value="0.00"
+          value={displayCredits.toFixed(2)}
           readOnly
         />
       </div>

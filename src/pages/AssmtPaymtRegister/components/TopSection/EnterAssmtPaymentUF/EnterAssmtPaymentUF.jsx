@@ -510,22 +510,21 @@ const selectResidentFromAddressSearch = (resident) => {
       return;
     }
 
-    if (!String(annualPayment).trim()) {
-      window.alert(
-        'Please enter an Annual Dues payment amount.'
-      );
-      return;
-    }
-
     const annualPaymentNumber =
-      numberFromMoney(annualPayment);
+  numberFromMoney(annualPayment);
 
-    if (annualPaymentNumber <= 0) {
-      window.alert(
-        'Annual Dues payment must be greater than zero.'
-      );
-      return;
-    }
+const specialPaymentNumber =
+  numberFromMoney(specialPayment);
+
+if (
+  annualPaymentNumber <= 0 &&
+  specialPaymentNumber <= 0
+) {
+  window.alert(
+    'Please enter an Annual Dues or Special Assessment payment amount.'
+  );
+  return;
+}
 
     if (!String(dateDeposited).trim()) {
       window.alert(
@@ -534,15 +533,13 @@ const selectResidentFromAddressSearch = (resident) => {
       return;
     }
 
-    const specialPaymentNumber =
-      numberFromMoney(specialPayment);
+    
 
     const totalPayment =
       annualPaymentNumber +
       specialPaymentNumber;
 
-    const transactionNumber =
-      `APR-${Date.now()}`;
+    
 
     const newPayment = {
       ownerAcct:
@@ -599,8 +596,7 @@ const selectResidentFromAddressSearch = (resident) => {
         selectedResident.totalCredits ||
         '$0.00',
 
-      transaction:
-        transactionNumber,
+      transaction: '',
 
       yeCreditUsed: '',
       yeAnnual: '',
@@ -634,7 +630,7 @@ checkNumber
       return;
     }
 
-    onAddPayment(newPayment);
+    
 
 if (keepOpen) {
   clearForNextPayment();
@@ -647,51 +643,32 @@ if (keepOpen) {
 }
 
 const payload = {
-      acct:
-        accountFor(selectedResident),
+  residentAccountId:
+    accountFor(selectedResident),
 
-      firstName,
-      lastName,
+  paymentType:
+    specialPaymentNumber > 0
+      ? 'SpecialAssessment'
+      : 'AnnualDues',
 
-      address:
-        addressFor(selectedResident),
+  annualDuesPayment:
+    annualPaymentNumber,
 
-      assmtPaidYTD:
-        selectedResident.assmtPaidYTD ||
-        selectedResident.totalAnnual ||
-        '',
+  specialAssessmentPayment:
+    specialPaymentNumber,
 
-      assmtDue:
-        selectedResident.assmtDue || '',
+  paymentDate:
+    dateDeposited,
 
-      specialPaidYTD:
-        selectedResident.specialPaidYTD ||
-        selectedResident.totalSpecial ||
-        '',
+  creditAmount:
+  0,
 
-      specialDue:
-        selectedResident.specialDue || '',
+electronicPaymentId:
+  checkNumber || null,
 
-      annualRate:
-        selectedResident.annualRate || '',
-
-      specialRate:
-        selectedResident.specialRate || '',
-
-      annualPayment:
-        moneyText(annualPaymentNumber),
-
-      specialPayment:
-        specialPaymentNumber > 0
-          ? moneyText(specialPaymentNumber)
-          : '',
-
-      finesDue:
-        selectedResident.finesDue || '',
-
-      dateDeposited,
-      checkNumber
-    };
+operatorId:
+  'SYSTEM'
+};
 
     try {
       const response = await fetch(
@@ -708,12 +685,27 @@ const payload = {
 
       const result = await response.json();
 
-      if (!result?.ok) {
+      if (!response.ok || !result?.success) {
         console.error(
           'APR server rejected payment:',
           result
         );
       }
+
+      if (response.ok && result?.success) {
+        const serverRow = result.rows?.[0];
+
+        if (serverRow) {
+          newPayment.transaction =
+            serverRow.transactionNumber || '';
+           onAddPayment(
+          newPayment,
+          serverRow.transactionNumber
+        );
+        }
+      }
+
+
     } catch (error) {
       console.error(
         'APR payment server error:',
