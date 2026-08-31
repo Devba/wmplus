@@ -291,15 +291,15 @@
 }
 
 .apr-enter-star-two {
-  left: 890px;
+  left: 800px;
   top: 245px;
 }
 
 .apr-enter-payment-note {
   position: absolute;
-  left: 900px;
+  left: 800px;
   top: 250px;
-  width: 250px;
+  width: 315px;
   font-size: 14px;
   font-weight: 700;
   line-height: 20px;

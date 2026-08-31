@@ -26,22 +26,11 @@ const voidConfig = {
       : [];
 
     return String(
-      cells[14]?.innerText || ''
+      cells[10]?.innerText || ''
     ).trim();
   },
 
-  stampFields: [
-  {
-    column: 6,
-    action: 'set',
-    value: 'VOID'
-  },
-  {
-    column: 7,
-    action: 'set',
-    value: 'VOID'
-  }
-]
+stampFields: []
 };
 
 function normalize(value) {
@@ -89,7 +78,7 @@ function findRowByTransaction(
       tr.querySelectorAll('td');
 
     const rowTransaction =
-      normalize(cells[14]?.innerText);
+      normalize(cells[10]?.innerText);
 
     if (rowTransaction === wanted) {
       return tr;
@@ -108,7 +97,7 @@ function populateFromRow(tr, refs) {
     tr.querySelectorAll('td');
 
   refs.transaction.current.value =
-    normalize(cells[14]?.innerText);
+    normalize(cells[10]?.innerText);
 
   refs.resident.current.value =
     normalize(cells[1]?.innerText);
@@ -123,7 +112,9 @@ function populateFromRow(tr, refs) {
     normalize(cells[3]?.innerText);
 }
 
-function VoidAssmtPaymentUF() {
+function VoidAssmtPaymentUF({
+  onVoidSuccess
+}) {
   const transactionRef =
     useRef(null);
 
@@ -170,7 +161,7 @@ function VoidAssmtPaymentUF() {
 
       selectedTransaction =
         normalize(
-          cells[14]?.innerText
+          cells[10]?.innerText
         );
     }
 
@@ -249,7 +240,11 @@ function VoidAssmtPaymentUF() {
     executeVoid(
       targetRow,
       voidConfig
-    );
+    ).then((success) => {
+      if (success) {
+        onVoidSuccess?.();
+      }
+    });
   };
 
   return (

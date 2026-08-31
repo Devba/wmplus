@@ -632,15 +632,7 @@ checkNumber
 
     
 
-if (keepOpen) {
-  clearForNextPayment();
 
-  window.alert(
-    'Assessment payment entered successfully. Continue with the next resident.'
-  );
-} else {
-  closeOverlay();
-}
 
 const payload = {
   residentAccountId:
@@ -698,10 +690,21 @@ operatorId:
         if (serverRow) {
           newPayment.transaction =
             serverRow.transactionNumber || '';
-           onAddPayment(
-          newPayment,
-          serverRow.transactionNumber
-        );
+
+          onAddPayment(
+            newPayment,
+            serverRow.transactionNumber
+          );
+        }
+
+        if (keepOpen) {
+          clearForNextPayment();
+
+          window.alert(
+            'Assessment payment entered successfully. Continue with the next resident.'
+          );
+        } else {
+          closeOverlay();
         }
       }
 
@@ -1007,13 +1010,12 @@ operatorId:
       </div>
 
       <div className="apr-enter-payment-note">
-        If Quarterly or Monthly Annual Dues
+        Special Assessment payments will only
         <br />
-        payment method, then enter Special
+        be applied up to the amount due.
         <br />
-        Assessment payments here
+        All excess money will be applied to Annual Dues / Credit.
       </div>
-
       <button
           type="button"
           className="apr-enter-submit"

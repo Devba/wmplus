@@ -108,18 +108,26 @@ export async function executeVoid(tr, config) {
 
     try {
       response = await fetch(
-        `${API_BASE_URL}/void/execute`,
+        config.page === 'APR'
+          ? `${API_BASE_URL}/apr/void`
+          : `${API_BASE_URL}/void/execute`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            payload: {
-              transaction_no: transactionNumber,
-              page: config.page || ''
-            }
-          })
+          body: JSON.stringify(
+  config.page === 'APR'
+    ? {
+        transactionNumber
+      }
+    : {
+        payload: {
+          transaction_no: transactionNumber,
+          page: config.page || ''
+        }
+      }
+)
         }
       );
     } catch (error) {
@@ -137,7 +145,14 @@ export async function executeVoid(tr, config) {
     }
   }
 
-  if (!data || data.ok !== true) {
+  if (
+  !data ||
+  (config.page === 'APR'
+    ? data.success !== true
+    : data.ok !== true)
+   ) {
+
+
     window.alert(
       data?.status?.message || 'Void failed.'
     );

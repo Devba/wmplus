@@ -12,7 +12,8 @@ function ButtonRow({
   residents = [],
   onApplyResidentFilter,
   onResetResidentFilter,
-  onAddPayment
+  onAddPayment,
+  onVoidSuccess
 }) {
   const handleOpenResidentFilter = () => {
     openOverlay({
@@ -55,7 +56,11 @@ function ButtonRow({
 const handleOpenVoidPayment = () => {
   openOverlay({
     title: 'VOID ASSESSMENT PAYMENT',
-    component: <VoidAssmtPaymentUF />,
+    component: (
+  <VoidAssmtPaymentUF
+    onVoidSuccess={onVoidSuccess}
+    />
+  ),
     width: '820px',
     maxWidth: '96vw'
   });

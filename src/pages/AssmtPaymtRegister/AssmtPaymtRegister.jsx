@@ -301,6 +301,11 @@ const residentLookupRows = useMemo(
       setResidentAccountFilter('');
     };
 
+    const handleVoidSuccess = () => {
+  setSelectedPaymentRow(null);
+  setPendingTransactionNumber('');
+  setAprReloadKey((key) => key + 1);
+    };
 
    const allResidentTotals = paymentRows.reduce(
   (totals, row) => {
@@ -332,6 +337,10 @@ const residentLookupRows = useMemo(
           onAddPayment={
             handleAddPayment
           }
+          onVoidSuccess={
+            handleVoidSuccess
+          }
+
           selectedPaymentRow={selectedPaymentRow}
           allResidentTotals={allResidentTotals}
         />

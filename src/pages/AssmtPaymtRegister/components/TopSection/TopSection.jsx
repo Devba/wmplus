@@ -10,6 +10,7 @@ function TopSection({
   onApplyResidentFilter,
   onResetResidentFilter,
   onAddPayment,
+  onVoidSuccess,
   selectedPaymentRow,
   allResidentTotals
 }) {
@@ -28,6 +29,9 @@ function TopSection({
         }
         onAddPayment={
           onAddPayment
+        }
+        onVoidSuccess={
+          onVoidSuccess
         }
       />
 
