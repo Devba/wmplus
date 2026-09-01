@@ -57,15 +57,7 @@ function formatDateForDatabase(dateText) {
   return `${year}-${month}-${day}`;
 }
 
-function buildTransactionNumber(date) {
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const year = String(date.getFullYear());
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `DP${month}${day}${year}-${hours}${minutes}${seconds}`;
-}
+
 
 function EnterDepositUF({ onAddDeposit }) {
   const [banks, setBanks] = useState([]);
@@ -646,7 +638,7 @@ function EnterDepositUF({ onAddDeposit }) {
         ? expenseRefundGLNumber
         : '',
       glNumber,
-      transactionNumber: buildTransactionNumber(now),
+      transactionNumber: '',
       notation,
       arbFineAssigned: '$0.00',
       fineAssigned: '$0.00',
@@ -678,7 +670,6 @@ try {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          deposit_txn_num: newDeposit.transactionNumber,
           payer_name: newDeposit.depositorName,
           amount: parseMoney(newDeposit.amount),
           bank_account_name: newDeposit.bankAccount,
@@ -704,6 +695,9 @@ try {
             `Server returned ${response.status}`
         );
       }
+
+      newDeposit.transactionNumber =
+        result.deposit_txn_num || newDeposit.transactionNumber;
 
       if (typeof onAddDeposit === 'function') {
         onAddDeposit(newDeposit);

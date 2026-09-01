@@ -1,11 +1,23 @@
 
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import HeaderRow from './HeaderRow';
 
 function CheckRegisterGrid({ checkRows }) {
   const [selectedTransactionNo, setSelectedTransactionNo] =
-    useState(null);
+      useState(null);
+    
+      const lastRowRef = useRef(null);
+
+  useEffect(() => {
+  if (checkRows.length > 0) {
+    lastRowRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end'
+    });
+  }
+}, [checkRows.length]);  
+
 
   return (
     <div className="checkreg-grid-band">
@@ -38,9 +50,10 @@ function CheckRegisterGrid({ checkRows }) {
           <HeaderRow />
 
           <tbody id="crRows">
-            {checkRows.map((row) => (
+            {checkRows.map((row, index) => (
               <tr
                 key={row.transactionNo}
+                ref={index === checkRows.length - 1 ? lastRowRef : null}
                 className={
                   selectedTransactionNo === row.transactionNo
                     ? 'is-selected'

@@ -213,7 +213,7 @@ function VoidCheckUF() {
                 ref={txnRef}
                 className="uf-input"
                 id="vcTxn"
-                maxLength={18}
+                maxLength={20}
                 type="text"
                 onKeyDown={handleTransactionKeyDown}
               />

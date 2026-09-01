@@ -61,16 +61,7 @@ const formatDateForDatabase = (dateText) => {
 
 
 
-function formatDateForTransaction(date) {
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const year = String(date.getFullYear());
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
 
-  return `CHK${month}${day}${year}-${hours}${minutes}${seconds}`;
-}
 
 function normalizeMoneyInput(value) {
   let normalized = String(value || '').replace(/[^0-9.]/g, '');
@@ -797,7 +788,6 @@ const visibleGLChildren = useMemo(
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          check_txn_num: newCheck.transactionNo,
           check_number: newCheck.checkNo,
           gl_name: newCheck.glAccount,
           amount: parseMoney(newCheck.amount),
@@ -831,6 +821,9 @@ const visibleGLChildren = useMemo(
         `Server returned ${response.status}`
       );
     }
+
+    newCheck.transactionNo =
+    result.check_txn_num || newCheck.transactionNo;
 
     if (typeof onAddCheck === 'function') {
       onAddCheck(newCheck);
@@ -906,7 +899,7 @@ const handleEnterCheck = async () => {
     checkAllowed: 'Y',
     glNo: glNumber,
 
-    transactionNo: formatDateForTransaction(now),
+    transactionNo: '',
 
     escrowFlag:
       selectedBank?.id === '301' ? 'Y' : 'N',

@@ -38,6 +38,14 @@
   font-weight: 700;
 }
 
+.dues-pending-bank-message {
+  margin-left: 30px;
+
+  color: #cc0000;
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .dues-grid {
   flex: 1 1 auto;
   min-width: 0;
@@ -106,17 +114,46 @@
 }
 
 .dues-control-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  position: relative;
+  width: 960px;
+  height: 54px;
 }
 
-.dues-control-left label {
-  font-weight: 700;
+.dues-field {
+  position: absolute;
+  top: 0px;
 }
+
+.dues-field label {
+  display: block;
+  height: 22px;
+  margin-bottom: 4px;
+
+  font-weight: 700;
+  text-align: center;
+}
+
+.dues-field-payment {
+  left: 20px;
+  width: 190px;
+}
+
+.dues-field-date {
+  left: 355px;
+  width: 120px;
+}
+
+.dues-field-bank {
+  left: 535px;
+  width: 300px;
+}
+
 
 .dues-control-right {
   margin-left: auto;
+
+  position: relative;
+  z-index: 10;
 
   display: flex;
   align-items: center;
@@ -124,6 +161,11 @@
 
 .dues-payment-frequency {
   width: 150px;
+  height: 26px;
+}
+
+.dues-deposit-bank {
+  width: 240px;
   height: 26px;
 }
 
@@ -189,7 +231,7 @@
 }
 
 .dues-save-button {
-  height: 28px;
+  height: 48px;
   padding: 0 14px;
 
   color: #003cff;

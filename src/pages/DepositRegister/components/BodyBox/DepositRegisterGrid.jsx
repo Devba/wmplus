@@ -1,11 +1,21 @@
 
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import HeaderRow from './HeaderRow';
 
 function DepositRegisterGrid({ depositRows }) {
   const [selectedRowIndex, setSelectedRowIndex] =
   useState(null);
+  const lastRowRef = useRef(null);
+
+  useEffect(() => {
+  if (depositRows.length > 0) {
+    lastRowRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end'
+    });
+  }
+}, [depositRows.length]);
 
   return (
     <div className="depreg-table-wrap">
@@ -16,6 +26,7 @@ function DepositRegisterGrid({ depositRows }) {
           {depositRows.map((row, index) => (
             <tr
               key={`${row.transactionNumber || row.transaction}-${index}`}
+              ref={index === depositRows.length - 1 ? lastRowRef : null}
               className={
                 selectedRowIndex === index
                   ? 'is-selected'

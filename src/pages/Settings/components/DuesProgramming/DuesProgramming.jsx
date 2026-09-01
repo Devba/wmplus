@@ -7,6 +7,10 @@ import {
   saveDuesProgramming
 } from '../../services/duesProgrammingService';
 
+import {
+  loadBankingSettings
+} from '../../services/bankingService';
+
 import UnsavedChangesPrompt
   from '../UnsavedChangesPrompt/UnsavedChangesPrompt';
 
@@ -37,6 +41,9 @@ function createEmptyRates() {
 const DEFAULT_SECTION_DATA = {
   paymentFrequency: 'Annually',
   dueDate: '',
+  depositBankAccountID: '',
+  pendingDepositBankAccountID: '',
+  bankChangeEffectiveDate: '',
   rates: createEmptyRates()
 };
 
@@ -171,11 +178,24 @@ function normalizeSection(savedSection) {
   );
 
   return {
-    paymentFrequency:
-      savedSection?.paymentFrequency || 'Annually',
-    dueDate: savedSection?.dueDate || '',
+  paymentFrequency:
+    savedSection?.paymentFrequency || 'Annually',
+
+  dueDate:
+    savedSection?.dueDate || '',
+
+    depositBankAccountID:
+      savedSection?.depositBankAccountID || '',
+
+    pendingDepositBankAccountID:
+      savedSection?.pendingDepositBankAccountID || '',
+
+    bankChangeEffectiveDate:
+      savedSection?.bankChangeEffectiveDate || '',
+
     rates: normalizedRates
   };
+
 }
 
 function DuesProgramming({
@@ -189,6 +209,9 @@ function DuesProgramming({
 
   const [duesData, setDuesData] =
     useState(DEFAULT_DATA);
+
+  const [bankOptions, setBankOptions] =
+  useState([]); 
 
   const savedDuesRef = useRef(DEFAULT_DATA);
 
@@ -217,6 +240,49 @@ function DuesProgramming({
   const currentSection = duesData[sectionKey];
 
   const isAnnual = activeSection === 'annual-dues';
+
+  const operatingBankOne = useMemo(() => {
+  return (
+    bankOptions
+      .filter(
+        (bank) =>
+          String(bank.bankType)
+            .trim()
+            .toLowerCase() === 'operating'
+      )
+      .sort(
+        (a, b) =>
+          Number(a.bankId) - Number(b.bankId)
+      )[0] || null
+  );
+}, [bankOptions]);
+
+   const pendingBank = useMemo(() => {
+  if (!currentSection.pendingDepositBankAccountID) {
+    return null;
+  }
+
+  return (
+    bankOptions.find(
+      (bank) =>
+        String(bank.id) ===
+        String(currentSection.pendingDepositBankAccountID)
+    ) || null
+  );
+}, [
+  bankOptions,
+  currentSection.pendingDepositBankAccountID
+]);
+
+const pendingBankMessage =
+  pendingBank &&
+  currentSection.bankChangeEffectiveDate
+    ? `Pending Bank Change to ${pendingBank.name} on ${currentSection.bankChangeEffectiveDate}`
+    : '';
+
+
+
+
 
   const labels = useMemo(() => ({
     title: isAnnual
@@ -255,6 +321,52 @@ function DuesProgramming({
       ? 'Annual Due Date'
       : "Special Assm't Due Date"
   }), [isAnnual]);
+
+  useEffect(() => {
+  let componentIsActive = true;
+
+  async function loadBanks() {
+    try {
+      const bankingData =
+        await loadBankingSettings();
+
+      if (!componentIsActive) {
+        return;
+      }
+
+      const activeBanks =
+        (bankingData?.bankRows || [])
+          .filter((bank) => bank.active === 'Y')
+          .map((bank) => ({
+            id: String(bank.dbId),
+            bankId: String(bank.bankId || ''),
+            bankType: bank.bankType || '',
+            bankName: bank.bankName || '',
+            name:
+              `${bank.bankName} - ` +
+              `${bank.bankType} - ` +
+              `${bank.bankId}`
+          }));
+
+      setBankOptions(activeBanks);
+    } catch (error) {
+      console.error(
+        'Error loading Dues Programming banks:',
+        error
+      );
+
+      if (componentIsActive) {
+        setBankOptions([]);
+      }
+    }
+  }
+
+  loadBanks();
+
+  return () => {
+    componentIsActive = false;
+  };
+}, []);
 
   useEffect(() => {
     let componentIsActive = true;
@@ -304,6 +416,44 @@ function DuesProgramming({
       componentIsActive = false;
     };
   }, []);
+
+  useEffect(() => {
+  if (isLoading || !operatingBankOne) {
+    return;
+  }
+
+  setDuesData((currentData) => {
+    const annualNeedsBank =
+      !currentData.annualDues.depositBankAccountID;
+
+    const specialNeedsBank =
+      !currentData.specialAssessment.depositBankAccountID;
+
+    if (!annualNeedsBank && !specialNeedsBank) {
+      return currentData;
+    }
+
+    return {
+      ...currentData,
+
+      annualDues: {
+        ...currentData.annualDues,
+        depositBankAccountID:
+          annualNeedsBank
+            ? operatingBankOne.id
+            : currentData.annualDues.depositBankAccountID
+      },
+
+      specialAssessment: {
+        ...currentData.specialAssessment,
+        depositBankAccountID:
+          specialNeedsBank
+            ? operatingBankOne.id
+            : currentData.specialAssessment.depositBankAccountID
+      }
+    };
+  });
+}, [isLoading, operatingBankOne]);
 
   useEffect(() => {
     if (!requestedSettingsPanel) {
@@ -383,6 +533,16 @@ function DuesProgramming({
       dueDate: nextValue
     }));
   }
+
+    function changeDepositBank(event) {
+      const { value } = event.target;
+
+      updateCurrentSection((sectionData) => ({
+        ...sectionData,
+        depositBankAccountID: value
+      }));
+    }
+
 
   function changeRate(
     rateType,
@@ -607,54 +767,98 @@ if (!isCurrentYearDate(currentSection.dueDate)) {
 
       <div className="settings-dues-right">
         <div className="dues-details-title">
+        <span>
           {labels.title}
-        </div>
+        </span>
+
+        {pendingBankMessage && (
+          <span className="dues-pending-bank-message">
+            {pendingBankMessage}
+          </span>
+        )}
+      </div>
 
         <div className="dues-instructions">
           {labels.instructions}
         </div>
 
         <div className="dues-control-row">
+
           <div className="dues-control-left">
-            <label htmlFor="paymentFrequency">
-              HOA Payment Type
-            </label>
 
-            <select
-              id="paymentFrequency"
-              className="dues-payment-frequency"
-              value={currentSection.paymentFrequency}
-              onChange={changePaymentFrequency}
-            >
-              <option value="Annually">
-                Annually
-              </option>
-              <option value="Semi-Annually">
-                Semi-Annually
-              </option>
-              <option value="Quarterly">
-                Quarterly
-              </option>
-              <option value="Monthly">
-                Monthly
-              </option>
-            </select>
+  <div className="dues-field dues-field-payment">
+    <label htmlFor="paymentFrequency">
+      HOA Payment Type
+    </label>
 
-            <label htmlFor="duesDueDate">
-              {labels.dueDateLabel}
-            </label>
+    <select
+      id="paymentFrequency"
+      className="dues-payment-frequency"
+      value={currentSection.paymentFrequency}
+      onChange={changePaymentFrequency}
+    >
+      <option value="Annually">
+        Annually
+      </option>
 
-            <input
-              id="duesDueDate"
-              type="text"
-              inputMode="numeric"
-              className="dues-date-box"
-              placeholder="mm/dd/yyyy"
-              maxLength={10}
-              value={currentSection.dueDate}
-              onChange={changeDueDate}
-            />
-          </div>
+      <option value="Semi-Annually">
+        Semi-Annually
+      </option>
+
+      <option value="Quarterly">
+        Quarterly
+      </option>
+
+      <option value="Monthly">
+        Monthly
+      </option>
+    </select>
+  </div>
+
+  <div className="dues-field dues-field-date">
+    <label htmlFor="duesDueDate">
+      {labels.dueDateLabel}
+    </label>
+
+    <input
+      id="duesDueDate"
+      type="text"
+      inputMode="numeric"
+      className="dues-date-box"
+      placeholder="mm/dd/yyyy"
+      maxLength={10}
+      value={currentSection.dueDate}
+      onChange={changeDueDate}
+    />
+  </div>
+
+  <div className="dues-field dues-field-bank">
+    <label htmlFor="depositBankAccountID">
+      Deposit Bank
+    </label>
+
+    <select
+      id="depositBankAccountID"
+      className="dues-deposit-bank"
+      value={currentSection.depositBankAccountID}
+      onChange={changeDepositBank}
+    >
+      <option value="">
+        Select bank account
+      </option>
+
+      {bankOptions.map((bank) => (
+        <option
+          key={bank.id}
+          value={bank.id}
+        >
+          {bank.name}
+        </option>
+      ))}
+    </select>
+  </div>
+
+</div>
 
           <div className="dues-control-right">
             <button

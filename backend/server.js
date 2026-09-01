@@ -1039,12 +1039,50 @@ app.get('/api/check-register/next-check-number', async (req, res) => {
   }
 });
 
+async function generateCheckTransactionNumber(conn) {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const [clockRows] = await conn.query(`
+      SELECT CONCAT(
+        'CHK',
+        DATE_FORMAT(NOW(2), '%m%d%Y-%H%i%s'),
+        LEFT(DATE_FORMAT(NOW(2), '%f'), 2)
+      ) AS TransactionNumber
+    `);
+
+    const txn = clockRows[0]?.TransactionNumber;
+
+    if (!txn) {
+      throw new Error(
+        'Unable to generate Check Register transaction number.'
+      );
+    }
+
+    const [existingRows] = await conn.query(`
+      SELECT CheckTransactionNumber
+      FROM CheckRegister
+      WHERE CheckTransactionNumber = ?
+      LIMIT 1
+    `, [txn]);
+
+    if (!existingRows[0]) {
+      return txn;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error(
+    'Unable to generate a unique Check Register transaction number after multiple attempts.'
+  );
+}
+
+
 app.post('/api/check-register', async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
     const c = req.body;
-    const txnNum = c.check_txn_num || `CHK-${Date.now()}`;
+    const txnNum = await generateCheckTransactionNumber(connection);
     const bankAccountId = c.bank_account_id || 1;
     const amount = parseFloat(c.amount) || 0.00;
 
@@ -1297,12 +1335,50 @@ app.get('/api/deposit-register', async (req, res) => {
   }
 });
 
+async function generateDepositTransactionNumber(conn) {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const [clockRows] = await conn.query(`
+      SELECT CONCAT(
+        'DP',
+        DATE_FORMAT(NOW(2), '%m%d%Y-%H%i%s'),
+        LEFT(DATE_FORMAT(NOW(2), '%f'), 2)
+      ) AS TransactionNumber
+    `);
+
+    const txn = clockRows[0]?.TransactionNumber;
+
+    if (!txn) {
+      throw new Error(
+        'Unable to generate Deposit Register transaction number.'
+      );
+    }
+
+    const [existingRows] = await conn.query(`
+      SELECT DepositTransactionNumber
+      FROM DepositRegister
+      WHERE DepositTransactionNumber = ?
+      LIMIT 1
+    `, [txn]);
+
+    if (!existingRows[0]) {
+      return txn;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error(
+    'Unable to generate a unique Deposit Register transaction number after multiple attempts.'
+  );
+}
+
+
 app.post('/api/deposit-register', async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
     const d = req.body;
-    const txnNum = d.deposit_txn_num || `DEP-${Date.now()}`;
+    const txnNum = await generateDepositTransactionNumber(connection);
     const bankAccountId = d.bank_account_id || 1;
     const amount = parseFloat(d.amount) || 0.00;
 
@@ -2704,14 +2780,92 @@ app.put('/api/settings/fines-late-fees', async (req, res) => {
    SETTINGS: ANNUAL / SPECIAL DUES PROGRAMMING
    =========================================================== */
 
+async function activateDueBankChanges() {
+  return db.withTransaction(async (conn) => {
+    const [dueRows] = await conn.query(`
+      SELECT
+        DuesProgrammingID,
+        DuesType,
+        DepositBankAccountID,
+        PendingDepositBankAccountID,
+        BankChangeEffectiveDate
+      FROM DuesProgramming
+      WHERE MgtCoClientID = 'MGTCO-001'
+        AND HOALicenseNumber = 'HOA-FL-2024-001'
+        AND ActiveFlag = 'Y'
+        AND PendingDepositBankAccountID IS NOT NULL
+        AND BankChangeEffectiveDate IS NOT NULL
+        AND BankChangeEffectiveDate <= CURRENT_DATE()
+      FOR UPDATE
+    `);
+
+    for (const row of dueRows) {
+      const oldBankId =
+        Number(row.DepositBankAccountID);
+
+      const newBankId =
+        Number(row.PendingDepositBankAccountID);
+
+      await conn.query(`
+        UPDATE DuesProgramming
+        SET
+          DepositBankAccountID = ?,
+          PendingDepositBankAccountID = NULL,
+          BankChangeEffectiveDate = NULL,
+          TimeStampUpdated = NOW()
+        WHERE DuesProgrammingID = ?
+      `, [
+        newBankId,
+        row.DuesProgrammingID
+      ]);
+
+      await conn.query(`
+        UPDATE AssessmentBankAssignmentHistory
+        SET
+          Status = 'ACTIVE',
+          ActivatedDate = NOW(),
+          TimeStampUpdated = NOW()
+        WHERE MgtCoClientID = 'MGTCO-001'
+          AND HOALicenseNumber = 'HOA-FL-2024-001'
+          AND DuesType = ?
+          AND OldBankAccountID = ?
+          AND NewBankAccountID = ?
+          AND EffectiveDate = ?
+          AND Status = 'PENDING'
+      `, [
+        row.DuesType,
+        oldBankId,
+        newBankId,
+        row.BankChangeEffectiveDate
+      ]);
+    }
+
+    return {
+      activatedCount: dueRows.length
+    };
+  });
+}
+
+
+
+
 app.get('/api/settings/dues-programming', async (req, res) => {
   try {
+
+    await activateDueBankChanges();
+
     const [programRows] = await db.query(`
       SELECT
-        DuesType,
-        AssessmentFrequency,
-        DATE_FORMAT(PaymentDueDate, '%m/%d/%Y') AS PaymentDueDate
-      FROM DuesProgramming
+          DuesType,
+          AssessmentFrequency,
+          DATE_FORMAT(PaymentDueDate, '%m/%d/%Y') AS PaymentDueDate,
+          DepositBankAccountID,
+          PendingDepositBankAccountID,
+          DATE_FORMAT(
+            BankChangeEffectiveDate,
+            '%m/%d/%Y'
+          ) AS BankChangeEffectiveDate
+        FROM DuesProgramming
       WHERE MgtCoClientID = 'MGTCO-001'
         AND HOALicenseNumber = 'HOA-FL-2024-001'
         AND ActiveFlag = 'Y'
@@ -2748,15 +2902,28 @@ app.get('/api/settings/dues-programming', async (req, res) => {
           };
         });
 
-      return {
-        paymentFrequency:
-          program.AssessmentFrequency || 'Annually',
+return {
+  paymentFrequency:
+    program.AssessmentFrequency || 'Annually',
 
-        dueDate:
-          program.PaymentDueDate || '',
+  dueDate:
+    program.PaymentDueDate || '',
 
-        rates
-      };
+  depositBankAccountID:
+    program.DepositBankAccountID
+      ? String(program.DepositBankAccountID)
+      : '',
+
+  pendingDepositBankAccountID:
+    program.PendingDepositBankAccountID
+      ? String(program.PendingDepositBankAccountID)
+      : '',
+
+  bankChangeEffectiveDate:
+    program.BankChangeEffectiveDate || '',
+
+  rates
+};
     }
 
     res.json({
@@ -2779,6 +2946,23 @@ app.get('/api/settings/dues-programming', async (req, res) => {
     });
   }
 });
+
+function firstDayOfNextMonth() {
+  const now = new Date();
+
+  const nextMonth =
+    new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      1
+    );
+
+  const year = nextMonth.getFullYear();
+  const month =
+    String(nextMonth.getMonth() + 1).padStart(2, '0');
+
+  return `${year}-${month}-01`;
+}
 
 
 app.put('/api/settings/dues-programming', async (req, res) => {
@@ -2806,8 +2990,13 @@ app.put('/api/settings/dues-programming', async (req, res) => {
       duesType,
       section
     ) {
+
       const [existing] = await db.query(`
-        SELECT DuesProgrammingID
+        SELECT
+          DuesProgrammingID,
+          DepositBankAccountID,
+          PendingDepositBankAccountID,
+          BankChangeEffectiveDate
         FROM DuesProgramming
         WHERE MgtCoClientID = 'MGTCO-001'
           AND HOALicenseNumber = 'HOA-FL-2024-001'
@@ -2816,38 +3005,136 @@ app.put('/api/settings/dues-programming', async (req, res) => {
       `, [duesType]);
 
       if (existing.length > 0) {
+
+       const currentBankId =
+          existing[0].DepositBankAccountID
+            ? Number(existing[0].DepositBankAccountID)
+            : null;
+
+        const requestedBankId =
+          section.depositBankAccountID
+            ? Number(section.depositBankAccountID)
+            : null;
+
+        const bankIsChanging =
+          currentBankId &&
+          requestedBankId &&
+          currentBankId !== requestedBankId;
+
+          const activeBankIdToSave =
+            currentBankId || requestedBankId;
+
+          const pendingBankIdToSave =
+            bankIsChanging
+              ? requestedBankId
+              : (
+                  existing[0].PendingDepositBankAccountID
+                    ? Number(existing[0].PendingDepositBankAccountID)
+                    : null
+                );
+
+          const bankChangeEffectiveDateToSave =
+            bankIsChanging
+              ? firstDayOfNextMonth()
+              : existing[0].BankChangeEffectiveDate;
+
+  if (bankIsChanging) {
+  const [pendingHistory] = await db.query(`
+    SELECT AssessmentBankAssignmentHistoryID
+    FROM AssessmentBankAssignmentHistory
+    WHERE MgtCoClientID = 'MGTCO-001'
+      AND HOALicenseNumber = 'HOA-FL-2024-001'
+      AND DuesType = ?
+      AND OldBankAccountID = ?
+      AND NewBankAccountID = ?
+      AND EffectiveDate = ?
+      AND Status = 'PENDING'
+    LIMIT 1
+  `, [
+    duesType,
+    currentBankId,
+    requestedBankId,
+    bankChangeEffectiveDateToSave
+  ]);
+
+  if (pendingHistory.length === 0) {
+    await db.query(`
+      INSERT INTO AssessmentBankAssignmentHistory (
+        MgtCoClientID,
+        HOALicenseNumber,
+        DuesType,
+        OldBankAccountID,
+        NewBankAccountID,
+        RequestedDate,
+        EffectiveDate,
+        Status,
+        OperatorID,
+        TimeStampUpdated
+      )
+      VALUES (
+        'MGTCO-001',
+        'HOA-FL-2024-001',
+        ?,
+        ?,
+        ?,
+        NOW(),
+        ?,
+        'PENDING',
+        'USER',
+        NOW()
+      )
+    `, [
+      duesType,
+      currentBankId,
+      requestedBankId,
+      bankChangeEffectiveDateToSave
+    ]);
+  }
+}
+
+
         await db.query(`
           UPDATE DuesProgramming
-          SET
-            AssessmentFrequency = ?,
-            PaymentDueDate = ?,
-            ActiveFlag = 'Y',
-            OperatorID = 'USER',
-            TimeStampUpdated = NOW()
-          WHERE DuesProgrammingID = ?
+            SET
+              AssessmentFrequency = ?,
+              PaymentDueDate = ?,
+              DepositBankAccountID = ?,
+              PendingDepositBankAccountID = ?,
+              BankChangeEffectiveDate = ?,
+              ActiveFlag = 'Y',
+              OperatorID = 'USER',
+              TimeStampUpdated = NOW()
+            WHERE DuesProgrammingID = ?
         `, [
-          section.paymentFrequency || 'Annually',
-          sqlDate(section.dueDate),
-          existing[0].DuesProgrammingID
-        ]);
+              section.paymentFrequency || 'Annually',
+              sqlDate(section.dueDate),
+              activeBankIdToSave,
+              pendingBankIdToSave,
+              bankChangeEffectiveDateToSave,
+              existing[0].DuesProgrammingID
+            ]);
       } else {
         await db.query(`
           INSERT INTO DuesProgramming (
-            MgtCoClientID,
-            HOALicenseNumber,
-            DuesType,
-            AssessmentFrequency,
-            PaymentDueDate,
-            ActiveFlag,
-            OperatorID
-          )
-          VALUES (?, ?, ?, ?, ?, 'Y', 'USER')
+          MgtCoClientID,
+          HOALicenseNumber,
+          DuesType,
+          AssessmentFrequency,
+          PaymentDueDate,
+          DepositBankAccountID,
+          ActiveFlag,
+          OperatorID
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 'Y', 'USER')
         `, [
           'MGTCO-001',
           'HOA-FL-2024-001',
           duesType,
           section.paymentFrequency || 'Annually',
-          sqlDate(section.dueDate)
+          sqlDate(section.dueDate),
+          section.depositBankAccountID
+            ? Number(section.depositBankAccountID)
+            : null
         ]);
       }
     }
@@ -3964,7 +4251,6 @@ app.post('/api/apr/enter-payment', async (req, res) => {
       amount,
       annualDuesPayment,
       specialAssessmentPayment,
-      bankAccountId,
       glNumber,
       fiscalYearBegins,
       mgtCoClientId,
@@ -3987,7 +4273,9 @@ app.post('/api/apr/enter-payment', async (req, res) => {
       });
     }
 
+    await activateDueBankChanges();
     const result = await db.withTransaction(async (conn) => {
+      
       const [resRows] = await conn.query(`
         SELECT
           ResidentAccountID,
@@ -4023,45 +4311,129 @@ app.post('/api/apr/enter-payment', async (req, res) => {
       const specialPeriodNumber = derivePeriodNumber(payDate, specialFrequency);
       const opId = operatorId || 'SYSTEM';
 
-      let bankType = 'Operating';
-      let effBankId = bankAccountId ? parseInt(bankAccountId, 10) : null;
+      // APR receiving banks are controlled by Dues Programming, not by the
+      // bank value submitted by the frontend. Final allocation controls routing:
+      //   SA dollars -> Special Assessment programmed bank
+      //   AD dollars -> Annual Dues programmed bank
+      //   Resident Credit -> Annual Dues programmed bank
+      const [assessmentBankRows] = await conn.query(`
+        SELECT
+          dp.DuesType,
+          dp.DepositBankAccountID,
+          dp.PendingDepositBankAccountID,
+          DATE_FORMAT(dp.BankChangeEffectiveDate, '%Y-%m-%d') AS BankChangeEffectiveDate,
+          dp.RevenueGLNumber
+        FROM DuesProgramming dp
+        WHERE dp.MgtCoClientID = ?
+          AND dp.HOALicenseNumber = ?
+          AND dp.DuesType IN ('annualDues', 'specialAssessment')
+          AND dp.ActiveFlag = 'Y'
+      `, [effMgtCo, effHoa]);
 
-      if (effBankId) {
-        const [bRows] = await conn.query(`
-          SELECT BankType
-          FROM BankAccount
-          WHERE BankAccountID = ?
-          LIMIT 1
-        `, [effBankId]);
+      async function getAssessmentBank(sectionType, label) {
+        const row = assessmentBankRows.find(
+          (bankRow) => bankRow.DuesType === sectionType
+        );
 
-        if (!bRows[0]) {
+        if (!row || !row.DepositBankAccountID) {
           throw Object.assign(
-            new Error(`BankAccountID ${effBankId} not found`),
-            { status: 404 }
+            new Error(`${label} does not have a receiving bank programmed.`),
+            { status: 400 }
           );
         }
 
-        bankType = bRows[0].BankType;
-      } else {
-        const [bRows] = await conn.query(`
-          SELECT BankAccountID, BankType
-          FROM BankAccount
-          WHERE BankType = 'Operating'
-          LIMIT 1
-        `);
+        const currentBankAccountId = Number(row.DepositBankAccountID);
+        let resolvedBankAccountId = currentBankAccountId;
 
-        if (bRows[0]) {
-          effBankId = bRows[0].BankAccountID;
-          bankType = bRows[0].BankType;
+        // Resolve the bank that was effective for the payment/receipt date.
+        // This protects back-dated APR entries after a mid-year target-bank change.
+        // If a future pending assignment is explicitly effective by payDate, use it.
+        const pendingEffectiveDate = row.BankChangeEffectiveDate
+          ? String(row.BankChangeEffectiveDate).slice(0, 10)
+          : null;
+
+        if (
+          row.PendingDepositBankAccountID &&
+          pendingEffectiveDate &&
+          payDate >= pendingEffectiveDate
+        ) {
+          resolvedBankAccountId = Number(row.PendingDepositBankAccountID);
+        } else {
+          // For a historical payDate, the earliest assignment change AFTER that
+          // date tells us which OldBankAccountID was active on the payment date.
+          const [laterChanges] = await conn.query(`
+            SELECT OldBankAccountID
+            FROM AssessmentBankAssignmentHistory
+            WHERE MgtCoClientID = ?
+              AND HOALicenseNumber = ?
+              AND DuesType = ?
+              AND EffectiveDate > ?
+              AND Status IN ('ACTIVE', 'PENDING')
+            ORDER BY EffectiveDate ASC
+            LIMIT 1
+          `, [effMgtCo, effHoa, sectionType, payDate]);
+
+          if (laterChanges[0]?.OldBankAccountID) {
+            resolvedBankAccountId = Number(laterChanges[0].OldBankAccountID);
+          }
         }
+
+        const [bankRows] = await conn.query(`
+          SELECT
+            BankAccountID,
+            BankType,
+            BankName,
+            BankID,
+            ActiveFlag
+          FROM BankAccount
+          WHERE BankAccountID = ?
+          LIMIT 1
+        `, [resolvedBankAccountId]);
+
+        const bankRow = bankRows[0];
+
+        if (!bankRow) {
+          throw Object.assign(
+            new Error(
+              `${label} receiving BankAccountID ${resolvedBankAccountId} was not found.`
+            ),
+            { status: 400 }
+          );
+        }
+
+        // Current/future receiving banks must be active. A historical bank may
+        // legitimately be inactive now but still owns a back-dated receipt.
+        const isHistoricalBank =
+          resolvedBankAccountId !== currentBankAccountId;
+
+        if (
+          !isHistoricalBank &&
+          String(bankRow.ActiveFlag || 'Y').toUpperCase() !== 'Y'
+        ) {
+          throw Object.assign(
+            new Error(`${label} receiving bank is not active.`),
+            { status: 400 }
+          );
+        }
+
+        return {
+          bankAccountId: resolvedBankAccountId,
+          bankType: bankRow.BankType,
+          bankName: bankRow.BankName || '',
+          bankId: bankRow.BankID || '',
+          revenueGlNumber: row.RevenueGLNumber || null
+        };
       }
 
-      if (!effBankId) {
-        throw Object.assign(
-          new Error('No receiving bank account is available for this APR payment.'),
-          { status: 400 }
-        );
-      }
+      const annualBank = await getAssessmentBank(
+        'annualDues',
+        'Annual Dues'
+      );
+
+      const specialBank = await getAssessmentBank(
+        'specialAssessment',
+        'Special Assessment'
+      );
 
       async function getRequiredAmount(duesType) {
         const isAnnual = duesType === 'AnnualDues';
@@ -4184,7 +4556,9 @@ app.post('/api/apr/enter-payment', async (req, res) => {
         specialPayment = 0,
         credit = 0,
         frequency,
-        periodNumber
+        periodNumber,
+        bankAccountId,
+        rowGlNumber
       }) {
         const totalAmount =
           parseDecimal(annualPayment) +
@@ -4208,8 +4582,8 @@ app.post('/api/apr/enter-payment', async (req, res) => {
           specialPayment,
           credit,
           totalAmount,
-          effBankId,
-          glNumber || null,
+          bankAccountId,
+          rowGlNumber || glNumber || null,
           electronicPaymentId || null,
           effMgtCo,
           effHoa,
@@ -4230,7 +4604,9 @@ app.post('/api/apr/enter-payment', async (req, res) => {
           frequency,
           periodNumber,
           paymentDate: payDate,
-          electronicPaymentId: electronicPaymentId || null
+          electronicPaymentId: electronicPaymentId || null,
+          bankAccountId,
+          glNumber: rowGlNumber || glNumber || null
         };
 
         createdRows.push(row);
@@ -4252,7 +4628,9 @@ app.post('/api/apr/enter-payment', async (req, res) => {
             paymentType: 'SpecialAssessment',
             specialPayment: specialApplied,
             frequency: specialFrequency,
-            periodNumber: specialPeriodNumber
+            periodNumber: specialPeriodNumber,
+            bankAccountId: specialBank.bankAccountId,
+            rowGlNumber: specialBank.revenueGlNumber
           });
 
           specialPaid += specialApplied;
@@ -4269,7 +4647,9 @@ app.post('/api/apr/enter-payment', async (req, res) => {
             annualPayment: overflowToAnnual,
             credit: overflowToCredit,
             frequency: annualFrequency,
-            periodNumber: annualPeriodNumber
+            periodNumber: annualPeriodNumber,
+            bankAccountId: annualBank.bankAccountId,
+            rowGlNumber: annualBank.revenueGlNumber
           });
 
           annualPaid += overflowToAnnual;
@@ -4304,7 +4684,9 @@ if (annualInput > 0) {
     annualPayment: annualApplied,
     credit: annualExcess,
     frequency: annualFrequency,
-    periodNumber: annualPeriodNumber
+    periodNumber: annualPeriodNumber,
+    bankAccountId: annualBank.bankAccountId,
+    rowGlNumber: annualBank.revenueGlNumber
   });
 
   annualPaid += annualApplied;
@@ -4375,8 +4757,11 @@ if (annualInput > 0) {
         paymentDate: payDate
       });
 
-      // One Enter APR UF submission is one physical cash receipt, even when it creates
-      // multiple APR allocation rows. This prevents CashFlow from double-counting.
+      // Cash Flow follows the FINAL allocation, not the input box.
+      // A single APR business transaction can therefore post to more than one bank.
+      // Preserve separate AD/SA Cash Flow lines even when they share a bank.
+      // Traceability is kept by APR transaction number, destination bank, GL, and
+      // allocation type so a transaction-number Void can find every portion.
       const cashReceived = annualInput + specialInput;
       const cfTableMap = {
         Operating: 'CashFlowTransaction_Operating',
@@ -4387,39 +4772,111 @@ if (annualInput > 0) {
         MoneyMarket: 'CashFlowTransaction_MoneyMarket',
         CD: 'CashFlowTransaction_CD'
       };
-      const cfTable = cfTableMap[bankType] || 'CashFlowTransaction_Operating';
       const fiscalYearLabel = String(new Date(fyBegins).getFullYear());
       const fiscalPeriod = derivePeriodNumber(payDate, 'Monthly');
-      const sourceTransactionNumber = createdTransactionNumbers[0];
-      const transactionDescription =
-        createdTransactionNumbers.length > 1
-          ? `APR payment: ${createdTransactionNumbers.join(' / ')}`
-          : 'APR payment';
 
-      await conn.query(`
-        INSERT INTO ${cfTable}
-          (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID,
-           FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber,
-           TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber,
-           CashInAmount, TransactionDescription, OperatorID)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-      `, [
-        effMgtCo,
-        effHoa,
-        bankType,
-        effBankId,
-        fiscalYearLabel,
-        fiscalPeriod,
-        'APR',
-        sourceTransactionNumber,
-        payDate,
-        resident.DisplayName || resident.LastName || residentAccountId,
-        residentAccountId,
-        glNumber || null,
-        cashReceived,
-        transactionDescription,
-        opId
+      const bankByAccountId = new Map([
+        [annualBank.bankAccountId, annualBank],
+        [specialBank.bankAccountId, specialBank]
       ]);
+
+      const cashFlowGroups = new Map();
+
+      for (const row of createdRows) {
+        if (!row.totalAmount || !row.bankAccountId) {
+          continue;
+        }
+
+        const key =
+          `${row.transactionNumber}|${row.bankAccountId}|` +
+          `${row.glNumber || ''}|${row.paymentType}`;
+        const existingGroup = cashFlowGroups.get(key) || {
+          transactionNumber: row.transactionNumber,
+          bankAccountId: row.bankAccountId,
+          glNumber: row.glNumber || null,
+          amount: 0,
+          paymentTypes: new Set()
+        };
+
+        existingGroup.amount += Number(row.totalAmount) || 0;
+        existingGroup.paymentTypes.add(row.paymentType);
+        cashFlowGroups.set(key, existingGroup);
+      }
+
+      const cashFlowPostings = [];
+
+      for (const group of cashFlowGroups.values()) {
+        const bank = bankByAccountId.get(group.bankAccountId);
+
+        if (!bank) {
+          throw new Error(
+            `APR destination BankAccountID ${group.bankAccountId} could not be resolved.`
+          );
+        }
+
+        // TEMPORARY resolver: current schema still uses the legacy bank-type CF tables.
+        // Replace this map when the per-Bank-ID physical CF table provisioning is installed.
+        const cfTable = cfTableMap[bank.bankType];
+
+        if (!cfTable) {
+          throw new Error(
+            `No Cash Flow table is configured for bank type ${bank.bankType}.`
+          );
+        }
+
+        const paymentTypeText =
+          Array.from(group.paymentTypes).join(' / ');
+
+        await conn.query(`
+          INSERT INTO ${cfTable}
+            (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID,
+             FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber,
+             TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber,
+             CashInAmount, TransactionDescription, OperatorID)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `, [
+          effMgtCo,
+          effHoa,
+          bank.bankType,
+          group.bankAccountId,
+          fiscalYearLabel,
+          fiscalPeriod,
+          'APR',
+          group.transactionNumber,
+          payDate,
+          resident.DisplayName || resident.LastName || residentAccountId,
+          residentAccountId,
+          group.glNumber,
+          group.amount,
+          `APR payment - ${paymentTypeText}`,
+          opId
+        ]);
+
+        cashFlowPostings.push({
+          transactionNumber: group.transactionNumber,
+          bankAccountId: group.bankAccountId,
+          bankType: bank.bankType,
+          amount: group.amount,
+          glNumber: group.glNumber
+        });
+      }
+
+      const postedCashTotal = cashFlowPostings.reduce(
+        (sum, posting) => sum + (Number(posting.amount) || 0),
+        0
+      );
+
+      if (Math.abs(postedCashTotal - cashReceived) > 0.005) {
+        throw new Error(
+          `APR Cash Flow allocation mismatch. Received ${cashReceived.toFixed(2)} but routed ${postedCashTotal.toFixed(2)}.`
+        );
+      }
+
+      const uniqueBankIds = [
+        ...new Set(
+          cashFlowPostings.map((posting) => posting.bankAccountId)
+        )
+      ];
 
       return {
         rows: createdRows,
@@ -4429,8 +4886,13 @@ if (annualInput > 0) {
         generatedCredit,
         cashReceived,
         fiscalYearBegins: fyBegins,
-        bankAccountId: effBankId,
-        bankType
+        bankAccountId:
+          uniqueBankIds.length === 1 ? uniqueBankIds[0] : null,
+        bankType:
+          uniqueBankIds.length === 1
+            ? bankByAccountId.get(uniqueBankIds[0])?.bankType || null
+            : null,
+        cashFlowPostings
       };
     });
 
