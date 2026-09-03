@@ -5034,12 +5034,46 @@ app.get('/api/apr/register/:residentAccountId', async (req, res) => {
   }
 });
 
-// POST /api/apr/void — void server-side with full shared-transaction reversal
+// Helper: resolve effective assessment bank for a given PaymentDate (tenant-isolated, history-aware)
+// Mirrors the logic in POST /api/apr/enter-payment getAssessmentBank, extracted for replay
+async function resolveEffectiveAssessmentBank(conn, sectionType, payDate, effMgtCo, effHoa) {
+  const [bankRows] = await conn.query(`
+    SELECT dp.DuesType, dp.DepositBankAccountID, dp.PendingDepositBankAccountID,
+           DATE_FORMAT(dp.BankChangeEffectiveDate, '%Y-%m-%d') AS BankChangeEffectiveDate,
+           dp.RevenueGLNumber
+    FROM DuesProgramming dp
+    WHERE dp.MgtCoClientID = ? AND dp.HOALicenseNumber = ? AND dp.DuesType = ? AND dp.ActiveFlag='Y'
+    LIMIT 1
+  `, [effMgtCo, effHoa, sectionType]);
+  const row = bankRows[0];
+  if (!row || !row.DepositBankAccountID) throw Object.assign(new Error(`${sectionType} does not have a receiving bank programmed.`), { status: 400 });
+  let resolved = Number(row.DepositBankAccountID);
+  const pendingDate = row.BankChangeEffectiveDate ? String(row.BankChangeEffectiveDate).slice(0,10) : null;
+  if (row.PendingDepositBankAccountID && pendingDate && payDate >= pendingDate) {
+    resolved = Number(row.PendingDepositBankAccountID);
+  } else {
+    const [later] = await conn.query(`
+      SELECT OldBankAccountID FROM AssessmentBankAssignmentHistory
+      WHERE MgtCoClientID=? AND HOALicenseNumber=? AND DuesType=? AND EffectiveDate > ? AND Status IN ('ACTIVE','PENDING')
+      ORDER BY EffectiveDate ASC LIMIT 1
+    `, [effMgtCo, effHoa, sectionType, payDate]);
+    if (later[0]?.OldBankAccountID) resolved = Number(later[0].OldBankAccountID);
+  }
+  const [bRows] = await conn.query(`SELECT BankAccountID, BankType, BankName, BankID, ActiveFlag FROM BankAccount WHERE BankAccountID=? LIMIT 1`, [resolved]);
+  const b = bRows[0];
+  if (!b) throw Object.assign(new Error(`Receiving BankAccountID ${resolved} not found.`), { status: 400 });
+  const isHistorical = resolved !== Number(row.DepositBankAccountID);
+  if (!isHistorical && String(b.ActiveFlag||'Y').toUpperCase() !== 'Y') throw Object.assign(new Error(`${sectionType} receiving bank is not active.`), { status: 400 });
+  return { bankAccountId: resolved, bankType: b.BankType, bankName: b.BankName||'', bankId: b.BankID||'', revenueGlNumber: row.RevenueGLNumber||null };
+}
+
+// POST /api/apr/void — void server-side with full shared-transaction reversal + historical full-year replay (V6 RECONCILED)
 app.post('/api/apr/void', async (req, res) => {
   try {
     const transactionNumber = String(
       req.body?.transactionNumber || ''
     ).trim();
+    const operatorId = String(req.body?.operatorId || 'SYSTEM').trim();
 
     if (!transactionNumber) {
       return res.status(400).json({
@@ -5050,7 +5084,7 @@ app.post('/api/apr/void', async (req, res) => {
     const result = await db.withTransaction(async (conn) => {
       // A single APR transaction number can legitimately belong to more than
       // one allocation row (for example SA -> AD overflow). Lock and reverse
-      // every active row carrying that transaction number.
+      // every active row carrying that transaction number — tenant-isolated check later.
       const [rows] = await conn.query(`
         SELECT *
         FROM AssessmentPaymentRegister
@@ -5078,6 +5112,7 @@ app.post('/api/apr/void', async (req, res) => {
       const mgtCoClientId = firstRow.MgtCoClientID;
       const hoaLicenseNumber = firstRow.HOALicenseNumber;
       const fiscalYearBegins = firstRow.CurrentFiscalYearBegins;
+      const paymentDateForVoid = firstRow.PaymentDate ? String(firstRow.PaymentDate).slice(0,10) : null;
 
       // Guard against an invalid mixed transaction number before changing data.
       const mixedResident = rows.some((row) =>
@@ -5096,254 +5131,235 @@ app.post('/api/apr/void', async (req, res) => {
         );
       }
 
-      const annualToReverse = rows.reduce(
-        (sum, row) =>
-          sum + (Number(row.AnnualDuesPayment) || 0),
-        0
-      );
+      // Acquire tenant-isolated locks for historical replay (ordered to avoid deadlock)
+      await conn.query(`SELECT * FROM AssessmentRegister WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? FOR UPDATE`, [mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins]);
+      await conn.query(`SELECT GET_LOCK(CONCAT('apr-replay:', ?, ':', ?, ':', ?), 10) AS g`, [mgtCoClientId, hoaLicenseNumber, residentAccountId]);
 
-      const specialToReverse = rows.reduce(
-        (sum, row) =>
-          sum + (Number(row.SpecialAssessmentPayment) || 0),
-        0
-      );
+      // Detect historical void: does this resident/FY have later active APR transactions?
+      const [laterCheck] = await conn.query(`
+        SELECT COUNT(*) AS cnt FROM AssessmentPaymentRegister
+        WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=?
+          AND Status='POSTED' AND DeletedFlag!='Y'
+          AND (PaymentDate > ? OR (PaymentDate = ? AND TransactionNumber > ?))
+      `, [mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins, paymentDateForVoid, paymentDateForVoid, transactionNumber]);
+      const hasLater = (Number(laterCheck[0]?.cnt) || 0) > 0;
 
-      const creditToReverse = rows.reduce(
-        (sum, row) =>
-          sum + (Number(row.CreditAmount) || 0),
-        0
-      );
+      // Also check if AssessmentPaymentSource exists for this txn (backfill may be pending) — if not, treat as latest-path with warning
+      let hasSource = false;
+      try {
+        const [srcCheck] = await conn.query(`SELECT TransactionNumber FROM AssessmentPaymentSource WHERE TransactionNumber=? LIMIT 1`, [transactionNumber]);
+        hasSource = !!srcCheck[0];
+      } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
 
-      const totalAmountToReverse = rows.reduce(
-        (sum, row) =>
-          sum + (Number(row.TotalAmount) || 0),
-        0
-      );
+      const isHistorical = hasLater && hasSource;
 
-      // Reverse Annual Dues only against the resident's AnnualDues register.
-      // Annual and Special obligations are always maintained separately.
-      if (annualToReverse > 0 || creditToReverse > 0) {
-        const [annualRows] = await conn.query(`
-          SELECT
-            AssmtRegID,
-            TotalYearlyRequiredAnnualDues,
-            TotalAnnualDuesPaymentsYTD,
-            CreditAfterPaymentsFinesRefunds
-          FROM AssessmentRegister
-          WHERE MgtCoClientID = ?
-            AND HOALicenseNumber = ?
-            AND ResidentAccountID = ?
-            AND CurrentFiscalYearBegins = ?
-            AND DuesType = 'AnnualDues'
-            AND ActiveFlag = 'Y'
-          LIMIT 1
-          FOR UPDATE
-        `, [
-          mgtCoClientId,
-          hoaLicenseNumber,
-          residentAccountId,
-          fiscalYearBegins
-        ]);
+      if (!isHistorical) {
+        // ===== LATEST-TRANSACTION PATH (existing, now tenant-isolated and with composite CF handling) =====
+        const annualToReverse = rows.reduce((s,r)=> s + (Number(r.AnnualDuesPayment)||0),0);
+        const specialToReverse = rows.reduce((s,r)=> s + (Number(r.SpecialAssessmentPayment)||0),0);
+        const creditToReverse = rows.reduce((s,r)=> s + (Number(r.CreditAmount)||0),0);
+        const totalAmountToReverse = rows.reduce((s,r)=> s + (Number(r.TotalAmount)||0),0);
 
-        const annualRegister = annualRows[0];
-
-        if (!annualRegister) {
-          throw Object.assign(
-            new Error(
-              `Annual Dues register not found for resident ${residentAccountId}.`
-            ),
-            { status: 409 }
-          );
+        if (annualToReverse > 0 || creditToReverse > 0) {
+          const [annualRows] = await conn.query(`
+            SELECT AssmtRegID, TotalYearlyRequiredAnnualDues, TotalAnnualDuesPaymentsYTD, CreditAfterPaymentsFinesRefunds
+            FROM AssessmentRegister WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND DuesType='AnnualDues' AND ActiveFlag='Y' LIMIT 1 FOR UPDATE
+          `, [mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins]);
+          const annualRegister = annualRows[0];
+          if (!annualRegister) throw Object.assign(new Error(`Annual Dues register not found for resident ${residentAccountId}.`), { status: 409 });
+          const annualRequired = Number(annualRegister.TotalYearlyRequiredAnnualDues)||0;
+          const annualPaidAfterVoid = Math.max((Number(annualRegister.TotalAnnualDuesPaymentsYTD)||0) - annualToReverse, 0);
+          const annualDueAfterVoid = Math.max(annualRequired - annualPaidAfterVoid, 0);
+          const annualCreditAfterVoid = Math.max((Number(annualRegister.CreditAfterPaymentsFinesRefunds)||0) - creditToReverse, 0);
+          await conn.query(`UPDATE AssessmentRegister SET TotalAnnualDuesPaymentsYTD=?, CurrentAssessmentPaymentDue=?, AssessmentPaidBalanceDue=0, CreditAfterPaymentsFinesRefunds=?, TotalCurrentAR=?, TimeStampUpdated=NOW() WHERE AssmtRegID=?`, [annualPaidAfterVoid, annualDueAfterVoid, annualCreditAfterVoid, annualDueAfterVoid, annualRegister.AssmtRegID]);
         }
-
-        const annualRequired =
-          Number(annualRegister.TotalYearlyRequiredAnnualDues) || 0;
-
-        const annualPaidAfterVoid = Math.max(
-          (Number(annualRegister.TotalAnnualDuesPaymentsYTD) || 0) -
-            annualToReverse,
-          0
-        );
-
-        const annualDueAfterVoid = Math.max(
-          annualRequired - annualPaidAfterVoid,
-          0
-        );
-
-        const annualCreditAfterVoid = Math.max(
-          (Number(annualRegister.CreditAfterPaymentsFinesRefunds) || 0) -
-            creditToReverse,
-          0
-        );
-
-        await conn.query(`
-          UPDATE AssessmentRegister
-          SET
-            TotalAnnualDuesPaymentsYTD = ?,
-            CurrentAssessmentPaymentDue = ?,
-            AssessmentPaidBalanceDue = 0,
-            CreditAfterPaymentsFinesRefunds = ?,
-            TotalCurrentAR = ?,
-            TimeStampUpdated = NOW()
-          WHERE AssmtRegID = ?
-        `, [
-          annualPaidAfterVoid,
-          annualDueAfterVoid,
-          annualCreditAfterVoid,
-          annualDueAfterVoid,
-          annualRegister.AssmtRegID
-        ]);
+        if (specialToReverse > 0) {
+          const [specialRows] = await conn.query(`
+            SELECT AssmtRegID, RequiredSpecialAssessment, TotalSpecialAssessmentPaidYTD
+            FROM AssessmentRegister WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND DuesType='SpecialAssessment' AND ActiveFlag='Y' LIMIT 1 FOR UPDATE
+          `, [mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins]);
+          const specialRegister = specialRows[0];
+          if (!specialRegister) throw Object.assign(new Error(`Special Assessment register not found for resident ${residentAccountId}.`), { status: 409 });
+          const specialRequired = Number(specialRegister.RequiredSpecialAssessment)||0;
+          const specialPaidAfterVoid = Math.max((Number(specialRegister.TotalSpecialAssessmentPaidYTD)||0) - specialToReverse, 0);
+          const specialDueAfterVoid = Math.max(specialRequired - specialPaidAfterVoid, 0);
+          await conn.query(`UPDATE AssessmentRegister SET TotalSpecialAssessmentPaidYTD=?, CurrentAssessmentPaymentDue=?, SpecialAssessmentPaymentDue=?, SpecialAssessmentPaidBalanceDue=0, TotalCurrentAR=?, TimeStampUpdated=NOW() WHERE AssmtRegID=?`, [specialPaidAfterVoid, specialDueAfterVoid, specialDueAfterVoid, specialDueAfterVoid, specialRegister.AssmtRegID]);
+        }
+        if (creditToReverse > 0) {
+          try {
+            await conn.query(`UPDATE ResidentMaster SET ResidentCreditBalance = GREATEST(COALESCE(ResidentCreditBalance,0) - ?,0), TimeStampUpdated=NOW() WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=?`, [creditToReverse, mgtCoClientId, hoaLicenseNumber, residentAccountId]);
+          } catch (e) { if (e.code !== 'ER_BAD_FIELD_ERROR') throw e; }
+          // Also mark credit ledger if exists — tenant-isolated (Rick detail)
+          try { await conn.query(`UPDATE ResidentCreditLedger SET Status='SUPERSEDED', SupersededAt=NOW() WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND ReferenceTransactionNumber=? AND Status='POSTED'`, [mgtCoClientId, hoaLicenseNumber, residentAccountId, transactionNumber]); } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_FIELD_ERROR') throw e; }
+        }
+        // Period not modified (F2) — tenant-isolated
+        await conn.query(`UPDATE AssessmentPaymentRegister SET Status='VOID', DeletedFlag='Y', RecalcBatchID=NULL WHERE MgtCoClientID=? AND HOALicenseNumber=? AND TransactionNumber=? AND DeletedFlag!='Y'`, [mgtCoClientId, hoaLicenseNumber, transactionNumber]);
+        // If Source exists, mark VOID — tenant-isolated
+        try { await conn.query(`UPDATE AssessmentPaymentSource SET Status='VOID' WHERE MgtCoClientID=? AND HOALicenseNumber=? AND TransactionNumber=?`, [mgtCoClientId, hoaLicenseNumber, transactionNumber]); } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
+        // CashFlow per (SubmissionKey, BankAccountID, GL, PaymentType) — composite, not LIMIT 1
+        // For latest, void all CF lines for this TransactionNumber across all bank tables (now per BankID)
+        const cfTablesLatest = ['CashFlowTransaction_Operating','CashFlowTransaction_Capital','CashFlowTransaction_Escrow','CashFlowTransaction_MoneyMarket','CashFlowTransaction_Savings','CashFlowTransaction_CD'];
+        for (const t of cfTablesLatest) {
+          try { await conn.query(`UPDATE ${t} SET VoidFlag='Y', DeletedFlag='Y' WHERE SourceRegister='APR' AND SourceTransactionNumber=?`, [transactionNumber]); } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
+          // Also try per BankID tables if they exist: CashFlow_BankID_*
+          try {
+            const [bankIds] = await conn.query(`SELECT BankAccountID FROM BankAccount WHERE ActiveFlag='Y'`);
+            for (const b of bankIds) {
+              const perBankTable = `CashFlow_BankID_${b.BankAccountID}`;
+              try { await conn.query(`UPDATE ${perBankTable} SET VoidFlag='Y', DeletedFlag='Y' WHERE SourceRegister='APR' AND SourceTransactionNumber=?`, [transactionNumber]); } catch (e2) { if (e2.code !== 'ER_NO_SUCH_TABLE') throw e2; }
+            }
+          } catch (e) {}
+        }
+        await conn.query(`SELECT RELEASE_LOCK(CONCAT('apr-replay:', ?, ':', ?, ':', ?))`, [mgtCoClientId, hoaLicenseNumber, residentAccountId]);
+        await refreshAssessmentPaymentSummary(conn, { residentAccountId, mgt: mgtCoClientId, hoa: hoaLicenseNumber, paymentDate: null });
+        return { success: true, transactionNumber, voided: true, historical: false, rowsVoided: rows.length, annualReversed: annualToReverse, specialReversed: specialToReverse, creditReversed: creditToReverse, totalReversed: totalAmountToReverse };
       }
 
-      // Reverse Special Assessment only against the resident's
-      // SpecialAssessment register.
-      if (specialToReverse > 0) {
-        const [specialRows] = await conn.query(`
-          SELECT
-            AssmtRegID,
-            RequiredSpecialAssessment,
-            TotalSpecialAssessmentPaidYTD
-          FROM AssessmentRegister
-          WHERE MgtCoClientID = ?
-            AND HOALicenseNumber = ?
-            AND ResidentAccountID = ?
-            AND CurrentFiscalYearBegins = ?
-            AND DuesType = 'SpecialAssessment'
-            AND ActiveFlag = 'Y'
-          LIMIT 1
-          FOR UPDATE
-        `, [
-          mgtCoClientId,
-          hoaLicenseNumber,
-          residentAccountId,
-          fiscalYearBegins
-        ]);
-
-        const specialRegister = specialRows[0];
-
-        if (!specialRegister) {
-          throw Object.assign(
-            new Error(
-              `Special Assessment register not found for resident ${residentAccountId}.`
-            ),
-            { status: 409 }
-          );
-        }
-
-        const specialRequired =
-          Number(specialRegister.RequiredSpecialAssessment) || 0;
-
-        const specialPaidAfterVoid = Math.max(
-          (Number(specialRegister.TotalSpecialAssessmentPaidYTD) || 0) -
-            specialToReverse,
-          0
-        );
-
-        const specialDueAfterVoid = Math.max(
-          specialRequired - specialPaidAfterVoid,
-          0
-        );
-
-        await conn.query(`
-          UPDATE AssessmentRegister
-          SET
-            TotalSpecialAssessmentPaidYTD = ?,
-            CurrentAssessmentPaymentDue = ?,
-            SpecialAssessmentPaymentDue = ?,
-            SpecialAssessmentPaidBalanceDue = 0,
-            TotalCurrentAR = ?,
-            TimeStampUpdated = NOW()
-          WHERE AssmtRegID = ?
-        `, [
-          specialPaidAfterVoid,
-          specialDueAfterVoid,
-          specialDueAfterVoid,
-          specialDueAfterVoid,
-          specialRegister.AssmtRegID
-        ]);
-      }
-
-      // Credit created by the voided APR transaction must also be removed from
-      // ResidentMaster. GREATEST prevents an invalid negative credit balance.
-      if (creditToReverse > 0) {
+      // ===== HISTORICAL FULL-YEAR REPLAY PATH (V6 RECONCILED) =====
+      // Old-bank 45-day check (§5): if any affected row's BankAccountID is old bank, block with 409 PENDING_TECH
+      for (const r of rows) {
+        const bankId = r.BankAccountID;
+        if (!bankId) continue;
+        // Resolve if this bank is old for its DuesType
+        const duesTypeForRow = r.PaymentType === 'SpecialAssessment' ? 'specialAssessment' : 'annualDues';
         try {
-          await conn.query(`
-            UPDATE ResidentMaster
-            SET
-              ResidentCreditBalance = GREATEST(
-                COALESCE(ResidentCreditBalance, 0) - ?,
-                0
-              ),
-              TimeStampUpdated = NOW()
-            WHERE ResidentAccountID = ?
-          `, [creditToReverse, residentAccountId]);
-        } catch (e) {
-          if (e.code !== 'ER_BAD_FIELD_ERROR') {
-            throw e;
+          const [hist] = await conn.query(`
+            SELECT OldBankAccountID, EffectiveDate FROM AssessmentBankAssignmentHistory
+            WHERE MgtCoClientID=? AND HOALicenseNumber=? AND DuesType=? AND OldBankAccountID=? AND Status IN ('ACTIVE','PENDING') LIMIT 1
+          `, [mgtCoClientId, hoaLicenseNumber, duesTypeForRow, bankId]);
+          if (hist[0]) {
+            const effDate = hist[0].EffectiveDate ? String(hist[0].EffectiveDate).slice(0,10) : null;
+            const payDate = r.PaymentDate ? String(r.PaymentDate).slice(0,10) : paymentDateForVoid;
+            // If payDate < EffectiveDate, this row is in old bank and any later modification requires tech assistance
+            if (effDate && payDate && payDate < effDate) {
+              await conn.query(`SELECT RELEASE_LOCK(CONCAT('apr-replay:', ?, ':', ?, ':', ?))`, [mgtCoClientId, hoaLicenseNumber, residentAccountId]);
+              throw Object.assign(new Error(`Transaction ${transactionNumber} resides in former assessment bank ${bankId} — requires technical assistance (45-day rule).`), { status: 409 });
+            }
+          }
+        } catch (e) { if (e.status === 409) throw e; }
+      }
+
+      // Create Batch
+      const batchId = `BATCH-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+      try {
+        await conn.query(`INSERT INTO APRRecalculationBatch (BatchID, MgtCoClientID, HOALicenseNumber, ResidentAccountID, VoidedTransactionNumber, FiscalYearBegins, OperatorID, Status, Reason) VALUES (?,?,?,?,?,?,?,?,?)`, [batchId, mgtCoClientId, hoaLicenseNumber, residentAccountId, transactionNumber, fiscalYearBegins, operatorId, 'IN_PROGRESS', 'historical APR Void']);
+      } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
+
+      // Mark Source VOID
+      try { await conn.query(`UPDATE AssessmentPaymentSource SET Status='VOID' WHERE MgtCoClientID=? AND HOALicenseNumber=? AND TransactionNumber=?`, [mgtCoClientId, hoaLicenseNumber, transactionNumber]); } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
+
+      // Supersede COMPLETE active APR allocation state for (MgtCo,HOA,Resident,FY) — Rick §1
+      await conn.query(`UPDATE AssessmentPaymentRegister SET Status='SUPERSEDED', DeletedFlag='Y', RecalcBatchID=?, SupersededAt=NOW() WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Status='POSTED' AND DeletedFlag!='Y'`, [batchId, mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins]);
+      try { await conn.query(`UPDATE ResidentCreditLedger SET Status='SUPERSEDED', SupersededAt=NOW(), RecalcBatchID_ledger=? WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Status='POSTED'`, [batchId, mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins]); } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_FIELD_ERROR') throw e; }
+
+      // Establish beginning-of-FY baseline per Rick §9: YTD=0, Credit=0, Due=Required, Period schedules intact (AD/SA separate)
+      const [annualRegRows] = await conn.query(`SELECT AssmtRegID, TotalYearlyRequiredAnnualDues FROM AssessmentRegister WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND DuesType='AnnualDues' AND ActiveFlag='Y' LIMIT 1 FOR UPDATE`, [mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins]);
+      const [specialRegRows] = await conn.query(`SELECT AssmtRegID, RequiredSpecialAssessment FROM AssessmentRegister WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND DuesType='SpecialAssessment' AND ActiveFlag='Y' LIMIT 1 FOR UPDATE`, [mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins]);
+      const annualRequired = Number(annualRegRows[0]?.TotalYearlyRequiredAnnualDues)||0;
+      const specialRequired = Number(specialRegRows[0]?.RequiredSpecialAssessment)||0;
+      if (annualRegRows[0]) await conn.query(`UPDATE AssessmentRegister SET TotalAnnualDuesPaymentsYTD=0, CurrentAssessmentPaymentDue=?, AssessmentPaidBalanceDue=0, CreditAfterPaymentsFinesRefunds=0, TotalCurrentAR=?, TimeStampUpdated=NOW() WHERE AssmtRegID=?`, [annualRequired, annualRequired, annualRegRows[0].AssmtRegID]);
+      if (specialRegRows[0]) await conn.query(`UPDATE AssessmentRegister SET TotalSpecialAssessmentPaidYTD=0, CurrentAssessmentPaymentDue=?, SpecialAssessmentPaymentDue=?, SpecialAssessmentPaidBalanceDue=0, TotalCurrentAR=?, TimeStampUpdated=NOW() WHERE AssmtRegID=?`, [specialRequired, specialRequired, specialRequired, specialRegRows[0].AssmtRegID]);
+      try { await conn.query(`UPDATE ResidentMaster SET ResidentCreditBalance=0, TimeStampUpdated=NOW() WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=?`, [mgtCoClientId, hoaLicenseNumber, residentAccountId]); } catch (e) { if (e.code !== 'ER_BAD_FIELD_ERROR') throw e; }
+
+      // Fetch all POSTED Source for FY ordered chronologically — Tenant-isolated
+      let sources = [];
+      try {
+        const [srcRows] = await conn.query(`SELECT * FROM AssessmentPaymentSource WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND CurrentFiscalYearBegins=? AND Status='POSTED' ORDER BY PaymentDate, TransactionNumber`, [mgtCoClientId, hoaLicenseNumber, residentAccountId, fiscalYearBegins]);
+        sources = srcRows;
+      } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
+
+      let annualPaid = 0, specialPaid = 0, annualCredit = 0;
+      const createdTransactionNumbers = [];
+
+      for (const src of sources) {
+        const payDate = String(src.PaymentDate).slice(0,10);
+        const fyBegins = src.CurrentFiscalYearBegins ? String(src.CurrentFiscalYearBegins).slice(0,10) : String(fiscalYearBegins).slice(0,10);
+        // Resolve effective banks per PaymentDate (history-aware)
+        const annualBank = await resolveEffectiveAssessmentBank(conn, 'annualDues', payDate, mgtCoClientId, hoaLicenseNumber);
+        const specialBank = await resolveEffectiveAssessmentBank(conn, 'specialAssessment', payDate, mgtCoClientId, hoaLicenseNumber);
+        const amount = Number(src.OriginalAmount)||0;
+        const entryType = src.OriginalEntryType;
+        const txn = src.TransactionNumber;
+        createdTransactionNumbers.push(txn);
+
+        if (entryType === 'SpecialAssessment') {
+          const specialDueBefore = Math.max(specialRequired - specialPaid, 0);
+          const specialApplied = Math.min(amount, specialDueBefore);
+          const specialExcess = amount - specialApplied;
+          if (specialApplied > 0) {
+            await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'SpecialAssessment', payDate, 0, specialApplied, 0, specialApplied, specialBank.bankAccountId, specialBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
+            specialPaid += specialApplied;
+          }
+          if (specialExcess > 0) {
+            const annualDueBeforeOverflow = Math.max(annualRequired - annualPaid, 0);
+            const overflowToAnnual = Math.min(specialExcess, annualDueBeforeOverflow);
+            const overflowToCredit = specialExcess - overflowToAnnual;
+            await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'AnnualDues', payDate, overflowToAnnual, 0, overflowToCredit, overflowToAnnual+overflowToCredit, annualBank.bankAccountId, annualBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
+            annualPaid += overflowToAnnual;
+            annualCredit += overflowToCredit;
+            if (overflowToCredit > 0) {
+              try { await conn.query(`INSERT INTO ResidentCreditLedger (ResidentAccountID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, BatchID, EventDate, Status, EventType, Amount, BalanceAfter, ReferenceTransactionNumber, SubmissionKey, OperatorID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [residentAccountId, mgtCoClientId, hoaLicenseNumber, fyBegins, batchId, payDate, 'POSTED', 'CREDIT_CREATED', overflowToCredit, annualCredit, txn, src.SubmissionKey, src.OperatorID||operatorId]); } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
+            }
+          }
+        } else { // AnnualDues
+          const annualDueBefore = Math.max(annualRequired - annualPaid, 0);
+          const annualApplied = Math.min(amount, annualDueBefore);
+          const annualExcess = amount - annualApplied;
+          await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'AnnualDues', payDate, annualApplied, 0, annualExcess, annualApplied+annualExcess, annualBank.bankAccountId, annualBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
+          annualPaid += annualApplied;
+          annualCredit += annualExcess;
+          if (annualExcess > 0) {
+            try { await conn.query(`INSERT INTO ResidentCreditLedger (ResidentAccountID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, BatchID, EventDate, Status, EventType, Amount, BalanceAfter, ReferenceTransactionNumber, SubmissionKey, OperatorID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [residentAccountId, mgtCoClientId, hoaLicenseNumber, fyBegins, batchId, payDate, 'POSTED', 'CREDIT_CREATED', annualExcess, annualCredit, txn, src.SubmissionKey, src.OperatorID||operatorId]); } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
           }
         }
       }
 
-      // AssessmentRegisterPeriod is scheduled-obligation data. Enter APR does
-      // not modify it, therefore Void APR must not modify it either.
+      // Recompute aggregates from active POSTED rows — Tenant-isolated, no GREATEST
+      const annualDue = Math.max(annualRequired - annualPaid, 0);
+      const specialDue = Math.max(specialRequired - specialPaid, 0);
+      if (annualRegRows[0]) await conn.query(`UPDATE AssessmentRegister SET TotalAnnualDuesPaymentsYTD=?, CurrentAssessmentPaymentDue=?, AssessmentPaidBalanceDue=0, CreditAfterPaymentsFinesRefunds=?, TotalCurrentAR=?, TimeStampUpdated=NOW() WHERE AssmtRegID=?`, [annualPaid, annualDue, annualCredit, annualDue, annualRegRows[0].AssmtRegID]);
+      if (specialRegRows[0]) await conn.query(`UPDATE AssessmentRegister SET TotalSpecialAssessmentPaidYTD=?, CurrentAssessmentPaymentDue=?, SpecialAssessmentPaymentDue=?, SpecialAssessmentPaidBalanceDue=0, TotalCurrentAR=?, TimeStampUpdated=NOW() WHERE AssmtRegID=?`, [specialPaid, specialDue, specialDue, specialDue, specialRegRows[0].AssmtRegID]);
+      // Tenant-isolated ResidentMaster fix (Rick detail — includes MgtCo/HOA in both subquery and outer WHERE)
+      try { await conn.query(`UPDATE ResidentMaster SET ResidentCreditBalance = (SELECT COALESCE(SUM(CASE WHEN EventType='CREDIT_CREATED' THEN Amount ELSE -Amount END),0) FROM ResidentCreditLedger WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=? AND Status='POSTED'), TimeStampUpdated=NOW() WHERE MgtCoClientID=? AND HOALicenseNumber=? AND ResidentAccountID=?`, [mgtCoClientId, hoaLicenseNumber, residentAccountId, mgtCoClientId, hoaLicenseNumber, residentAccountId]); } catch (e) { if (e.code !== 'ER_BAD_FIELD_ERROR' && e.code !== 'ER_NO_SUCH_TABLE') throw e; }
 
-      // Mark every APR allocation row carrying this transaction number VOID.
-      await conn.query(`
-        UPDATE AssessmentPaymentRegister
-        SET
-          Status = 'VOID',
-          DeletedFlag = 'Y'
-        WHERE TransactionNumber = ?
-          AND DeletedFlag != 'Y'
-      `, [transactionNumber]);
-
-      // Reverse the one physical CashFlow receipt associated with this APR
-      // transaction number. Search every bank-specific CashFlow table because
-      // APR Void does not receive the bank type from the UF.
-      const cfTables = [
-        'CashFlowTransaction_Operating',
-        'CashFlowTransaction_Capital',
-        'CashFlowTransaction_Escrow',
-        'CashFlowTransaction_MoneyMarket',
-        'CashFlowTransaction_Savings',
-        'CashFlowTransaction_CD'
+      // CashFlow per V6/Rick FINAL RULE: void ONLY the voided transaction's cash lines
+      // (by SourceTransactionNumber). Replayed transactions KEEP their original CashFlow
+      // (cash did not move again) and NO new CashFlow rows are posted during replay.
+      // Covers: 6 interim views (updatable, over base CashFlowTransaction), the base table
+      // itself, and the per-BankID physical tables (CashFlow_BankID_<BankAccountID>).
+      const cfTablesHistorical = [
+        'CashFlowTransaction_Operating','CashFlowTransaction_Capital','CashFlowTransaction_Escrow',
+        'CashFlowTransaction_MoneyMarket','CashFlowTransaction_Savings','CashFlowTransaction_CD',
+        'CashFlowTransaction'
       ];
-
-      for (const tableName of cfTables) {
-        try {
-          await conn.query(`
-            UPDATE ${tableName}
-            SET
-              VoidFlag = 'Y',
-              DeletedFlag = 'Y'
-            WHERE SourceRegister = 'APR'
-              AND SourceTransactionNumber = ?
-          `, [transactionNumber]);
-        } catch (e) {
-          if (e.code !== 'ER_NO_SUCH_TABLE') {
-            throw e;
-          }
-        }
+      for (const t of cfTablesHistorical) {
+        try { await conn.query(`UPDATE ${t} SET VoidFlag='Y', DeletedFlag='Y' WHERE SourceRegister='APR' AND SourceTransactionNumber=?`, [transactionNumber]); }
+        catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_FIELD_ERROR') throw e; }
       }
+      try {
+        const [banksAll] = await conn.query(`SELECT BankAccountID FROM BankAccount WHERE ActiveFlag='Y'`);
+        for (const b of banksAll) {
+          const perBankTable = `CashFlow_BankID_${b.BankAccountID}`;
+          try { await conn.query(`UPDATE ${perBankTable} SET VoidFlag='Y', DeletedFlag='Y' WHERE SourceRegister='APR' AND SourceTransactionNumber=?`, [transactionNumber]); }
+          catch (e2) { if (e2.code !== 'ER_NO_SUCH_TABLE') throw e2; }
+        }
+      } catch (e) {}
 
-      // Rebuild the resident's current displayed totals from the now-correct
-      // AssessmentRegister values.
-      await refreshAssessmentPaymentSummary(conn, {
-        residentAccountId,
-        mgt: mgtCoClientId,
-        hoa: hoaLicenseNumber,
-        paymentDate: null
-      });
+      await conn.query(`UPDATE APRRecalculationBatch SET Status='COMPLETED', ReplayedTransactionNumbers=?, ReplayedCount=?, TimeStampCompleted=NOW() WHERE BatchID=?`, [JSON.stringify(createdTransactionNumbers.concat(sources.map(s=>s.TransactionNumber))), sources.length, batchId]);
+      await conn.query(`SELECT RELEASE_LOCK(CONCAT('apr-replay:', ?, ':', ?, ':', ?))`, [mgtCoClientId, hoaLicenseNumber, residentAccountId]);
+      await refreshAssessmentPaymentSummary(conn, { residentAccountId, mgt: mgtCoClientId, hoa: hoaLicenseNumber, paymentDate: null });
 
       return {
         success: true,
         transactionNumber,
         voided: true,
+        historical: true,
+        batchId,
         rowsVoided: rows.length,
-        annualReversed: annualToReverse,
-        specialReversed: specialToReverse,
-        creditReversed: creditToReverse,
-        totalReversed: totalAmountToReverse
+        replayedCount: sources.length,
+        annualPaid,
+        specialPaid,
+        credit: annualCredit
       };
     });
 
