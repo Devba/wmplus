@@ -8,7 +8,7 @@ const getBaseUrl = () => {
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
     return `${window.location.protocol}//${window.location.hostname}/api`;
   }
-  return 'http://localhost:3011/api';
+  return '/api';
 };
 
 export const API_BASE_URL = getBaseUrl();
