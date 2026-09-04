@@ -1077,6 +1077,734 @@ async function generateCheckTransactionNumber(conn) {
 }
 
 
+function getCashFlowBankTableName(bankId) {
+  const id = Number.parseInt(bankId, 10);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('Invalid BankID for Cash Flow.');
+  }
+
+  return `CashFlow_BankID_${id}`;
+}
+
+async function resolveCashFlowBankTable(conn, bankAccountId) {
+  const [rows] = await conn.query(`
+    SELECT BankID, BankType
+    FROM BankAccount
+    WHERE BankAccountID = ?
+    LIMIT 1
+  `, [bankAccountId]);
+
+  const bankId = rows[0]?.BankID;
+
+  if (!bankId) {
+    throw new Error(
+      `No BankID found for BankAccountID ${bankAccountId}.`
+    );
+  }
+
+  return {
+    tableName: getCashFlowBankTableName(bankId),
+    bankId,
+    bankType: rows[0]?.BankType || ''
+  };
+}
+
+async function establishCashFlowLedgerMaster(
+  conn,
+  bankAccountId,
+  startingBalance,
+  startingMonth
+) {
+  const [bankRows] = await conn.query(`
+    SELECT
+      BankAccountID,
+      BankID,
+      BankType,
+      BankName
+    FROM BankAccount
+    WHERE BankAccountID = ?
+    LIMIT 1
+  `, [bankAccountId]);
+
+  if (!bankRows[0]) {
+    throw new Error(
+      `BankAccountID ${bankAccountId} was not found while establishing Cash Flow Ledger Master.`
+    );
+  }
+
+  const bank = bankRows[0];
+
+  const currentYear = new Date().getFullYear();
+
+const fiscalYearStartDate =
+  `${currentYear}-01-01`;
+
+const fiscalYearEndDate =
+  `${currentYear}-12-31`;
+
+  const fiscalYearLabel =
+  String(currentYear);
+
+  const [existingRows] = await conn.query(`
+    SELECT *
+    FROM CashFlowLedgerMaster
+    WHERE BankAccountID = ?
+      AND FiscalYearStartDate = ?
+      AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+    LIMIT 1
+    FOR UPDATE
+  `, [
+    bankAccountId,
+    fiscalYearStartDate
+  ]);
+
+  const cashFlowBank =
+    await resolveCashFlowBankTable(conn, bankAccountId);
+
+  const [tenantRows] = await conn.query(`
+  SELECT
+    MgtCoClientID,
+    HOALicenseNumber
+  FROM ${cashFlowBank.tableName}
+  WHERE BankAccountID = ?
+  LIMIT 1
+`, [bankAccountId]);
+
+const tenant =
+  tenantRows[0] || {
+    MgtCoClientID: 'MGTCO-001',
+    HOALicenseNumber: 'HOA-FL-2024-001'
+  };
+
+
+
+  const [activityRows] = await conn.query(`
+    SELECT
+      MIN(TransactionDate) AS FirstActivityDate
+    FROM ${cashFlowBank.tableName}
+    WHERE BankAccountID = ?
+      AND TransactionDate >= ?
+      AND TransactionDate <= ?
+      AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+      AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+      AND (
+        COALESCE(ActiveCashInAmount, 0) <> 0
+        OR COALESCE(ActiveCashOutAmount, 0) <> 0
+      )
+  `, [
+    bankAccountId,
+    fiscalYearStartDate,
+    fiscalYearEndDate
+  ]);
+
+  const firstActivityDate =
+    activityRows[0]?.FirstActivityDate || null;
+
+    const [balanceRows] = await conn.query(`
+  SELECT
+    COALESCE(SUM(ActiveCashInAmount), 0.00) AS TotalCashIn,
+    COALESCE(SUM(ActiveCashOutAmount), 0.00) AS TotalCashOut
+  FROM ${cashFlowBank.tableName}
+  WHERE BankAccountID = ?
+    AND TransactionDate >= ?
+    AND TransactionDate <= ?
+    AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+    AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+`, [
+  bankAccountId,
+  fiscalYearStartDate,
+  fiscalYearEndDate
+]);
+
+const initialCurrentBalance =
+  (Number(startingBalance) || 0) +
+  (Number(balanceRows[0]?.TotalCashIn) || 0) -
+  (Number(balanceRows[0]?.TotalCashOut) || 0);
+
+  const requestedMonth =
+    startingMonth || 'January';
+
+  const requestedBalance =
+    Number(startingBalance) || 0;
+
+  if (firstActivityDate) {
+    const firstActivityMonth =
+      new Date(firstActivityDate).getMonth() + 1;
+
+    const monthNumbers = {
+      January: 1,
+      February: 2,
+      March: 3,
+      April: 4,
+      May: 5,
+      June: 6,
+      July: 7,
+      August: 8,
+      September: 9,
+      October: 10,
+      November: 11,
+      December: 12
+    };
+
+    const requestedMonthNumber =
+      monthNumbers[requestedMonth];
+
+    if (
+      !requestedMonthNumber ||
+      requestedMonthNumber > firstActivityMonth
+    ) {
+      throw new Error(
+        `Starting Month cannot be later than the first Cash Flow activity month for this bank.`
+      );
+    }
+  }
+
+  if (existingRows[0]) {
+    return existingRows[0];
+  }
+
+  const [insertResult] = await conn.query(`
+    INSERT INTO CashFlowLedgerMaster (
+      MgtCoClientID,
+      HOALicenseNumber,
+      BankType,
+      BankAccountID,
+      BankIDLabel,
+      BankIDNumber,
+      BankAccountName,
+      FiscalYearLabel,
+      FiscalYearStartDate,
+      FiscalYearEndDate,
+      OpeningBalance,
+      StartMonth,
+      CurrentBalance,
+      ActiveFlag,
+      OperatorID,
+      TimeStampCreated
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Y', 'SYSTEM', NOW())
+  `, [
+    tenant.MgtCoClientID,
+    tenant.HOALicenseNumber,
+    bank.BankType || '',
+    bank.BankAccountID,
+    String(bank.BankID || ''),
+    Number(bank.BankID) || null,
+    bank.BankName || '',
+    fiscalYearLabel,
+    fiscalYearStartDate,
+    fiscalYearEndDate,
+    requestedBalance,
+    requestedMonth,
+    initialCurrentBalance
+  ]);
+
+  const [createdRows] = await conn.query(`
+    SELECT *
+    FROM CashFlowLedgerMaster
+    WHERE CashFlowLedgerID = ?
+    LIMIT 1
+  `, [insertResult.insertId]);
+
+  return createdRows[0];
+}
+
+/* ===========================================================
+   CASH FLOW PAGE - READ SELECTED BANK / FISCAL YEAR
+   =========================================================== */
+
+app.get('/api/cash-flow', async (req, res) => {
+  try {
+    const bankId = Number.parseInt(req.query.bankId, 10);
+    const fiscalYear = Number.parseInt(req.query.fiscalYear, 10);
+
+    if (!Number.isInteger(bankId) || bankId <= 0) {
+      return res.status(400).json({
+        error: 'A valid bankId is required.'
+      });
+    }
+
+    if (!Number.isInteger(fiscalYear) || fiscalYear < 2000) {
+      return res.status(400).json({
+        error: 'A valid fiscalYear is required.'
+      });
+    }
+
+    const [bankRows] = await db.query(`
+      SELECT
+        BankAccountID,
+        BankID,
+        BankType,
+        BankName
+      FROM BankAccount
+      WHERE BankID = ?
+      LIMIT 1
+    `, [bankId]);
+
+    if (!bankRows[0]) {
+      return res.status(404).json({
+        error: `Bank ID ${bankId} was not found.`
+      });
+    }
+
+    const bank = bankRows[0];
+    const bankAccountId = bank.BankAccountID;
+
+    const cashFlowTable =
+      getCashFlowBankTableName(bank.BankID);
+
+    const [ledgerRows] = await db.query(`
+      SELECT
+        CashFlowLedgerID,
+        OpeningBalance,
+        CurrentBalance,
+        StartMonth,
+        LastPostedTransactionDate,
+        LastPostedDateTime,
+        TimeStampUpdated
+      FROM CashFlowLedgerMaster
+      WHERE BankAccountID = ?
+        AND FiscalYearLabel = ?
+        AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+      LIMIT 1
+    `, [
+      bankAccountId,
+      String(fiscalYear)
+    ]);
+
+    const ledger = ledgerRows[0] || null;
+
+    const fiscalYearStart =
+      `${fiscalYear}-01-01`;
+
+    const fiscalYearEnd =
+      `${fiscalYear}-12-31`;
+
+    const [monthlyRows] = await db.query(`
+      SELECT
+        GLNumber,
+        MONTH(TransactionDate) AS MonthNumber,
+        COALESCE(SUM(ActiveCashInAmount), 0.00)
+          - COALESCE(SUM(ActiveCashOutAmount), 0.00)
+          AS NetAmount
+      FROM ${cashFlowTable}
+      WHERE BankAccountID = ?
+        AND TransactionDate >= ?
+        AND TransactionDate <= ?
+        AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+        AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+      GROUP BY
+        GLNumber,
+        MONTH(TransactionDate)
+      ORDER BY
+        GLNumber,
+        MonthNumber
+    `, [
+      bankAccountId,
+      fiscalYearStart,
+      fiscalYearEnd
+    ]);
+
+    const byGl = new Map();
+
+    for (const row of monthlyRows) {
+      const glNumber = Number(row.GLNumber);
+
+      if (!byGl.has(glNumber)) {
+        byGl.set(glNumber, {
+          glNumber,
+          jan: 0,
+          feb: 0,
+          mar: 0,
+          apr: 0,
+          may: 0,
+          jun: 0,
+          jul: 0,
+          aug: 0,
+          sep: 0,
+          oct: 0,
+          nov: 0,
+          dec: 0,
+          total: 0
+        });
+      }
+
+      const item = byGl.get(glNumber);
+
+      const monthKeys = [
+        '',
+        'jan',
+        'feb',
+        'mar',
+        'apr',
+        'may',
+        'jun',
+        'jul',
+        'aug',
+        'sep',
+        'oct',
+        'nov',
+        'dec'
+      ];
+
+      const monthKey =
+        monthKeys[Number(row.MonthNumber)];
+
+      const amount =
+        Number(row.NetAmount) || 0;
+
+      if (monthKey) {
+        item[monthKey] = amount;
+      }
+
+      item.total += amount;
+    }
+
+    return res.json({
+      success: true,
+
+      bank: {
+        bankAccountId: bank.BankAccountID,
+        bankId: bank.BankID,
+        bankType: bank.BankType,
+        bankName: bank.BankName
+      },
+
+      fiscalYear,
+
+      ledger: {
+        openingBalance:
+          Number(ledger?.OpeningBalance) || 0,
+
+        currentBalance:
+          Number(ledger?.CurrentBalance) || 0,
+
+        startMonth:
+          ledger?.StartMonth || null,
+
+        lastPostedTransactionDate:
+          ledger?.LastPostedTransactionDate || null,
+
+        lastPostedDateTime:
+          ledger?.LastPostedDateTime || null,
+
+        lastUpdated:
+          ledger?.TimeStampUpdated || null
+      },
+
+      monthlyByGL:
+        Array.from(byGl.values())
+    });
+
+  } catch (err) {
+    console.error(
+      'Error loading Cash Flow page:',
+      err
+    );
+
+    return res.status(500).json({
+      error: 'Failed to load Cash Flow page.',
+      details: err.message
+    });
+  }
+});
+
+function getCashFlowDirection(glNumber) {
+  const gl = Number.parseInt(glNumber, 10);
+
+  if (!Number.isInteger(gl)) {
+    throw new Error('A valid GLNumber is required for Cash Flow posting.');
+  }
+
+  if (gl >= 20000 && gl <= 39999) {
+    return 'OUT';
+  }
+
+  if (gl >= 40000 && gl <= 50000) {
+    return 'IN';
+  }
+
+  throw new Error(
+    `GLNumber ${gl} is outside the W M+ Cash Flow Expense/Revenue ranges.`
+  );
+}
+
+async function createCashFlowBankTableForNewBank(conn, bankId) {
+  const tableName = getCashFlowBankTableName(bankId);
+
+  const [tableRows] = await conn.query(`
+    SELECT TABLE_NAME
+    FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+    LIMIT 1
+  `, [tableName]);
+
+  if (tableRows[0]) {
+    return tableName;
+  }
+
+  // This CREATE requires the database account used by W M+ to have CREATE
+  // privilege. It is intentionally performed BEFORE the BankAccount INSERT so
+  // a permission failure cannot leave a new bank without its Cash Flow table.
+  await conn.query(`
+    CREATE TABLE ${tableName} (
+      CashFlowTransactionID BIGINT NOT NULL AUTO_INCREMENT,
+      BankAccountID INT NOT NULL,
+      MgtCoClientID VARCHAR(20) NULL,
+      HOALicenseNumber VARCHAR(20) NULL,
+      BankType VARCHAR(20) NULL,
+      SourceRegister VARCHAR(40) NOT NULL,
+      SourceTransactionNumber VARCHAR(40) NOT NULL,
+      SubmissionKey VARCHAR(36) NULL,
+      RecalcBatchID VARCHAR(36) NULL,
+      SupersededAt DATETIME NULL,
+      ActiveCashInAmount DECIMAL(10,2) NULL DEFAULT 0.00,
+      ActiveCashOutAmount DECIMAL(10,2) NULL DEFAULT 0.00,
+      CashInAmount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+      CashOutAmount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+      TransactionDate DATE NOT NULL,
+      PayeeDepositorName VARCHAR(120) NULL,
+      ResidentAccountID VARCHAR(20) NULL,
+      GLNumber INT NOT NULL,
+      VoidFlag CHAR(1) NOT NULL DEFAULT 'N',
+      DeletedFlag CHAR(1) NOT NULL DEFAULT 'N',
+      OperatorID VARCHAR(20) NULL,
+      TimeStampCreated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      TimeStampUpdated DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (CashFlowTransactionID),
+      INDEX idx_cf_source (SourceRegister, SourceTransactionNumber),
+      INDEX idx_cf_date_gl (TransactionDate, GLNumber),
+      INDEX idx_cf_submission (SubmissionKey)
+    )
+  `);
+
+  return tableName;
+}
+
+async function ensureCashFlowBankTable(conn, bankAccountId) {
+  const cashFlowBank =
+    await resolveCashFlowBankTable(conn, bankAccountId);
+
+  const tableName = cashFlowBank.tableName;
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS ${tableName} (
+      CashFlowTransactionID BIGINT NOT NULL AUTO_INCREMENT,
+      BankAccountID INT NOT NULL,
+      MgtCoClientID VARCHAR(20) NULL,
+      HOALicenseNumber VARCHAR(20) NULL,
+      BankType VARCHAR(20) NULL,
+      SourceRegister VARCHAR(40) NOT NULL,
+      SourceTransactionNumber VARCHAR(40) NOT NULL,
+      SubmissionKey VARCHAR(36) NULL,
+      RecalcBatchID VARCHAR(36) NULL,
+      SupersededAt DATETIME NULL,
+      ActiveCashInAmount DECIMAL(10,2) NULL DEFAULT 0.00,
+      ActiveCashOutAmount DECIMAL(10,2) NULL DEFAULT 0.00,
+      CashInAmount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+      CashOutAmount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+      TransactionDate DATE NOT NULL,
+      PayeeDepositorName VARCHAR(120) NULL,
+      ResidentAccountID VARCHAR(20) NULL,
+      GLNumber INT NOT NULL,
+      VoidFlag CHAR(1) NOT NULL DEFAULT 'N',
+      DeletedFlag CHAR(1) NOT NULL DEFAULT 'N',
+      OperatorID VARCHAR(20) NULL,
+      TimeStampCreated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      TimeStampUpdated DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (CashFlowTransactionID),
+      INDEX idx_cf_source (SourceRegister, SourceTransactionNumber),
+      INDEX idx_cf_date_gl (TransactionDate, GLNumber),
+      INDEX idx_cf_submission (SubmissionKey)
+    )
+  `);
+
+  const [columnRows] = await conn.query(`
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+  `, [tableName]);
+
+  const columns = new Set(
+    columnRows.map((row) => String(row.COLUMN_NAME))
+  );
+
+  if (!columns.has('CashOutAmount')) {
+    await conn.query(`
+      ALTER TABLE ${tableName}
+      ADD COLUMN CashOutAmount DECIMAL(14,2) NOT NULL DEFAULT 0.00
+      AFTER CashInAmount
+    `);
+  }
+
+  if (!columns.has('ActiveCashOutAmount')) {
+    await conn.query(`
+      ALTER TABLE ${tableName}
+      ADD COLUMN ActiveCashOutAmount DECIMAL(10,2) NULL DEFAULT 0.00
+      AFTER ActiveCashInAmount
+    `);
+  }
+
+  // One-time corrective migration for rows written before CashOut columns
+  // existed. W M+ direction is determined by the GL range.
+  await conn.query(`
+    UPDATE ${tableName}
+    SET
+      CashOutAmount = COALESCE(CashInAmount, 0.00),
+      ActiveCashOutAmount = CASE
+        WHEN VoidFlag = 'Y' OR DeletedFlag = 'Y' THEN 0.00
+        ELSE COALESCE(ActiveCashInAmount, CashInAmount, 0.00)
+      END,
+      CashInAmount = 0.00,
+      ActiveCashInAmount = 0.00
+    WHERE GLNumber BETWEEN 20000 AND 39999
+      AND COALESCE(CashOutAmount, 0.00) = 0.00
+      AND COALESCE(CashInAmount, 0.00) <> 0.00
+  `);
+
+  return cashFlowBank;
+}
+
+async function postCashFlowTransaction(conn, {
+  bankAccountId,
+  mgtCoClientId,
+  hoaLicenseNumber,
+  sourceRegister,
+  sourceTransactionNumber,
+  transactionDate,
+  payeeDepositorName,
+  residentAccountId,
+  glNumber,
+  amount,
+  operatorId = 'SYSTEM'
+}) {
+  const cashFlowBank =
+    await resolveCashFlowBankTable(conn, bankAccountId);
+
+  const [existingRows] = await conn.query(`
+    SELECT CashFlowTransactionID
+    FROM ${cashFlowBank.tableName}
+    WHERE SourceRegister = ?
+      AND SourceTransactionNumber = ?
+      AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+      AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+    LIMIT 1
+  `, [sourceRegister, sourceTransactionNumber]);
+
+  if (existingRows[0]) {
+    return {
+      ...cashFlowBank,
+      alreadyPosted: true,
+      cashFlowTransactionId:
+        existingRows[0].CashFlowTransactionID
+    };
+  }
+
+  const direction = getCashFlowDirection(glNumber);
+  const cashInAmount = direction === 'IN' ? Number(amount) : 0;
+  const cashOutAmount = direction === 'OUT' ? Number(amount) : 0;
+
+  const [insertResult] = await conn.query(`
+    INSERT INTO ${cashFlowBank.tableName} (
+      BankAccountID,
+      MgtCoClientID,
+      HOALicenseNumber,
+      BankType,
+      SourceRegister,
+      SourceTransactionNumber,
+      TransactionDate,
+      PayeeDepositorName,
+      ResidentAccountID,
+      GLNumber,
+      CashInAmount,
+      CashOutAmount,
+      ActiveCashInAmount,
+      ActiveCashOutAmount,
+      VoidFlag,
+      DeletedFlag,
+      OperatorID
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?)
+  `, [
+    bankAccountId,
+    mgtCoClientId || null,
+    hoaLicenseNumber || null,
+    cashFlowBank.bankType,
+    sourceRegister,
+    sourceTransactionNumber,
+    transactionDate,
+    payeeDepositorName || '',
+    residentAccountId || '',
+    glNumber,
+    cashInAmount,
+    cashOutAmount,
+    cashInAmount,
+    cashOutAmount,
+    operatorId
+  ]);
+
+  return {
+    ...cashFlowBank,
+    alreadyPosted: false,
+    direction,
+    cashInAmount,
+    cashOutAmount,
+    cashFlowTransactionId: insertResult.insertId
+  };
+}
+
+async function voidCashFlowTransaction(conn, {
+  bankAccountId,
+  sourceRegister,
+  sourceTransactionNumber
+}) {
+  const cashFlowBank =
+    await resolveCashFlowBankTable(conn, bankAccountId);
+
+  const [result] = await conn.query(`
+    UPDATE ${cashFlowBank.tableName}
+    SET
+      ActiveCashInAmount = 0.00,
+      ActiveCashOutAmount = 0.00,
+      VoidFlag = 'Y',
+      DeletedFlag = 'Y',
+      TimeStampUpdated = NOW()
+    WHERE SourceRegister = ?
+      AND SourceTransactionNumber = ?
+      AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+      AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+  `, [sourceRegister, sourceTransactionNumber]);
+
+  return {
+    ...cashFlowBank,
+    affectedRows: result.affectedRows
+  };
+}
+
+async function ensureAllCashFlowBankTables() {
+  const connection = await db.getConnection();
+
+  try {
+    const [bankRows] = await connection.query(`
+      SELECT BankAccountID
+      FROM BankAccount
+      ORDER BY BankAccountID ASC
+    `);
+
+    for (const bank of bankRows) {
+      await ensureCashFlowBankTable(
+        connection,
+        bank.BankAccountID
+      );
+    }
+  } finally {
+    connection.release();
+  }
+}
+
 app.post('/api/check-register', async (req, res) => {
   const connection = await db.getConnection();
   try {
@@ -1113,28 +1841,11 @@ app.post('/api/check-register', async (req, res) => {
       c.escrow_flag || 'N'
     ]);
 
-    // Real-time Bank Cash Flow update (decrease balance)
-    await connection.query(`
-      UPDATE BankAccount 
-      SET StartingBalance = StartingBalance - ?, TimeStampUpdated = NOW()
-      WHERE BankAccountID = ?
-    `, [amount, bankAccountId]);
-
-    // CashFlow posting for CR (Cash Out) — bank-specific, traceable to CheckRegister
-    const [bankRowsCF_CR] = await connection.query("SELECT BankType FROM BankAccount WHERE BankAccountID=? LIMIT 1", [bankAccountId]);
-    const bankTypeCF_CR = bankRowsCF_CR[0]?.BankType || 'Operating';
-    const cfTableMapCR = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket', CD: 'CashFlowTransaction_CD' };
-    const cfTableCR = cfTableMapCR[bankTypeCF_CR] || 'CashFlowTransaction_Operating';
-    const txDateCR = c.date_issued || new Date().toISOString().slice(0, 10);
-    const fyLabelCR = String(new Date(txDateCR).getFullYear());
-    const fyPeriodCR = derivePeriodNumber(txDateCR, 'Monthly');
-    await connection.query(`INSERT INTO ${cfTableCR} (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID, FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber, TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber, CashOutAmount, TransactionDescription, OperatorID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ['MGTCO-001', 'HOA-FL-2024-001', bankTypeCF_CR, bankAccountId, fyLabelCR, fyPeriodCR, 'CR', txnNum, txDateCR, c.payee_id || '', c.payee_id || '', c.gl_number || 5000, amount, c.note || 'Check', 'SYSTEM']);
-
     await connection.commit();
     res.status(201).json({
       success: true,
       check_txn_num: txnNum,
-      message: 'Check posted and Bank Cash Flow updated successfully'
+      message: 'Check posted successfully'
     });
   } catch (err) {
     await connection.rollback();
@@ -1144,6 +1855,237 @@ app.post('/api/check-register', async (req, res) => {
     connection.release();
   }
 });
+
+
+app.post('/api/check-register/clear', async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const {
+      transactionNumber,
+      clearedDate
+    } = req.body;
+
+    if (!transactionNumber || !clearedDate) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Transaction number and cleared date are required.'
+      });
+    }
+
+    const [checkRows] = await connection.query(`
+      SELECT
+        CheckTransactionNumber,
+        CheckNumber,
+        Amount,
+        GLNumber,
+        GLAccountName,
+        VendorResidentID,
+        BankAccountID,
+        BankAccount,
+        CheckNotation,
+        Status,
+        DateCheckIssued,
+        DateCheckCleared,
+        DeletedFlag,
+        MgtCoClientID,
+        HOALicenseNumber,
+        COALESCE(
+          (
+            SELECT VendorName
+            FROM VendorMaster
+            WHERE VendorID = CheckRegister.VendorResidentID
+            LIMIT 1
+          ),
+          (
+            SELECT DisplayName
+            FROM ResidentMaster
+            WHERE ResidentAccountID = CheckRegister.VendorResidentID
+            LIMIT 1
+          ),
+          CheckRegister.VendorResidentID
+        ) AS PayeeName
+      FROM CheckRegister
+      WHERE CheckTransactionNumber = ?
+        AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+      LIMIT 1
+      FOR UPDATE
+    `, [transactionNumber]);
+
+    if (!checkRows[0]) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        error: 'Check transaction was not found.'
+      });
+    }
+
+    const check = checkRows[0];
+
+    const [ledgerRows] = await connection.query(`
+  SELECT *
+  FROM CashFlowLedgerMaster
+  WHERE BankAccountID = ?
+    AND FiscalYearLabel = ?
+    AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+  LIMIT 1
+  FOR UPDATE
+`, [
+  check.BankAccountID,
+  String(clearedDate).slice(0, 4)
+]);
+
+if (!ledgerRows[0]) {
+  await connection.rollback();
+
+  return res.status(409).json({
+    error:
+      'Cash Flow Ledger Master is not established for this bank and fiscal year.'
+  });
+}
+
+const ledgerMaster = ledgerRows[0];
+
+
+    if (!check.DateCheckIssued) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error: 'This check has not been issued yet and cannot be cleared.'
+      });
+    }
+
+    if (
+      check.Status === 'Voided'
+    ) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error: 'This check is voided and cannot be cleared.'
+      });
+    }
+
+    if (
+      check.Status === 'Cleared' ||
+      check.DateCheckCleared !== null
+    ) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error: 'This check has already been cleared.'
+      });
+    }
+
+    const clearDate = new Date(clearedDate);
+
+    if (Number.isNaN(clearDate.getTime())) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Invalid cleared date.'
+      });
+    }
+
+    const monthCleared = clearDate.getMonth() + 1;
+
+    
+
+    const cashFlowPosting = await postCashFlowTransaction(
+      connection,
+      {
+        bankAccountId: check.BankAccountID,
+        mgtCoClientId: check.MgtCoClientID,
+        hoaLicenseNumber: check.HOALicenseNumber,
+        sourceRegister: 'CR',
+        sourceTransactionNumber: transactionNumber,
+        transactionDate: clearedDate,
+        payeeDepositorName: check.PayeeName || check.VendorResidentID || '',
+        residentAccountId: check.VendorResidentID || '',
+        glNumber: check.GLNumber,
+        amount: check.Amount,
+        operatorId: 'SYSTEM'
+      }
+    );
+
+    if (cashFlowPosting.alreadyPosted) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error:
+          'Cash Flow already contains an active posting for this check transaction.'
+      });
+    }
+
+    const newCurrentBalance =
+  Number(ledgerMaster.CurrentBalance || 0) -
+  Number(check.Amount || 0);
+
+await connection.query(`
+  UPDATE CashFlowLedgerMaster
+  SET
+    CurrentBalance = ?,
+    LastPostedTransactionDate = ?,
+    LastPostedDateTime = NOW(),
+    TimeStampUpdated = NOW()
+  WHERE CashFlowLedgerID = ?
+`, [
+  newCurrentBalance,
+  clearedDate,
+  ledgerMaster.CashFlowLedgerID
+]);
+
+  
+
+
+
+
+    await connection.query(`
+      UPDATE CheckRegister
+      SET
+        DateCheckCleared = ?,
+        MonthCleared = ?,
+        Status = 'Cleared',
+        TimeStampUpdated = NOW()
+      WHERE CheckTransactionNumber = ?
+    `, [
+      clearedDate,
+      monthCleared,
+      transactionNumber
+    ]);
+
+    await connection.commit();
+
+    return res.json({
+      success: true,
+      message: 'Check cleared and Cash Flow posted successfully.',
+      transactionNumber,
+      clearedDate,
+      monthCleared,
+      cashFlowTable: cashFlowPosting.tableName,
+      cashFlowDirection: cashFlowPosting.direction,
+      cashInAmount: cashFlowPosting.cashInAmount,
+      cashOutAmount: cashFlowPosting.cashOutAmount
+    });
+
+  } catch (err) {
+    await connection.rollback();
+
+    console.error('Error clearing check:', err);
+
+    return res.status(500).json({
+      error: 'Failed to clear check',
+      details: err.message
+    });
+
+  } finally {
+    connection.release();
+  }
+});
+
+
 
 
 app.post('/api/modify-gl/submit', async (req, res) => {
@@ -1382,6 +2324,36 @@ app.post('/api/deposit-register', async (req, res) => {
     const bankAccountId = d.bank_account_id || 1;
     const amount = parseFloat(d.amount) || 0.00;
 
+    const depositDate =
+  d.date_deposited || new Date().toISOString().slice(0, 10);
+
+const fiscalYearLabel =
+  String(depositDate).slice(0, 4);
+
+const [ledgerRows] = await connection.query(`
+  SELECT *
+  FROM CashFlowLedgerMaster
+  WHERE BankAccountID = ?
+    AND FiscalYearLabel = ?
+    AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+  LIMIT 1
+  FOR UPDATE
+`, [
+  bankAccountId,
+  fiscalYearLabel
+]);
+
+if (!ledgerRows[0]) {
+  await connection.rollback();
+
+  return res.status(409).json({
+    error:
+      'Cash Flow Ledger Master is not established for this bank and fiscal year.'
+  });
+}
+
+const ledgerMaster = ledgerRows[0];
+
     await connection.query(`
       INSERT INTO DepositRegister (
         DepositTransactionNumber, DepositorAccountName, Amount, BankAccountName,
@@ -1408,28 +2380,48 @@ app.post('/api/deposit-register', async (req, res) => {
       d.note || ''
     ]);
 
-    // Real-time Bank Cash Flow update (increase balance)
-    await connection.query(`
-      UPDATE BankAccount 
-      SET StartingBalance = StartingBalance + ?, TimeStampUpdated = NOW()
-      WHERE BankAccountID = ?
-    `, [amount, bankAccountId]);
+    const cashFlowPosting = await postCashFlowTransaction(
+      connection,
+      {
+        bankAccountId,
+        mgtCoClientId: 'MGTCO-001',
+        hoaLicenseNumber: 'HOA-FL-2024-001',
+        sourceRegister: 'DP',
+        sourceTransactionNumber: txnNum,
+        transactionDate: depositDate,
+        payeeDepositorName: d.payer_name || '',
+        residentAccountId: d.resident_id || d.vendor_id || '',
+        glNumber: d.gl_number || 4000,
+        amount,
+        operatorId: 'SYSTEM'
+      }
+    );
 
-    // CashFlow posting for DP (Cash In) — bank-specific, traceable to DepositRegister
-    const [bankRowsCF_DP] = await connection.query("SELECT BankType FROM BankAccount WHERE BankAccountID=? LIMIT 1", [bankAccountId]);
-    const bankTypeCF_DP = bankRowsCF_DP[0]?.BankType || 'Operating';
-    const cfTableMapDP = { Operating: 'CashFlowTransaction_Operating', Capital: 'CashFlowTransaction_Capital', Escrow: 'CashFlowTransaction_Escrow', 'Money Market': 'CashFlowTransaction_MoneyMarket', Savings: 'CashFlowTransaction_Savings', MoneyMarket: 'CashFlowTransaction_MoneyMarket', CD: 'CashFlowTransaction_CD' };
-    const cfTableDP = cfTableMapDP[bankTypeCF_DP] || 'CashFlowTransaction_Operating';
-    const txDateDP = d.date_deposited || new Date().toISOString().slice(0, 10);
-    const fyLabelDP = String(new Date(txDateDP).getFullYear());
-    const fyPeriodDP = derivePeriodNumber(txDateDP, 'Monthly');
-    await connection.query(`INSERT INTO ${cfTableDP} (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID, FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber, TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber, CashInAmount, TransactionDescription, OperatorID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ['MGTCO-001', 'HOA-FL-2024-001', bankTypeCF_DP, bankAccountId, fyLabelDP, fyPeriodDP, 'DP', txnNum, txDateDP, d.payer_name || '', d.resident_id || d.vendor_id || '', d.gl_number || 4000, amount, d.note || 'Deposit', 'SYSTEM']);
+    if (!cashFlowPosting.alreadyPosted) {
+    await connection.query(`
+    UPDATE CashFlowLedgerMaster
+    SET
+      CurrentBalance =
+        COALESCE(CurrentBalance, 0)
+        + ?
+        - ?,
+      LastPostedTransactionDate = ?,
+      LastPostedDateTime = NOW(),
+      TimeStampUpdated = NOW()
+    WHERE CashFlowLedgerID = ?
+  `, [
+    Number(cashFlowPosting.cashInAmount || 0),
+    Number(cashFlowPosting.cashOutAmount || 0),
+    depositDate,
+    ledgerMaster.CashFlowLedgerID
+  ]);
+}
 
     await connection.commit();
     res.status(201).json({
       success: true,
       deposit_txn_num: txnNum,
-      message: 'Deposit posted and Bank Cash Flow updated successfully'
+      message: 'Deposit posted and Cash Flow updated successfully'
     });
   } catch (err) {
     await connection.rollback();
@@ -2246,13 +3238,40 @@ app.get('/api/settings/banking', async (req, res) => {
 });
 
 app.put('/api/settings/banking', async (req, res) => {
+  const connection = await db.getConnection();
+
   try {
+    await connection.beginTransaction();
+
     const { banks, fiscalSetup } = req.body;
+    const savedBanks = [];
 
     if (Array.isArray(banks)) {
       for (const b of banks) {
-        if (b.id) {
-          await db.query(`
+        const normalizedBankId = String(b.bankId || '').trim();
+
+        if (!/^\d+$/.test(normalizedBankId)) {
+          throw new Error(
+            'Bank ID must contain numbers only before Banking Settings can be saved.'
+          );
+        }
+
+        let bankAccountId = Number.parseInt(b.id, 10);
+
+        if (!Number.isInteger(bankAccountId) || bankAccountId <= 0) {
+          const [existingBankRows] = await connection.query(`
+            SELECT BankAccountID
+            FROM BankAccount
+            WHERE BankID = ?
+            LIMIT 1
+          `, [normalizedBankId]);
+
+          bankAccountId =
+            Number(existingBankRows[0]?.BankAccountID) || 0;
+        }
+
+        if (bankAccountId > 0) {
+          const [updateResult] = await connection.query(`
             UPDATE BankAccount SET
               BankType=?, BankName=?, BankID=?, ActiveFlag=?, CheckMode=?,
               StartCheckNumber=?, GLCashAccount=?, AccountNumber=?, RoutingNumber=?,
@@ -2260,18 +3279,96 @@ app.put('/api/settings/banking', async (req, res) => {
               ContactEmail=?, CoMingled=?, CoMingledWith=?, Notes=?, TimeStampUpdated=NOW()
             WHERE BankAccountID=?
           `, [
-            b.bankType||'', b.bankName||'', b.bankId||'', b.active||'Y', b.checkMode||'None',
+            b.bankType||'', b.bankName||'', normalizedBankId, b.active||'Y', b.checkMode||'None',
             b.startCheck||'', b.glCashAccount||'', b.accountNumber||'', b.routingNumber||'',
             b.startingBalance||0.00, b.startingMonth||'January', b.contactPerson||'', b.contactTel||'',
-            b.contactEmail||'', b.coMingled||'N', b.coMingledWith||'', b.notes||'', b.id
+            b.contactEmail||'', b.coMingled||'N', b.coMingledWith||'', b.notes||'', bankAccountId
           ]);
+
+          if (updateResult.affectedRows === 0) {
+            throw new Error(
+              `BankAccountID ${bankAccountId} was not found while saving Banking Settings.`
+            );
+          }
+        } else {
+          // Provision the physical Cash Flow table first. If CREATE privilege
+          // is unavailable, the bank row is not inserted.
+          await createCashFlowBankTableForNewBank(
+            connection,
+            normalizedBankId
+          );
+
+          const [insertResult] = await connection.query(`
+            INSERT INTO BankAccount (
+              BankType,
+              BankName,
+              BankID,
+              ActiveFlag,
+              CheckMode,
+              StartCheckNumber,
+              GLCashAccount,
+              AccountNumber,
+              RoutingNumber,
+              StartingBalance,
+              StartingMonth,
+              ContactPerson,
+              ContactTel,
+              ContactEmail,
+              CoMingled,
+              CoMingledWith,
+              Notes,
+              MgtCoClientID,
+              HOALicenseNumber,
+              OperatorID,
+              TimeStampCreated
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+          `, [
+            b.bankType||'',
+            b.bankName||'',
+            normalizedBankId,
+            b.active||'Y',
+            b.checkMode||'None',
+            b.startCheck||'',
+            b.glCashAccount||'',
+            b.accountNumber||'',
+            b.routingNumber||'',
+            b.startingBalance||0.00,
+            b.startingMonth||'January',
+            b.contactPerson||'',
+            b.contactTel||'',
+            b.contactEmail||'',
+            b.coMingled||'N',
+            b.coMingledWith||'',
+            b.notes||''
+          ]);
+
+          bankAccountId = insertResult.insertId;
         }
+
+       await establishCashFlowLedgerMaster(
+        connection,
+        bankAccountId,
+        b.startingBalance || 0.00,
+        b.startingMonth || 'January'
+      );
+
+
+
+
+
+        savedBanks.push({
+          id: bankAccountId,
+          bankId: normalizedBankId,
+          cashFlowTable: getCashFlowBankTableName(normalizedBankId)
+        });
       }
     }
 
     if (fiscalSetup) {
       const f = fiscalSetup;
-      await db.query(`
+      await connection.query(`
         UPDATE FiscalYearSetup SET
           OpeningRetainedEarnings=?, EndingRetainedEarnings=?, CurrentFiscalYearIncome=?,
           AccountsReceivable=?, AccountsPayable=?, InterestEarned=?,
@@ -2286,10 +3383,23 @@ app.put('/api/settings/banking', async (req, res) => {
       ]);
     }
 
-    res.json({ success: true, message: 'Banking settings saved successfully' });
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: 'Banking settings saved successfully',
+      savedBanks
+    });
   } catch (err) {
+    await connection.rollback();
+
     console.error('Error saving banking settings:', err);
-    res.status(500).json({ error: 'Failed to save banking settings', details: err.message });
+    res.status(500).json({
+      error: 'Failed to save banking settings',
+      details: err.message
+    });
+  } finally {
+    connection.release();
   }
 });
 
@@ -2300,7 +3410,11 @@ app.put('/api/settings/banking', async (req, res) => {
    =========================================================== */
 
 app.post('/api/void/execute', async (req, res) => {
+  const connection = await db.getConnection();
+
   try {
+    await connection.beginTransaction();
+
     const transactionNumber =
       req.body?.payload?.transaction_no;
 
@@ -2308,6 +3422,8 @@ app.post('/api/void/execute', async (req, res) => {
       req.body?.payload?.page || '';
 
     if (!transactionNumber) {
+      await connection.rollback();
+
       return res.status(400).json({
         ok: false,
         status: {
@@ -2317,84 +3433,186 @@ app.post('/api/void/execute', async (req, res) => {
     }
 
     if (page === 'DP') {
-  const [rows] = await db.query(`
-    SELECT
-      DepositTransactionNumber,
-      Status,
-      DateCleared,
-      MonthCleared
-    FROM DepositRegister
-    WHERE DepositTransactionNumber = ?
-    LIMIT 1
-  `, [transactionNumber]);
+      const [rows] = await connection.query(`
+        SELECT
+          DepositTransactionNumber,
+          Status,
+          DateCleared,
+          MonthCleared,
+          BankAccountID
+        FROM DepositRegister
+        WHERE DepositTransactionNumber = ?
+        LIMIT 1
+        FOR UPDATE
+      `, [transactionNumber]);
 
-  if (rows.length === 0) {
-    return res.status(404).json({
-      ok: false,
-      status: {
-        message: 'Deposit transaction not found.'
+      if (rows.length === 0) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          ok: false,
+          status: {
+            message: 'Deposit transaction not found.'
+          }
+        });
       }
-    });
-  }
 
-  const deposit = rows[0];
+      const deposit = rows[0];
 
-  if (
-    deposit.Status === 'Cleared' ||
-    deposit.DateCleared !== null ||
-    deposit.MonthCleared !== null
-  ) {
-    return res.status(400).json({
-      ok: false,
-      status: {
-        message:
-          'This deposit already cleared the bank and cannot be voided.'
-      }
-    });
-  }
+      const [cashFlowRows] = await connection.query(`
+  SELECT
+    CashFlowTransactionID,
+    ActiveCashInAmount,
+    ActiveCashOutAmount,
+    DATE_FORMAT(TransactionDate, '%Y-%m-%d') AS TransactionDate
+  FROM ${(
+    await resolveCashFlowBankTable(
+      connection,
+      deposit.BankAccountID
+    )
+  ).tableName}
+  WHERE SourceRegister = 'DP'
+    AND SourceTransactionNumber = ?
+    AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+    AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+  LIMIT 1
+  FOR UPDATE
+`, [transactionNumber]);
 
-  if (deposit.Status === 'Voided') {
-    return res.status(400).json({
-      ok: false,
-      status: {
-        message: 'Transaction already voided.'
-      }
-    });
-  }
+const cashFlowRow = cashFlowRows[0] || null;
 
-  await db.query(`
-    UPDATE DepositRegister
-    SET
-      Status = 'Voided',
-      DateCleared = NULL,
-      MonthCleared = NULL,
-      TimeStampUpdated = NOW()
-    WHERE DepositTransactionNumber = ?
-  `, [transactionNumber]);
+if (!cashFlowRow) {
+  await connection.rollback();
 
-  return res.json({
-    ok: true,
+  return res.status(409).json({
+    ok: false,
     status: {
-      message: 'VOID successful.'
+      message:
+        'The active Cash Flow transaction for this deposit could not be found.'
     }
   });
 }
 
+      if (
+        deposit.Status === 'Cleared' ||
+        deposit.DateCleared !== null ||
+        deposit.MonthCleared !== null
+      ) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          ok: false,
+          status: {
+            message:
+              'This deposit already cleared the bank and cannot be voided.'
+          }
+        });
+      }
+
+      if (deposit.Status === 'Voided') {
+        await connection.rollback();
+
+        return res.status(400).json({
+          ok: false,
+          status: {
+            message: 'Transaction already voided.'
+          }
+        });
+      }
+
+      await connection.query(`
+        UPDATE DepositRegister
+        SET
+          Status = 'Voided',
+          DateCleared = NULL,
+          MonthCleared = NULL,
+          TimeStampUpdated = NOW()
+        WHERE DepositTransactionNumber = ?
+      `, [transactionNumber]);
+
+      const cashFlowVoid = await voidCashFlowTransaction(
+        connection,
+        {
+          bankAccountId: deposit.BankAccountID,
+          sourceRegister: 'DP',
+          sourceTransactionNumber: transactionNumber
+        }
+      );
+
+      const fiscalYearLabel =
+  String(cashFlowRow.TransactionDate).slice(0, 4);
+
+const [ledgerRows] = await connection.query(`
+  SELECT *
+  FROM CashFlowLedgerMaster
+  WHERE BankAccountID = ?
+    AND FiscalYearLabel = ?
+    AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+  LIMIT 1
+  FOR UPDATE
+`, [
+  deposit.BankAccountID,
+  fiscalYearLabel
+]);
+
+if (!ledgerRows[0]) {
+  await connection.rollback();
+
+  return res.status(409).json({
+    ok: false,
+    status: {
+      message:
+        'Cash Flow Ledger Master is not established for this bank and fiscal year.'
+    }
+  });
+}
+
+const ledgerMaster = ledgerRows[0];
+
+  await connection.query(`
+    UPDATE CashFlowLedgerMaster
+    SET
+      CurrentBalance =
+        COALESCE(CurrentBalance, 0)
+        - ?
+        + ?,
+      LastPostedTransactionDate = ?,
+      LastPostedDateTime = NOW(),
+      TimeStampUpdated = NOW()
+    WHERE CashFlowLedgerID = ?
+  `, [
+    Number(cashFlowRow.ActiveCashInAmount || 0),
+    Number(cashFlowRow.ActiveCashOutAmount || 0),
+    cashFlowRow.TransactionDate,
+    ledgerMaster.CashFlowLedgerID
+  ]);
 
 
+      await connection.commit();
 
+      return res.json({
+        ok: true,
+        status: {
+          message: 'VOID successful.'
+        },
+        cashFlowTable: cashFlowVoid.tableName,
+        cashFlowRowsVoided: cashFlowVoid.affectedRows
+      });
+    }
 
     if (page !== 'CR') {
+      await connection.rollback();
+
       return res.status(400).json({
         ok: false,
         status: {
           message:
-            'Only Check Register void is enabled at this time.'
+            'Only Check Register and Deposit Register void are enabled at this time.'
         }
       });
     }
 
-    const [rows] = await db.query(`
+    const [rows] = await connection.query(`
       SELECT
         CheckTransactionNumber,
         Status,
@@ -2403,9 +3621,12 @@ app.post('/api/void/execute', async (req, res) => {
       FROM CheckRegister
       WHERE CheckTransactionNumber = ?
       LIMIT 1
+      FOR UPDATE
     `, [transactionNumber]);
 
     if (rows.length === 0) {
+      await connection.rollback();
+
       return res.status(404).json({
         ok: false,
         status: {
@@ -2421,6 +3642,8 @@ app.post('/api/void/execute', async (req, res) => {
       check.DateCheckCleared !== null ||
       check.MonthCleared !== null
     ) {
+      await connection.rollback();
+
       return res.status(400).json({
         ok: false,
         status: {
@@ -2431,6 +3654,8 @@ app.post('/api/void/execute', async (req, res) => {
     }
 
     if (check.Status === 'Voided') {
+      await connection.rollback();
+
       return res.status(400).json({
         ok: false,
         status: {
@@ -2439,7 +3664,7 @@ app.post('/api/void/execute', async (req, res) => {
       });
     }
 
-    await db.query(`
+    await connection.query(`
       UPDATE CheckRegister
       SET
         Status = 'Voided',
@@ -2449,6 +3674,8 @@ app.post('/api/void/execute', async (req, res) => {
       WHERE CheckTransactionNumber = ?
     `, [transactionNumber]);
 
+    await connection.commit();
+
     return res.json({
       ok: true,
       status: {
@@ -2456,21 +3683,24 @@ app.post('/api/void/execute', async (req, res) => {
       }
     });
   } catch (err) {
+    await connection.rollback();
+
     console.error(
-      'Error voiding Check Register transaction:',
+      'Error voiding Check/Deposit Register transaction:',
       err
     );
 
     return res.status(500).json({
       ok: false,
       status: {
-        message: 'Unable to void check.'
+        message: 'Unable to void transaction.'
       },
       details: err.message
     });
+  } finally {
+    connection.release();
   }
 });
-
 
 /* ===========================================================
    SETTINGS: FINES / LATE FEES PROGRAMMING
@@ -4641,16 +5871,29 @@ app.post('/api/apr/enter-payment', async (req, res) => {
           const overflowToAnnual = Math.min(specialExcess, annualDueBeforeOverflow);
           const overflowToCredit = specialExcess - overflowToAnnual;
 
+          if (overflowToAnnual > 0) {
           await insertAprRow({
             transactionNumber: specialTxn,
             paymentType: 'AnnualDues',
             annualPayment: overflowToAnnual,
-            credit: overflowToCredit,
             frequency: annualFrequency,
             periodNumber: annualPeriodNumber,
             bankAccountId: annualBank.bankAccountId,
             rowGlNumber: annualBank.revenueGlNumber
           });
+        }
+
+        if (overflowToCredit > 0) {
+          await insertAprRow({
+            transactionNumber: specialTxn,
+            paymentType: 'AnnualDues',
+            credit: overflowToCredit,
+            frequency: annualFrequency,
+            periodNumber: annualPeriodNumber,
+            bankAccountId: annualBank.bankAccountId,
+            rowGlNumber: 50000
+          });
+        }
 
           annualPaid += overflowToAnnual;
           annualCredit += overflowToCredit;
@@ -4763,17 +6006,12 @@ if (annualInput > 0) {
       // Traceability is kept by APR transaction number, destination bank, GL, and
       // allocation type so a transaction-number Void can find every portion.
       const cashReceived = annualInput + specialInput;
-      const cfTableMap = {
-        Operating: 'CashFlowTransaction_Operating',
-        Capital: 'CashFlowTransaction_Capital',
-        Escrow: 'CashFlowTransaction_Escrow',
-        'Money Market': 'CashFlowTransaction_MoneyMarket',
-        Savings: 'CashFlowTransaction_Savings',
-        MoneyMarket: 'CashFlowTransaction_MoneyMarket',
-        CD: 'CashFlowTransaction_CD'
-      };
-      const fiscalYearLabel = String(new Date(fyBegins).getFullYear());
-      const fiscalPeriod = derivePeriodNumber(payDate, 'Monthly');
+
+      
+
+      const fiscalYearLabel =
+        String(fyBegins).slice(0, 4);
+      
 
       const bankByAccountId = new Map([
         [annualBank.bankAccountId, annualBank],
@@ -4814,43 +6052,92 @@ if (annualInput > 0) {
           );
         }
 
-        // TEMPORARY resolver: current schema still uses the legacy bank-type CF tables.
-        // Replace this map when the per-Bank-ID physical CF table provisioning is installed.
-        const cfTable = cfTableMap[bank.bankType];
-
-        if (!cfTable) {
-          throw new Error(
-            `No Cash Flow table is configured for bank type ${bank.bankType}.`
+       const cashFlowBank =
+          await resolveCashFlowBankTable(
+            conn,
+            group.bankAccountId
           );
-        }
 
-        const paymentTypeText =
-          Array.from(group.paymentTypes).join(' / ');
+       const cfTable = cashFlowBank.tableName;
 
-        await conn.query(`
-          INSERT INTO ${cfTable}
-            (MgtCoClientID, HOALicenseNumber, BankType, BankAccountID,
-             FiscalYearLabel, FiscalPeriod, SourceRegister, SourceTransactionNumber,
-             TransactionDate, PayeeDepositorName, ResidentAccountID, GLNumber,
-             CashInAmount, TransactionDescription, OperatorID)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        `, [
-          effMgtCo,
-          effHoa,
-          bank.bankType,
-          group.bankAccountId,
-          fiscalYearLabel,
-          fiscalPeriod,
-          'APR',
-          group.transactionNumber,
-          payDate,
-          resident.DisplayName || resident.LastName || residentAccountId,
-          residentAccountId,
-          group.glNumber,
-          group.amount,
-          `APR payment - ${paymentTypeText}`,
-          opId
-        ]);
+      const direction =
+  getCashFlowDirection(group.glNumber);
+
+  if (direction !== 'IN') {
+    throw new Error(
+      `APR GLNumber ${group.glNumber} must be a Cash Flow revenue GL.`
+    );
+  }
+
+  await conn.query(`
+    INSERT INTO ${cfTable} (
+      BankAccountID,
+      MgtCoClientID,
+      HOALicenseNumber,
+      BankType,
+      SourceRegister,
+      SourceTransactionNumber,
+      TransactionDate,
+      PayeeDepositorName,
+      ResidentAccountID,
+      GLNumber,
+      CashInAmount,
+      CashOutAmount,
+      ActiveCashInAmount,
+      ActiveCashOutAmount,
+      VoidFlag,
+      DeletedFlag,
+      OperatorID
+    )
+    VALUES (?, ?, ?, ?, 'APR', ?, ?, ?, ?, ?, ?, 0.00, ?, 0.00, 'N', 'N', ?)
+  `, [
+    group.bankAccountId,
+    effMgtCo,
+    effHoa,
+    cashFlowBank.bankType,
+    group.transactionNumber,
+    payDate,
+    resident.DisplayName || resident.LastName || residentAccountId,
+    residentAccountId,
+    group.glNumber,
+    group.amount,
+    group.amount,
+    opId
+  ]);
+
+  const [ledgerRows] = await conn.query(`
+  SELECT *
+  FROM CashFlowLedgerMaster
+  WHERE BankAccountID = ?
+    AND FiscalYearLabel = ?
+    AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+  LIMIT 1
+  FOR UPDATE
+`, [
+  group.bankAccountId,
+  fiscalYearLabel
+]);
+
+if (!ledgerRows[0]) {
+  throw new Error(
+    `Cash Flow Ledger Master is not established for BankAccountID ${group.bankAccountId} and fiscal year ${fiscalYearLabel}.`
+  );
+}
+
+await conn.query(`
+  UPDATE CashFlowLedgerMaster
+  SET
+    CurrentBalance =
+      COALESCE(CurrentBalance, 0) + ?,
+    LastPostedTransactionDate = ?,
+    LastPostedDateTime = NOW(),
+    TimeStampUpdated = NOW()
+  WHERE CashFlowLedgerID = ?
+`, [
+  Number(group.amount || 0),
+  payDate,
+  ledgerRows[0].CashFlowLedgerID
+]);
 
         cashFlowPostings.push({
           transactionNumber: group.transactionNumber,
@@ -5203,9 +6490,9 @@ app.post('/api/apr/void', async (req, res) => {
           try { await conn.query(`UPDATE ${t} SET VoidFlag='Y', DeletedFlag='Y' WHERE SourceRegister='APR' AND SourceTransactionNumber=?`, [transactionNumber]); } catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
           // Also try per BankID tables if they exist: CashFlow_BankID_*
           try {
-            const [bankIds] = await conn.query(`SELECT BankAccountID FROM BankAccount WHERE ActiveFlag='Y'`);
+            const [bankIds] = await conn.query(`SELECT BankAccountID, BankID FROM BankAccount WHERE ActiveFlag='Y'`);
             for (const b of bankIds) {
-              const perBankTable = `CashFlow_BankID_${b.BankAccountID}`;
+              const perBankTable = getCashFlowBankTableName(b.BankID);
               try { await conn.query(`UPDATE ${perBankTable} SET VoidFlag='Y', DeletedFlag='Y' WHERE SourceRegister='APR' AND SourceTransactionNumber=?`, [transactionNumber]); } catch (e2) { if (e2.code !== 'ER_NO_SUCH_TABLE') throw e2; }
             }
           } catch (e) {}
@@ -5326,7 +6613,7 @@ app.post('/api/apr/void', async (req, res) => {
       // (by SourceTransactionNumber). Replayed transactions KEEP their original CashFlow
       // (cash did not move again) and NO new CashFlow rows are posted during replay.
       // Covers: 6 interim views (updatable, over base CashFlowTransaction), the base table
-      // itself, and the per-BankID physical tables (CashFlow_BankID_<BankAccountID>).
+      // itself, and the per-BankID physical tables (CashFlow_BankID_<BankID>).
       const cfTablesHistorical = [
         'CashFlowTransaction_Operating','CashFlowTransaction_Capital','CashFlowTransaction_Escrow',
         'CashFlowTransaction_MoneyMarket','CashFlowTransaction_Savings','CashFlowTransaction_CD',
@@ -5337,9 +6624,9 @@ app.post('/api/apr/void', async (req, res) => {
         catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_FIELD_ERROR') throw e; }
       }
       try {
-        const [banksAll] = await conn.query(`SELECT BankAccountID FROM BankAccount WHERE ActiveFlag='Y'`);
+        const [banksAll] = await conn.query(`SELECT BankAccountID, BankID FROM BankAccount WHERE ActiveFlag='Y'`);
         for (const b of banksAll) {
-          const perBankTable = `CashFlow_BankID_${b.BankAccountID}`;
+          const perBankTable = getCashFlowBankTableName(b.BankID);
           try { await conn.query(`UPDATE ${perBankTable} SET VoidFlag='Y', DeletedFlag='Y' WHERE SourceRegister='APR' AND SourceTransactionNumber=?`, [transactionNumber]); }
           catch (e2) { if (e2.code !== 'ER_NO_SUCH_TABLE') throw e2; }
         }
@@ -5391,9 +6678,11 @@ app.post('/api/apr/recalculate', async (req, res) => {
   return res.status(501).json({ error: 'Not implemented — utilidad de excepción para rebuild de AssessmentRegisters/CashFlow', details: 'V3 §6 y refinamiento incremental: no recalcular en flujo normal' });
 });
 
-// Fase 1 Cash Flow incremental: CR/DP ya no necesitan rebuild; APR ya postea arriba.
-// Los POST /api/check-register y /api/deposit-register deberán migrar a débito/crédito
-// CashFlowTransaction_* en siguiente iteración (hoy solo actualizan BankAccount).
+// Fase 1 Cash Flow incremental: CR and DP post to the final per-BankID
+// physical Cash Flow tables. APR retains Jose's V6 replay/allocation logic and
+// its current Cash Flow posting path until the separate APR Cash Flow conversion.
+// New-bank table provisioning is performed from Banking Settings; the DB account
+// executing that save must have CREATE/ALTER privileges for CashFlow_BankID_XXX.
 
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {

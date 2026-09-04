@@ -1279,6 +1279,48 @@ const DEFAULT_EXPENSE_ROWS = [
   }
 ];
 
+
+const DEFAULT_ASSET_LIABILITY_ROWS = [
+  {
+    "glNumber": "50000",
+    "glName": "Resident_Credit",
+    "sourceTable": "Ass'mt Pay'mt Register",
+    "description": "",
+    "bankType": "All",
+    "bankId": "OP_Bank_ID#1",
+    "pc": "P",
+    "parentGl": "",
+    "consolidatedParentGl": "50000",
+    "dc": "C",
+    "ar": "A",
+    "effectiveDate": "",
+    "createdBy": "SYSTEM",
+    "createdDate": "",
+    "lastEditedBy": "",
+    "systemLocked": true
+  },
+  {
+    "glNumber": "50001 - 50999",
+    "glName": "Resident Credit Assignable Sub Headings",
+    "sourceTable": "Ass'mt Pay'mt Register",
+    "description": "",
+    "bankType": "All",
+    "bankId": "OP_Bank_ID#1",
+    "pc": "C",
+    "parentGl": "50000",
+    "consolidatedParentGl": "50000",
+    "dc": "C",
+    "ar": "A",
+    "effectiveDate": "",
+    "createdBy": "SYSTEM",
+    "createdDate": "",
+    "lastEditedBy": "",
+    "systemLocked": true
+  }
+];
+
+
+
 const DEFAULT_REVENUE_ROWS = [
   {
     "glNumber": "40000",
@@ -2650,6 +2692,11 @@ function GLMapping({
   const [revenueRows, setRevenueRows] =
     useState(() => cloneRows(DEFAULT_REVENUE_ROWS));
 
+  const [assetLiabilityRows, setAssetLiabilityRows] =
+  useState(() => cloneRows(DEFAULT_ASSET_LIABILITY_ROWS));
+
+
+
   const [selectedRowIndex, setSelectedRowIndex] =
     useState(null);
 
@@ -2695,27 +2742,42 @@ const [createParentEnd, setCreateParentEnd] =
 
 
   const currentRows =
-    activeSection === 'expense'
-      ? expenseRows
-      : revenueRows;
+  activeSection === 'expense'
+    ? expenseRows
+    : activeSection === 'revenue'
+      ? revenueRows
+      : assetLiabilityRows;
 
   const sectionTitle =
-    activeSection === 'expense'
-      ? 'EXPENSE GL# MAPPING'
-      : 'REVENUE GL# MAPPING';
+  activeSection === 'expense'
+    ? 'EXPENSE GL# MAPPING'
+    : activeSection === 'revenue'
+      ? 'REVENUE GL# MAPPING'
+      : 'ASSET / LIABILITY GL# MAPPING';
 
   const sectionNote =
-    activeSection === 'expense'
+  activeSection === 'expense'
+    ? (
+      'User / IT programming page for Expense GL# ' +
+      'categories, bank assignment, parent/child ' +
+      'hierarchy, and accounting behavior.'
+    )
+    : activeSection === 'revenue'
       ? (
-        'User / IT programming page for Expense GL# ' +
+        'User / IT programming page for Revenue GL# ' +
         'categories, bank assignment, parent/child ' +
         'hierarchy, and accounting behavior.'
       )
       : (
-        'User / IT programming page for Revenue GL# ' +
+        'User / IT programming page for Asset / Liability GL# ' +
         'categories, bank assignment, parent/child ' +
         'hierarchy, and accounting behavior.'
       );
+
+
+
+
+
 
   const selectedRow = useMemo(() => {
     if (selectedRowIndex === null) {
@@ -2880,6 +2942,13 @@ const createParentEndingOptions = useMemo(() => {
           setRevenueRows(cloneRows(savedData.revenueRows));
         }
 
+        if (
+          Array.isArray(savedData.assetLiabilityRows) &&
+          savedData.assetLiabilityRows.length > 0
+        ) {
+          setAssetLiabilityRows(cloneRows(savedData.assetLiabilityRows));
+        }
+
         if (savedData.activeSection) {
           setActiveSection(savedData.activeSection);
         }
@@ -2942,11 +3011,13 @@ const createParentEndingOptions = useMemo(() => {
     hasUnsavedChanges
   ]);
 
-  function setCurrentRows(nextRows) {
+    function setCurrentRows(nextRows) {
     if (activeSection === 'expense') {
       setExpenseRows(nextRows);
-    } else {
+    } else if (activeSection === 'revenue') {
       setRevenueRows(nextRows);
+    } else {
+      setAssetLiabilityRows(nextRows);
     }
   }
 
@@ -3682,12 +3753,13 @@ if (!hasAvailableGLNumber) {
   }
 
   function buildCompleteData() {
-    return {
-      expenseRows,
-      revenueRows,
-      activeSection
-    };
-  }
+  return {
+    expenseRows,
+    revenueRows,
+    assetLiabilityRows,
+    activeSection
+  };
+}
 
   async function saveCurrentSettings() {
     if (!validateEditedRow()) {
@@ -3739,6 +3811,11 @@ if (!hasAvailableGLNumber) {
               activeSection === 'revenue'
                 ? [editedRow]
                 : [],
+            assetLiabilityRows:
+              activeSection === 'asset-liability'
+                ? [editedRow]
+                : [],
+
             activeSection,
             structuralSave: false
           };
@@ -3759,6 +3836,11 @@ if (!hasAvailableGLNumber) {
               ? cloneRows(savedData.revenueRows)
               : cloneRows(DEFAULT_REVENUE_ROWS)
           );
+          setAssetLiabilityRows(
+            Array.isArray(savedData?.assetLiabilityRows)
+              ? cloneRows(savedData.assetLiabilityRows)
+              : cloneRows(DEFAULT_ASSET_LIABILITY_ROWS)
+          );
         } else {
           const saveData = {
             expenseRows:
@@ -3769,6 +3851,10 @@ if (!hasAvailableGLNumber) {
               activeSection === 'revenue'
                 ? [editedRow]
                 : [],
+            assetLiabilityRows:
+              activeSection === 'asset-liability'
+                ? [editedRow]
+                : [],    
             activeSection,
             structuralSave: false
           };
@@ -3777,8 +3863,10 @@ if (!hasAvailableGLNumber) {
 
           if (activeSection === 'expense') {
             setExpenseRows(updatedRows);
-          } else {
+          } else if (activeSection === 'revenue') {
             setRevenueRows(updatedRows);
+          } else {
+            setAssetLiabilityRows(updatedRows);
           }
         }
       }
@@ -3792,6 +3880,7 @@ if (!hasAvailableGLNumber) {
         const completeData = {
           expenseRows,
           revenueRows,
+          assetLiabilityRows,
           activeSection,
           structuralSave: true
         };
@@ -3809,6 +3898,11 @@ if (!hasAvailableGLNumber) {
           Array.isArray(savedData?.revenueRows)
             ? cloneRows(savedData.revenueRows)
             : cloneRows(DEFAULT_REVENUE_ROWS)
+        );
+        setAssetLiabilityRows(
+          Array.isArray(savedData?.assetLiabilityRows)
+            ? cloneRows(savedData.assetLiabilityRows)
+            : cloneRows(DEFAULT_ASSET_LIABILITY_ROWS)
         );
       }
 
@@ -3838,6 +3932,7 @@ if (!hasAvailableGLNumber) {
     if (!savedData) {
       setExpenseRows(cloneRows(DEFAULT_EXPENSE_ROWS));
       setRevenueRows(cloneRows(DEFAULT_REVENUE_ROWS));
+      setAssetLiabilityRows(cloneRows(DEFAULT_ASSET_LIABILITY_ROWS));
       setActiveSection('expense');
     } else {
       setExpenseRows(
@@ -3850,6 +3945,12 @@ if (!hasAvailableGLNumber) {
         Array.isArray(savedData.revenueRows)
           ? cloneRows(savedData.revenueRows)
           : cloneRows(DEFAULT_REVENUE_ROWS)
+      );
+
+      setAssetLiabilityRows(
+        Array.isArray(savedData.assetLiabilityRows)
+          ? cloneRows(savedData.assetLiabilityRows)
+          : cloneRows(DEFAULT_ASSET_LIABILITY_ROWS)
       );
 
       setActiveSection(
@@ -4058,13 +4159,17 @@ async function handlePromptYes() {
           Revenue GL#s
         </button>
 
-        <button
-          type="button"
-          className="glmap-section-btn disabled"
-          disabled
-        >
-          Asset / Liability Later
-        </button>
+            <button
+      type="button"
+      className={
+        activeSection === 'asset-liability'
+          ? 'glmap-section-btn active'
+          : 'glmap-section-btn'
+      }
+      onClick={() => requestSection('asset-liability')}
+    >
+      Asset / Liability
+    </button>
       </div>
 
       <div className="glmap-main">
