@@ -69,7 +69,7 @@ function clearSessionCookieHeader() {
 async function createSession(userId, userAgent) {
   const token = newSessionToken();
   await db.query(
-    `INSERT INTO UserSession (UserID, TokenHash, ExpiresAt, UserAgent)
+    `INSERT INTO user_session (user_id, token_hash, expires_at, user_agent)
      VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), ?)`,
     [userId, sha256(token), SESSION_TTL_MIN, String(userAgent || '').slice(0, 255)]
   );
@@ -78,36 +78,54 @@ async function createSession(userId, userAgent) {
 
 async function revokeSession(token) {
   if (!token) return;
-  await db.query(`UPDATE UserSession SET RevokedFlag='Y' WHERE TokenHash=?`, [sha256(token)]);
+  await db.query(`UPDATE user_session SET revoked_flag='Y' WHERE token_hash=?`, [sha256(token)]);
 }
 
-// Devuelve fila de UserAuthorization o null. Desliza expiración.
+// HOAs asignadas al usuario (scope de sesión; admin global no necesita filas)
+async function loadUserHoas(userId) {
+  const [rows] = await db.query(
+    `SELECT h.id AS hoa_id, h.hoa_code, h.legal_name, h.state_code, a.role
+       FROM hoa_assignment a
+       JOIN hoa h ON h.id = a.hoa_id
+      WHERE a.user_id = ? AND a.active_flag = 'Y' AND h.active_flag = 'Y'
+        AND (a.valid_from IS NULL OR a.valid_from <= CURDATE())
+        AND (a.valid_to IS NULL OR a.valid_to >= CURDATE())
+      ORDER BY h.hoa_code`,
+    [userId]
+  );
+  return rows;
+}
+
+// Devuelve fila de app_user (+ hoas, + is_admin) o null. Desliza expiración.
 async function getSessionUser(req) {
   const token = parseCookies(req)[COOKIE_NAME];
   if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
   const [rows] = await db.query(
-    `SELECT u.UserID, u.MgtCoClientID, u.HOALicenseNumber, u.LoginName, u.DisplayName,
-            u.EmailAddress, u.AuthorizationLevel, u.ReadOnlyFlag,
-            u.CanViewEscrowFlag, u.CanViewCreditCardServicesFlag, u.ActiveFlag
-       FROM UserSession s
-       JOIN UserAuthorization u ON u.UserID = s.UserID
-      WHERE s.TokenHash = ? AND s.RevokedFlag = 'N'
-        AND s.ExpiresAt > NOW() AND u.ActiveFlag = 'Y'
+    `SELECT u.id AS user_id, u.mgt_company_id, u.login_name, u.display_name,
+            u.email, u.authorization_level, u.read_only_flag,
+            u.can_view_escrow_flag, u.can_view_cc_flag, u.active_flag
+       FROM user_session s
+       JOIN app_user u ON u.id = s.user_id
+      WHERE s.token_hash = ? AND s.revoked_flag = 'N'
+        AND s.expires_at > NOW() AND u.active_flag = 'Y'
       LIMIT 1`,
     [sha256(token)]
   );
   if (!rows.length) return null;
   // sliding expiration (best-effort, no bloquea)
   db.query(
-    `UPDATE UserSession SET LastSeenAt = NOW(),
-       ExpiresAt = DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE TokenHash = ?`,
+    `UPDATE user_session SET last_seen_at = NOW(),
+       expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE token_hash = ?`,
     [SESSION_TTL_MIN, sha256(token)]
   ).catch(() => {});
-  return rows[0];
+  const user = rows[0];
+  user.is_admin = (user.authorization_level || 0) >= 9;
+  user.hoas = user.is_admin ? [] : await loadUserHoas(user.user_id);
+  return user;
 }
 
 function isReadOnly(user) {
-  return !user || String(user.ReadOnlyFlag).toUpperCase() === 'Y';
+  return !user || String(user.read_only_flag).toUpperCase() === 'Y';
 }
 
 // 401 si no hay sesión válida. Adjunta req.authUser.
@@ -152,5 +170,6 @@ module.exports = {
   isReadOnly,
   requireAuth,
   requireReadWrite,
+  loadUserHoas,
   publicUser,
 };

@@ -5421,44 +5421,59 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'loginName y password requeridos' });
     }
     const [users] = await db.query(
-      `SELECT u.UserID, u.MgtCoClientID, u.HOALicenseNumber, u.LoginName, u.DisplayName,
-              u.EmailAddress, u.AuthorizationLevel, u.ReadOnlyFlag,
-              u.CanViewEscrowFlag, u.CanViewCreditCardServicesFlag, u.ActiveFlag,
-              c.PasswordHash, c.FailedAttempts, c.LockedUntil
-         FROM UserAuthorization u
-         LEFT JOIN UserCredential c ON c.UserID = u.UserID
-        WHERE u.LoginName = ? LIMIT 1`,
+      `SELECT u.id AS user_id, u.mgt_company_id, u.login_name, u.display_name,
+              u.email, u.authorization_level, u.read_only_flag,
+              u.can_view_escrow_flag, u.can_view_cc_flag, u.active_flag,
+              c.password_hash, c.failed_attempts, c.locked_until
+         FROM app_user u
+         LEFT JOIN user_credential c ON c.user_id = u.id
+        WHERE u.login_name = ? LIMIT 1`,
       [loginName]
     );
     const row = users[0];
     // Respuesta genérica para no revelar qué falló (usuario vs clave)
     const denied = () => res.status(401).json({ error: 'Credenciales inválidas' });
-    if (!row || String(row.ActiveFlag).toUpperCase() !== 'Y' || !row.PasswordHash) {
+    if (!row || String(row.active_flag).toUpperCase() !== 'Y' || !row.password_hash) {
       return denied();
     }
-    if (row.LockedUntil && new Date(row.LockedUntil) > new Date()) {
+    if (row.locked_until && new Date(row.locked_until) > new Date()) {
       return res.status(423).json({ error: 'Cuenta bloqueada temporalmente por intentos fallidos' });
     }
-    if (!authMid.verifyPassword(password, row.PasswordHash)) {
-      const failed = (row.FailedAttempts || 0) + 1;
+    if (!authMid.verifyPassword(password, row.password_hash)) {
+      const failed = (row.failed_attempts || 0) + 1;
       const lock = failed >= authMid.MAX_FAILED
-        ? `, LockedUntil = DATE_ADD(NOW(), INTERVAL ${authMid.LOCK_MINUTES} MINUTE)` : '';
+        ? `, locked_until = DATE_ADD(NOW(), INTERVAL ${authMid.LOCK_MINUTES} MINUTE)` : '';
       await db.query(
-        `UPDATE UserCredential SET FailedAttempts = ?${lock} WHERE UserID = ?`,
-        [failed, row.UserID]
+        `UPDATE user_credential SET failed_attempts = ?${lock} WHERE user_id = ?`,
+        [failed, row.user_id]
       );
       return denied();
     }
     await db.query(
-      `UPDATE UserCredential SET FailedAttempts = 0, LockedUntil = NULL, LastLoginAt = NOW()
-        WHERE UserID = ?`,
-      [row.UserID]
+      `UPDATE user_credential SET failed_attempts = 0, locked_until = NULL, last_login_at = NOW()
+        WHERE user_id = ?`,
+      [row.user_id]
     );
     // Oportunista: purga sesiones expiradas del usuario
-    await db.query(`DELETE FROM UserSession WHERE UserID = ? AND ExpiresAt <= NOW()`, [row.UserID]);
-    const token = await authMid.createSession(row.UserID, req.headers['user-agent']);
+    await db.query(`DELETE FROM user_session WHERE user_id = ? AND expires_at <= NOW()`, [row.user_id]);
+    const token = await authMid.createSession(row.user_id, req.headers['user-agent']);
     res.setHeader('Set-Cookie', authMid.sessionCookieHeader(token, req));
-    res.json({ user: authMid.publicUser({ ...row, PasswordHash: undefined, FailedAttempts: undefined, LockedUntil: undefined }) });
+    const is_admin = (row.authorization_level || 0) >= 9;
+    const user = authMid.publicUser({
+      user_id: row.user_id,
+      mgt_company_id: row.mgt_company_id,
+      login_name: row.login_name,
+      display_name: row.display_name,
+      email: row.email,
+      authorization_level: row.authorization_level,
+      read_only_flag: row.read_only_flag,
+      can_view_escrow_flag: row.can_view_escrow_flag,
+      can_view_cc_flag: row.can_view_cc_flag,
+      active_flag: row.active_flag,
+      is_admin,
+      hoas: is_admin ? [] : await authMid.loadUserHoas(row.user_id),
+    });
+    res.json({ user });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
