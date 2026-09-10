@@ -3,7 +3,8 @@ import { useRef, useState } from 'react'
 const trayItems = [
   { key: 'master-navigation-panel', label: 'Master Navigation Panel' },
   { key: 'main-directory', label: 'Main Directory' },
-  { key: 'cash-flow', label: 'Report' },
+  { key: 'report', label: 'Report' },
+  { key: 'cash-flow', label: 'Cash Flow' },
   { key: 'ytd-acct-cash-flow-analysis', label: 'YTD Acct Cash Flow Analysis' },
   { key: 'monthly-general-ledger-report', label: 'Monthly General Ledger Report' },
   { key: 'check-register', label: 'Check Register' },

@@ -6,9 +6,12 @@ import './BodyBox.css';
 
 function BodyBox({
   selectedBankId,
-  selectedFiscalYear
-}) {
-  const [glMapping, setGLMapping] = useState({
+  selectedFiscalYear,
+  setCashFlowData: setParentCashFlowData,
+  refreshKey
+  }) {
+  
+    const [glMapping, setGLMapping] = useState({
   expenseRows: [],
   revenueRows: [],
   assetLiabilityRows: []
@@ -73,6 +76,7 @@ function BodyBox({
         const data = await response.json();
         console.log('Cash Flow Data:', data);
         setCashFlowData(data);
+        setParentCashFlowData(data);
       } catch (error) {
         console.error('Unable to load Cash Flow data:', error);
         setCashFlowData(null);
@@ -80,7 +84,7 @@ function BodyBox({
     }
 
     loadCashFlow();
-  }, [selectedBankId, selectedFiscalYear]);
+  }, [selectedBankId, selectedFiscalYear, refreshKey]);
 
   const monthKeys = [
     'jan',

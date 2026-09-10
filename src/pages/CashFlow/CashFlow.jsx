@@ -9,6 +9,8 @@ import BodyBox from './components/BodyBox/BodyBox';
 function CashFlow() {
   const [selectedBankId, setSelectedBankId] = React.useState('');
   const [selectedFiscalYear, setSelectedFiscalYear] = React.useState('2026');
+  const [cashFlowData, setCashFlowData] = React.useState(null);
+  const [refreshKey, setRefreshKey] = React.useState(0);
   return (
     <div className="cash-flow-page">
       <div className="cash-flow-shell">
@@ -19,6 +21,10 @@ function CashFlow() {
             setSelectedBankId={setSelectedBankId}
             selectedFiscalYear={selectedFiscalYear}
             setSelectedFiscalYear={setSelectedFiscalYear}
+            cashFlowData={cashFlowData}
+            refreshKey={refreshKey}
+            setRefreshKey={setRefreshKey}
+
             />
         </div>
 
@@ -26,6 +32,8 @@ function CashFlow() {
             <BodyBox
                 selectedBankId={selectedBankId}
                 selectedFiscalYear={selectedFiscalYear}
+                setCashFlowData={setCashFlowData}
+                refreshKey={refreshKey}
                 />
         </div>
 

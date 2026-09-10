@@ -327,7 +327,11 @@ function MainDirectory({ onSelectPage }) {
     if (searchTerm.trim() !== '') {
       const term = searchTerm.toLowerCase();
       result = result.filter((r) => {
-        const name = `${r.firstName || ''} ${r.lastName || ''}`.toLowerCase();
+        const name = `${
+          r.firstName || r.FirstName || r.first_name || ''
+        } ${
+          r.lastName || r.LastName || r.last_name || ''
+        }`.toLowerCase();
         const acct = String(accountNumberFor(r)).toLowerCase();
         const address = (r.residence || r.address || '').toLowerCase();
         const phone = (r.phone || '').toLowerCase();

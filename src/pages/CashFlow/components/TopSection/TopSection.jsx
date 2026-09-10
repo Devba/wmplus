@@ -9,7 +9,10 @@ function TopSection({
   selectedBankId,
   setSelectedBankId,
   selectedFiscalYear,
-  setSelectedFiscalYear
+  setSelectedFiscalYear,
+  cashFlowData,
+  refreshKey,
+  setRefreshKey,
 }) {
   return (
     <div className="cf-topsection">
@@ -27,7 +30,16 @@ function TopSection({
             <input
                 className="cf-last-updated-display"
                 type="text"
-                value="--"
+                value={
+                cashFlowData?.ledger?.lastUpdated
+                    ? new Date(
+                        cashFlowData.ledger.lastUpdated
+                    ).toLocaleString('en-US', {
+                        timeZone:
+                        cashFlowData?.hoaTimeZone || 'UTC'
+                    })
+                    : '--'
+                }
                 readOnly
             />
         </div>
@@ -35,6 +47,7 @@ function TopSection({
         <button
             type="button"
             className="cf-refresh-button"
+            onClick={() => setRefreshKey((key) => key + 1)}
             >
             Refresh
         </button>
@@ -47,7 +60,9 @@ function TopSection({
         <input
             className="cf-balance-display"
             type="text"
-            value="$0.00"
+            value={`$${Number(
+            cashFlowData?.ledger?.outstandingChecks || 0
+            ).toFixed(2)}`}
             readOnly
         />
         </div>
@@ -58,7 +73,10 @@ function TopSection({
         <input
             className="cf-balance-display"
             type="text"
-            value="$0.00"
+            value={`$${(
+            Number(cashFlowData?.ledger?.currentBalance || 0) -
+            Number(cashFlowData?.ledger?.outstandingChecks || 0)
+            ).toFixed(2)}`}
             readOnly
         />
         </div>
@@ -109,7 +127,9 @@ function TopSection({
         <input
             className="cf-balance-display"
             type="text"
-            value="$0.00"
+            value={`$${Number(
+            cashFlowData?.ledger?.openingBalance || 0
+            ).toFixed(2)}`}
             readOnly
         />
         </div>
@@ -120,7 +140,9 @@ function TopSection({
         <input
             className="cf-balance-display"
             type="text"
-            value="$0.00"
+            value={`$${Number(
+            cashFlowData?.ledger?.currentBalance || 0
+            ).toFixed(2)}`}
             readOnly
         />
         </div>

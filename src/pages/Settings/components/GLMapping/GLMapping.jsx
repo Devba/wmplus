@@ -1300,7 +1300,7 @@ const DEFAULT_ASSET_LIABILITY_ROWS = [
     "systemLocked": true
   },
   {
-    "glNumber": "50001 - 50999",
+    "glNumber": "50001 - 50099",
     "glName": "Resident Credit Assignable Sub Headings",
     "sourceTable": "Ass'mt Pay'mt Register",
     "description": "",
