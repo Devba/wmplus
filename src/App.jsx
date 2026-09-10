@@ -13,6 +13,7 @@ import {
 } from './engines';
 
 import { pageMap } from './pages/pageMap';
+import Login from './pages/Login/Login';
 import { API_BASE_URL, subscribeToConnectionStatus, setConnectionStatus } from './config/api.js';
 
 import UnsavedChangesPrompt
@@ -34,6 +35,28 @@ function App() {
     () => localStorage.getItem('hideBadge') !== 'true'
   );
   const [isOffline, setIsOffline] = useState(false);
+
+  // FASE A (auth): gate de sesión. Sin usuario -> pantalla Login (gate PWUF del VBA).
+  const [authUser, setAuthUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/me`, { credentials: 'include' });
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          setAuthUser(data.user);
+        }
+      } catch {
+        // sin backend o sin sesión: se muestra Login
+      } finally {
+        if (!cancelled) setAuthChecked(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeToConnectionStatus(setIsOffline);
@@ -170,6 +193,11 @@ function handleNavigationCancel() {
 
   return (
     <div className="app-shell">
+      {!authChecked ? (
+        <div className="dev-placeholder">Verificando sesión…</div>
+      ) : !authUser ? (
+        <Login onLogin={setAuthUser} />
+      ) : (<>
       <div className="top-ribbon">
         <TopRibbon onSelectPage={handleSelectPage} />
       </div>
@@ -267,6 +295,7 @@ function handleNavigationCancel() {
           </button>
         </div>
       )}
+      </>)}
     </div>
   );
 }

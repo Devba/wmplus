@@ -6,11 +6,13 @@ const os = require('os');
 const path = require('path');
 const db = require('./db');
 require('dotenv').config();
+// FASE A (auth): middleware de sesiones (aditivo; no altera rutas existentes)
+const authMid = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3011;
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
 // Health Check
@@ -5394,6 +5396,96 @@ app.post('/api/apr/recalculate', async (req, res) => {
 // Fase 1 Cash Flow incremental: CR/DP ya no necesitan rebuild; APR ya postea arriba.
 // Los POST /api/check-register y /api/deposit-register deberán migrar a débito/crédito
 // CashFlowTransaction_* en siguiente iteración (hoy solo actualizan BankAccount).
+
+/* ===========================================================
+   FASE A (auth): login por roles + sesiones con timeout.
+   Reemplaza: PWUF + InitializePWUFActivityTimer (gate) e I1=1/2
+   (view-only vs admin -> ReadOnlyFlag) y CATimer (expiración
+   deslizante por inactividad en UserSession).
+   Aditivo: no modifica endpoints existentes. La protección por
+   ruta (requireAuth/requireReadWrite) se aplica en Fase A2.
+   Tablas: ver backend/migrate-auth-tables.js
+   =========================================================== */
+
+function clientIp(req) {
+  return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || req.socket.remoteAddress || '';
+}
+
+// POST /api/auth/login { loginName, password }
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const loginName = String(req.body.loginName || '').trim();
+    const password = String(req.body.password || '');
+    if (!loginName || !password) {
+      return res.status(400).json({ error: 'loginName y password requeridos' });
+    }
+    const [users] = await db.query(
+      `SELECT u.UserID, u.MgtCoClientID, u.HOALicenseNumber, u.LoginName, u.DisplayName,
+              u.EmailAddress, u.AuthorizationLevel, u.ReadOnlyFlag,
+              u.CanViewEscrowFlag, u.CanViewCreditCardServicesFlag, u.ActiveFlag,
+              c.PasswordHash, c.FailedAttempts, c.LockedUntil
+         FROM UserAuthorization u
+         LEFT JOIN UserCredential c ON c.UserID = u.UserID
+        WHERE u.LoginName = ? LIMIT 1`,
+      [loginName]
+    );
+    const row = users[0];
+    // Respuesta genérica para no revelar qué falló (usuario vs clave)
+    const denied = () => res.status(401).json({ error: 'Credenciales inválidas' });
+    if (!row || String(row.ActiveFlag).toUpperCase() !== 'Y' || !row.PasswordHash) {
+      return denied();
+    }
+    if (row.LockedUntil && new Date(row.LockedUntil) > new Date()) {
+      return res.status(423).json({ error: 'Cuenta bloqueada temporalmente por intentos fallidos' });
+    }
+    if (!authMid.verifyPassword(password, row.PasswordHash)) {
+      const failed = (row.FailedAttempts || 0) + 1;
+      const lock = failed >= authMid.MAX_FAILED
+        ? `, LockedUntil = DATE_ADD(NOW(), INTERVAL ${authMid.LOCK_MINUTES} MINUTE)` : '';
+      await db.query(
+        `UPDATE UserCredential SET FailedAttempts = ?${lock} WHERE UserID = ?`,
+        [failed, row.UserID]
+      );
+      return denied();
+    }
+    await db.query(
+      `UPDATE UserCredential SET FailedAttempts = 0, LockedUntil = NULL, LastLoginAt = NOW()
+        WHERE UserID = ?`,
+      [row.UserID]
+    );
+    // Oportunista: purga sesiones expiradas del usuario
+    await db.query(`DELETE FROM UserSession WHERE UserID = ? AND ExpiresAt <= NOW()`, [row.UserID]);
+    const token = await authMid.createSession(row.UserID, req.headers['user-agent']);
+    res.setHeader('Set-Cookie', authMid.sessionCookieHeader(token, req));
+    res.json({ user: authMid.publicUser({ ...row, PasswordHash: undefined, FailedAttempts: undefined, LockedUntil: undefined }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/logout
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const token = authMid.parseCookies(req)[authMid.COOKIE_NAME];
+    await authMid.revokeSession(token);
+    res.setHeader('Set-Cookie', authMid.clearSessionCookieHeader());
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/auth/me -> 200 {user} | 401
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const user = await authMid.getSessionUser(req);
+    if (!user) return res.status(401).json({ error: 'Sin sesión' });
+    res.json({ user: authMid.publicUser(user), ip: clientIp(req) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {

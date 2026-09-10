@@ -35,6 +35,7 @@ export function subscribeToConnectionStatus(cb) {
 export async function apiFetch(endpoint, options = {}) {
   try {
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      credentials: 'include', // FASE A: envía la cookie de sesión wm_session
       headers: {
         'Content-Type': 'application/json',
         ...options.headers

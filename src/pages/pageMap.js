@@ -10,6 +10,7 @@ import AssmtPaymtRegister from './AssmtPaymtRegister';
 import MainDirectory from './MainDirectory';
 import Settings from './Settings';
 import VendorIdList from './VendorIdList';
+import Login from './Login/Login';
 
 
 
@@ -23,5 +24,6 @@ export const pageMap = {
   'main-directory': MainDirectory,
   'settings': Settings,
   'vendor-id-list': VendorIdList,
+  'login': Login,
   };
 
