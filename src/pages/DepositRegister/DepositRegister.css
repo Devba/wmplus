@@ -245,6 +245,53 @@
   color: #000000;
 }
 
+.depreg-status-box-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.depreg-status-box-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #000000;
+}
+
+.depreg-status-box {
+  width: 170px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid #888888;
+  font-size: 14px;
+  background: #ffffff;
+}
+
+.depreg-status-box.pending {
+  background: #dbeafe;
+}
+
+.depreg-status-save-btn {
+  height: 28px !important;
+  min-width: 72px !important;
+  padding: 0 10px !important;
+  border: 1px solid #000000 !important;
+  background: #90ee90 !important;
+  color: #000000 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.depreg-status-save-btn:disabled {
+  background: #f2f2f2 !important;
+  color: #999999 !important;
+  cursor: default;
+}
+
+.depreg-status-save-btn.dirty {
+  background: #ff6666 !important;
+  border: 1px solid #000000 !important;
+}
+
 
 
 /* ===========================================================

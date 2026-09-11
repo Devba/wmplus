@@ -7,6 +7,7 @@ import FilterUF from '../../../../components/FilterUF/FilterUF';
 
 function FilterRow({
   depositRows = [],
+  selectedDepositRow,
   onApplyVendorResidentFilter,
   onResetVendorResidentFilter
 }) {
@@ -216,6 +217,11 @@ function FilterRow({
       >
         RESET FILTER
       </button>
+
+      
+
+
+
     </div>
   );
 }

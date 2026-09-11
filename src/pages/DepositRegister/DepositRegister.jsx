@@ -8,7 +8,7 @@ import { API_BASE_URL } from '../../config/api';
 
 function DepositRegister({ onSelectPage }) {
   const [depositRows, setDepositRows] = useState([]);
-
+  const [selectedDepositRow, setSelectedDepositRow] = useState(null);
   useEffect(() => {
     async function loadDepositRegister() {
       try {
@@ -95,6 +95,38 @@ function DepositRegister({ onSelectPage }) {
     setDepositRows((currentRows) => [...currentRows, newDeposit]);
   };
 
+  const handleDepositCleared = (savedDeposit) => {
+  setDepositRows((currentRows) =>
+    currentRows.map((row) =>
+      row.transactionNumber === savedDeposit.transactionNumber
+        ? {
+            ...row,
+            depositDate: savedDeposit.depositDate || row.depositDate,
+            date: savedDeposit.depositDate || row.date,
+            dateCleared: savedDeposit.clearedDate,
+            monthCleared: savedDeposit.monthCleared,
+            status: savedDeposit.status || 'Cleared'
+          }
+        : row
+    )
+  );
+
+  setSelectedDepositRow((currentRow) =>
+    currentRow?.transactionNumber === savedDeposit.transactionNumber
+      ? {
+          ...currentRow,
+          depositDate:
+            savedDeposit.depositDate || currentRow.depositDate,
+          date: savedDeposit.depositDate || currentRow.date,
+          dateCleared: savedDeposit.clearedDate,
+          monthCleared: savedDeposit.monthCleared,
+          status: savedDeposit.status || 'Cleared'
+          }
+        : currentRow
+    );
+  };
+
+
   const handleApplyVendorResidentFilter = (request) => {
     const filterType = String(request?.filterType || '').trim();
     const accountNumber = String(request?.accountNumber || '').trim();
@@ -124,7 +156,9 @@ function DepositRegister({ onSelectPage }) {
           <TopSection
             onSelectPage={onSelectPage}
             onAddDeposit={handleAddDeposit}
+            onDepositCleared={handleDepositCleared}
             depositRows={depositRows}
+            selectedDepositRow={selectedDepositRow}
             onApplyVendorResidentFilter={
               handleApplyVendorResidentFilter
             }
@@ -134,7 +168,10 @@ function DepositRegister({ onSelectPage }) {
           />
         </div>
 
-        <BodyBox depositRows={displayedDepositRows} />
+        <BodyBox
+          depositRows={displayedDepositRows}
+          onSelectDepositRow={setSelectedDepositRow}
+        />
       </div>
     </div>
   );

@@ -7,8 +7,10 @@ function TopSection({
   onSelectPage,
   onAddDeposit,
   depositRows,
+  selectedDepositRow,
   onApplyVendorResidentFilter,
-  onResetVendorResidentFilter
+  onResetVendorResidentFilter,
+  onDepositCleared,
 }) {
   return (
     <div className="depreg-topsection">
@@ -16,6 +18,7 @@ function TopSection({
 
       <FilterRow
         depositRows={depositRows}
+        selectedDepositRow={selectedDepositRow}
         onApplyVendorResidentFilter={
           onApplyVendorResidentFilter
         }
@@ -28,6 +31,8 @@ function TopSection({
         onSelectPage={onSelectPage}
         onAddDeposit={onAddDeposit}
         depositRows={depositRows}
+        selectedDepositRow={selectedDepositRow}
+        onDepositCleared={onDepositCleared}
       />
     </div>
   );

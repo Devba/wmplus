@@ -2514,51 +2514,61 @@ async function generateDepositTransactionNumber(conn) {
 
 app.post('/api/deposit-register', async (req, res) => {
   const connection = await db.getConnection();
+
   try {
     await connection.beginTransaction();
+
     const d = req.body;
-    const txnNum = await generateDepositTransactionNumber(connection);
-    const bankAccountId = d.bank_account_id || 1;
-    const amount = parseFloat(d.amount) || 0.00;
+
+    const txnNum =
+      await generateDepositTransactionNumber(connection);
+
+    const bankAccountId =
+      d.bank_account_id || 1;
+
+    const amount =
+      parseFloat(d.amount) || 0.00;
 
     const depositDate =
-  d.date_deposited || new Date().toISOString().slice(0, 10);
-
-const fiscalYearLabel =
-  String(depositDate).slice(0, 4);
-
-const [ledgerRows] = await connection.query(`
-  SELECT *
-  FROM CashFlowLedgerMaster
-  WHERE BankAccountID = ?
-    AND FiscalYearLabel = ?
-    AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
-  LIMIT 1
-  FOR UPDATE
-`, [
-  bankAccountId,
-  fiscalYearLabel
-]);
-
-if (!ledgerRows[0]) {
-  await connection.rollback();
-
-  return res.status(409).json({
-    error:
-      'Cash Flow Ledger Master is not established for this bank and fiscal year.'
-  });
-}
-
-const ledgerMaster = ledgerRows[0];
+      d.date_deposited ||
+      new Date().toISOString().slice(0, 10);
 
     await connection.query(`
       INSERT INTO DepositRegister (
-        DepositTransactionNumber, DepositorAccountName, Amount, BankAccountName,
-        BankAccountID, GLAccountName, GLNumber, DateDeposited, DateCleared,
-        MonthCleared, ResidentAccountID, VendorID, ExpenseRefundGLCategory,
-        ExpenseRefundGLNumber, DepositNotation, Status,
-        DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, 'Posted', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+        DepositTransactionNumber,
+        DepositorAccountName,
+        Amount,
+        BankAccountName,
+        BankAccountID,
+        GLAccountName,
+        GLNumber,
+        DateDeposited,
+        DateCleared,
+        MonthCleared,
+        ResidentAccountID,
+        VendorID,
+        ExpenseRefundGLCategory,
+        ExpenseRefundGLNumber,
+        DepositNotation,
+        Status,
+        DeletedFlag,
+        MgtCoClientID,
+        HOALicenseNumber,
+        OperatorID,
+        TimeStampCreated
+      )
+      VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?,
+        NULL,
+        NULL,
+        ?, ?, ?, ?, ?,
+        'Pending',
+        'N',
+        'MGTCO-001',
+        'HOA-FL-2024-001',
+        'SYSTEM',
+        NOW()
+      )
     `, [
       txnNum,
       d.payer_name || '',
@@ -2567,9 +2577,7 @@ const ledgerMaster = ledgerRows[0];
       bankAccountId,
       d.gl_name || '',
       d.gl_number || 4000,
-      d.date_deposited || new Date().toISOString().slice(0, 10),
-      d.date_cleared || null,
-      d.month_cleared || null,
+      depositDate,
       d.resident_id || '',
       d.vendor_id || '',
       d.expense_refund_gl_category || '',
@@ -2577,63 +2585,293 @@ const ledgerMaster = ledgerRows[0];
       d.note || ''
     ]);
 
-    const cashFlowPosting = await postCashFlowTransaction(
-      connection,
-      {
-        bankAccountId,
-        mgtCoClientId: 'MGTCO-001',
-        hoaLicenseNumber: 'HOA-FL-2024-001',
-        sourceRegister: 'DP',
-        sourceTransactionNumber: txnNum,
-        transactionDate: depositDate,
-        payeeDepositorName: d.payer_name || '',
-        residentAccountId: d.resident_id || d.vendor_id || '',
-        glNumber: d.gl_number || 4000,
-        amount,
-        operatorId: 'SYSTEM'
-      }
-    );
-
-    if (!cashFlowPosting.alreadyPosted) {
-    const postedAt = (await hoaNow(connection)).utcDateTime;
-
-    await connection.query(`
-    UPDATE CashFlowLedgerMaster
-    SET
-      CurrentBalance =
-        COALESCE(CurrentBalance, 0)
-        + ?
-        - ?,
-      LastPostedTransactionDate = ?,
-      LastPostedDateTime = ?,
-      TimeStampUpdated = ?
-    WHERE CashFlowLedgerID = ?
-  `, [
-    Number(cashFlowPosting.cashInAmount || 0),
-    Number(cashFlowPosting.cashOutAmount || 0),
-    depositDate,
-    postedAt,
-    postedAt,
-    ledgerMaster.CashFlowLedgerID
-  ]);
-}
-
     await connection.commit();
-    res.status(201).json({
+
+    return res.status(201).json({
       success: true,
       deposit_txn_num: txnNum,
-      message: 'Deposit posted and Cash Flow updated successfully'
+      status: 'Pending',
+      message:
+        'Deposit entered successfully. Cash Flow will be updated when the deposit clears the bank.'
     });
+
   } catch (err) {
     await connection.rollback();
-    console.error('Error posting deposit transaction:', err);
-    res.status(500).json({ error: 'Failed to post deposit transaction', details: err.message });
+
+    console.error(
+      'Error entering deposit transaction:',
+      err
+    );
+
+    return res.status(500).json({
+      error: 'Failed to enter deposit transaction',
+      details: err.message
+    });
+
   } finally {
     connection.release();
   }
 });
 
+app.post('/api/deposit-register/clear', async (req, res) => {
+  const connection = await db.getConnection();
 
+  try {
+    await connection.beginTransaction();
+
+    const {
+      transactionNumber,
+      clearedDate,
+      changeDepositDate = false
+    } = req.body;
+
+    if (!transactionNumber || !clearedDate) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Transaction number and cleared date are required.'
+      });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(clearedDate)) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Cleared date must be YYYY-MM-DD.'
+      });
+    }
+
+    const [yearText, monthText, dayText] = clearedDate.split('-');
+
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+
+    const clearDateCheck = new Date(year, month - 1, day);
+
+    if (
+      clearDateCheck.getFullYear() !== year ||
+      clearDateCheck.getMonth() !== month - 1 ||
+      clearDateCheck.getDate() !== day
+    ) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Invalid cleared date.'
+      });
+    }
+
+    const todayText =
+      new Date().toISOString().slice(0, 10);
+
+    if (clearedDate > todayText) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Cleared date cannot be in the future.'
+      });
+    }
+
+    const [depositRows] = await connection.query(`
+      SELECT
+        DepositTransactionNumber,
+        DepositorAccountName,
+        Amount,
+        BankAccountID,
+        GLNumber,
+        DateDeposited,
+        DateCleared,
+        MonthCleared,
+        ResidentAccountID,
+        Status,
+        DeletedFlag,
+        MgtCoClientID,
+        HOALicenseNumber
+      FROM DepositRegister
+      WHERE DepositTransactionNumber = ?
+        AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+      LIMIT 1
+      FOR UPDATE
+    `, [transactionNumber]);
+
+    if (!depositRows[0]) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        error: 'Deposit transaction was not found.'
+      });
+    }
+
+    const deposit = depositRows[0];
+
+    if (deposit.Status === 'Voided') {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error: 'This deposit is voided and cannot be cleared.'
+      });
+    }
+
+    if (
+      deposit.Status === 'Cleared' ||
+      deposit.DateCleared !== null
+    ) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error: 'This deposit has already been cleared.'
+      });
+    }
+
+    const originalDepositDate =
+      deposit.DateDeposited instanceof Date
+        ? deposit.DateDeposited.toISOString().slice(0, 10)
+        : String(deposit.DateDeposited || '').slice(0, 10);
+
+    if (
+      originalDepositDate &&
+      clearedDate < originalDepositDate &&
+      !changeDepositDate
+    ) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        code: 'CLEARED_BEFORE_DEPOSIT_DATE',
+        error:
+          'The cleared date is before the deposit date.'
+      });
+    }
+
+    const [ledgerRows] = await connection.query(`
+      SELECT *
+      FROM CashFlowLedgerMaster
+      WHERE BankAccountID = ?
+        AND FiscalYearLabel = ?
+        AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+      LIMIT 1
+      FOR UPDATE
+    `, [
+      deposit.BankAccountID,
+      String(year)
+    ]);
+
+    if (!ledgerRows[0]) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error:
+          'Cash Flow Ledger Master is not established for this bank and fiscal year.'
+      });
+    }
+
+    const ledgerMaster = ledgerRows[0];
+
+    const cashFlowPosting =
+      await postCashFlowTransaction(
+        connection,
+        {
+          bankAccountId: deposit.BankAccountID,
+          mgtCoClientId: deposit.MgtCoClientID,
+          hoaLicenseNumber: deposit.HOALicenseNumber,
+          sourceRegister: 'DP',
+          sourceTransactionNumber: transactionNumber,
+          transactionDate: clearedDate,
+          payeeDepositorName:
+            deposit.DepositorAccountName || '',
+          residentAccountId:
+            deposit.ResidentAccountID || '',
+          glNumber: deposit.GLNumber,
+          amount: deposit.Amount,
+          operatorId: 'SYSTEM'
+        }
+      );
+
+    if (cashFlowPosting.alreadyPosted) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error:
+          'Cash Flow already contains an active posting for this deposit transaction.'
+      });
+    }
+
+    const newCurrentBalance =
+      Number(ledgerMaster.CurrentBalance || 0) +
+      Number(cashFlowPosting.cashInAmount || 0) -
+      Number(cashFlowPosting.cashOutAmount || 0);
+
+    const postedAt =
+      (await hoaNow(connection)).utcDateTime;
+
+    await connection.query(`
+      UPDATE CashFlowLedgerMaster
+      SET
+        CurrentBalance = ?,
+        LastPostedTransactionDate = ?,
+        LastPostedDateTime = ?,
+        TimeStampUpdated = ?
+      WHERE CashFlowLedgerID = ?
+    `, [
+      newCurrentBalance,
+      clearedDate,
+      postedAt,
+      postedAt,
+      ledgerMaster.CashFlowLedgerID
+    ]);
+
+    await connection.query(`
+      UPDATE DepositRegister
+      SET
+        DateDeposited =
+          CASE
+            WHEN ? = 1 THEN ?
+            ELSE DateDeposited
+          END,
+        DateCleared = ?,
+        MonthCleared = ?,
+        Status = 'Cleared',
+        TimeStampUpdated = ?
+      WHERE DepositTransactionNumber = ?
+    `, [
+      changeDepositDate ? 1 : 0,
+      clearedDate,
+      clearedDate,
+      month,
+      postedAt,
+      transactionNumber
+    ]);
+
+    await connection.commit();
+
+    return res.json({
+      success: true,
+      message:
+        'Deposit cleared and Cash Flow posted successfully.',
+      transactionNumber,
+      depositDate:
+        changeDepositDate
+          ? clearedDate
+          : originalDepositDate,
+      clearedDate,
+      monthCleared: month,
+      status: 'Cleared',
+      currentBalance: newCurrentBalance
+    });
+
+  } catch (err) {
+    await connection.rollback();
+
+    console.error('Error clearing deposit:', err);
+
+    return res.status(500).json({
+      error: 'Failed to clear deposit',
+      details: err.message
+    });
+
+  } finally {
+    connection.release();
+  }
+});
 
 /* ===========================================================
    5. SETTINGS: HOA PROFILE
@@ -3634,176 +3872,78 @@ app.post('/api/void/execute', async (req, res) => {
     }
 
     if (page === 'DP') {
-      const [rows] = await connection.query(`
-        SELECT
-          DepositTransactionNumber,
-          Status,
-          DateCleared,
-          MonthCleared,
-          BankAccountID
-        FROM DepositRegister
-        WHERE DepositTransactionNumber = ?
-        LIMIT 1
-        FOR UPDATE
-      `, [transactionNumber]);
+  const [rows] = await connection.query(`
+    SELECT
+      DepositTransactionNumber,
+      Status,
+      DateCleared,
+      MonthCleared,
+      BankAccountID
+    FROM DepositRegister
+    WHERE DepositTransactionNumber = ?
+    LIMIT 1
+    FOR UPDATE
+  `, [transactionNumber]);
 
-      if (rows.length === 0) {
-        await connection.rollback();
+  if (rows.length === 0) {
+    await connection.rollback();
 
-        return res.status(404).json({
-          ok: false,
-          status: {
-            message: 'Deposit transaction not found.'
-          }
-        });
+    return res.status(404).json({
+      ok: false,
+      status: {
+        message: 'Deposit transaction not found.'
       }
+    });
+  }
 
-      const deposit = rows[0];
+  const deposit = rows[0];
 
-      const [cashFlowRows] = await connection.query(`
-  SELECT
-    CashFlowTransactionID,
-    ActiveCashInAmount,
-    ActiveCashOutAmount,
-    DATE_FORMAT(TransactionDate, '%Y-%m-%d') AS TransactionDate
-  FROM ${(
-    await resolveCashFlowBankTable(
-      connection,
-      deposit.BankAccountID
-    )
-  ).tableName}
-  WHERE SourceRegister = 'DP'
-    AND SourceTransactionNumber = ?
-    AND (VoidFlag IS NULL OR VoidFlag != 'Y')
-    AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
-  LIMIT 1
-  FOR UPDATE
-`, [transactionNumber]);
+  if (
+    deposit.Status === 'Cleared' ||
+    deposit.DateCleared !== null ||
+    deposit.MonthCleared !== null
+  ) {
+    await connection.rollback();
 
-const cashFlowRow = cashFlowRows[0] || null;
-
-if (!cashFlowRow) {
-  await connection.rollback();
-
-  return res.status(409).json({
-    ok: false,
-    status: {
-      message:
-        'The active Cash Flow transaction for this deposit could not be found.'
-    }
-  });
-}
-
-      if (
-        deposit.Status === 'Cleared' ||
-        deposit.DateCleared !== null ||
-        deposit.MonthCleared !== null
-      ) {
-        await connection.rollback();
-
-        return res.status(400).json({
-          ok: false,
-          status: {
-            message:
-              'This deposit already cleared the bank and cannot be voided.'
-          }
-        });
+    return res.status(400).json({
+      ok: false,
+      status: {
+        message:
+          'This deposit already cleared the bank and cannot be voided.'
       }
+    });
+  }
 
-      if (deposit.Status === 'Voided') {
-        await connection.rollback();
+  if (deposit.Status === 'Voided') {
+    await connection.rollback();
 
-        return res.status(400).json({
-          ok: false,
-          status: {
-            message: 'Transaction already voided.'
-          }
-        });
+    return res.status(400).json({
+      ok: false,
+      status: {
+        message: 'Transaction already voided.'
       }
-
-      await connection.query(`
-        UPDATE DepositRegister
-        SET
-          Status = 'Voided',
-          DateCleared = NULL,
-          MonthCleared = NULL,
-          TimeStampUpdated = NOW()
-        WHERE DepositTransactionNumber = ?
-      `, [transactionNumber]);
-
-      const cashFlowVoid = await voidCashFlowTransaction(
-        connection,
-        {
-          bankAccountId: deposit.BankAccountID,
-          sourceRegister: 'DP',
-          sourceTransactionNumber: transactionNumber
-        }
-      );
-
-      const fiscalYearLabel =
-  String(cashFlowRow.TransactionDate).slice(0, 4);
-
-const [ledgerRows] = await connection.query(`
-  SELECT *
-  FROM CashFlowLedgerMaster
-  WHERE BankAccountID = ?
-    AND FiscalYearLabel = ?
-    AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
-  LIMIT 1
-  FOR UPDATE
-`, [
-  deposit.BankAccountID,
-  fiscalYearLabel
-]);
-
-if (!ledgerRows[0]) {
-  await connection.rollback();
-
-  return res.status(409).json({
-    ok: false,
-    status: {
-      message:
-        'Cash Flow Ledger Master is not established for this bank and fiscal year.'
-    }
-  });
-}
-
-const ledgerMaster = ledgerRows[0];
-
-  const postedAt = (await hoaNow(connection)).utcDateTime;
+    });
+  }
 
   await connection.query(`
-    UPDATE CashFlowLedgerMaster
+    UPDATE DepositRegister
     SET
-      CurrentBalance =
-        COALESCE(CurrentBalance, 0)
-        - ?
-        + ?,
-      LastPostedTransactionDate = ?,
-      LastPostedDateTime = ?,
-      TimeStampUpdated = ?
-    WHERE CashFlowLedgerID = ?
-  `, [
-    Number(cashFlowRow.ActiveCashInAmount || 0),
-    Number(cashFlowRow.ActiveCashOutAmount || 0),
-    cashFlowRow.TransactionDate,
-    postedAt,
-    postedAt,
-    ledgerMaster.CashFlowLedgerID
-  ]);
+      Status = 'Voided',
+      DateCleared = NULL,
+      MonthCleared = NULL,
+      TimeStampUpdated = NOW()
+    WHERE DepositTransactionNumber = ?
+  `, [transactionNumber]);
 
+  await connection.commit();
 
-      await connection.commit();
-
-      return res.json({
-        ok: true,
-        status: {
-          message: 'VOID successful.'
-        },
-        cashFlowTable: cashFlowVoid.tableName,
-        cashFlowRowsVoided: cashFlowVoid.affectedRows
-      });
+  return res.json({
+    ok: true,
+    status: {
+      message: 'VOID successful.'
     }
+  });
+}
 
     if (page !== 'CR') {
       await connection.rollback();

@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import HeaderRow from './HeaderRow';
 
-function DepositRegisterGrid({ depositRows }) {
+function DepositRegisterGrid({
+  depositRows,
+  onSelectDepositRow
+}) {
   const [selectedRowIndex, setSelectedRowIndex] =
   useState(null);
   const lastRowRef = useRef(null);
@@ -32,9 +35,13 @@ function DepositRegisterGrid({ depositRows }) {
                   ? 'is-selected'
                   : ''
               }
-              onClick={() =>
-                setSelectedRowIndex(index)
-              }
+              onClick={() => {
+                setSelectedRowIndex(index);
+
+                if (typeof onSelectDepositRow === 'function') {
+                  onSelectDepositRow(row);
+                }
+              }}
             >
               <td>{row.checkNumber || ''}</td>
               <td>{row.depositorName || 'Depositor Name'}</td>
@@ -42,7 +49,7 @@ function DepositRegisterGrid({ depositRows }) {
               <td>{row.bankAccount || 'Operating'}</td>
               <td>{row.glAccount}</td>
               <td>{row.depositDate || row.date}</td>
-              <td>{row.dateCleared || ''}</td>
+              <td>{row.status === 'Pending' ? 'Pending' : row.dateCleared || ''}</td>
               <td>{row.monthCleared || ''}</td>
               <td>{row.ownerAccount || ''}</td>
               <td>{row.vendorId || ''}</td>
