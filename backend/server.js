@@ -10,6 +10,118 @@ const { lookupZip } = require('zipcode-detail-lookup');
 const app = express();
 const PORT = process.env.PORT || 3011;
 
+/* ===========================================================
+   HOA-LOCAL TIME HELPERS
+   The HOA's local timezone is derived from SystemSettings.DefaultZip
+   with zipcode-detail-lookup (same rule used by the Cash Flow page).
+   - Human readable transaction numbers use HOA LOCAL time.
+   - Audit timestamps are stored in UTC so any reader can render
+     them in the HOA timezone without ambiguity.
+   =========================================================== */
+
+const HOA_TIMEZONE_CACHE_MS = 5 * 60 * 1000;
+
+let hoaTimeZoneCache = {
+  zip: null,
+  timeZone: null,
+  expiresAt: 0
+};
+
+async function getHoaTimeZone(conn) {
+  const now = Date.now();
+
+  if (hoaTimeZoneCache.timeZone && now < hoaTimeZoneCache.expiresAt) {
+    return hoaTimeZoneCache.timeZone;
+  }
+
+  let zip = '';
+
+  try {
+    const runner = conn && typeof conn.query === 'function' ? conn : db;
+
+    const [zipRows] = await runner.query(`
+      SELECT DefaultZip
+      FROM SystemSettings
+      WHERE SystemSettingsID = 1
+      LIMIT 1
+    `);
+
+    zip = String(zipRows?.[0]?.DefaultZip || '').trim();
+  } catch (err) {
+    console.error('Unable to read SystemSettings.DefaultZip:', err.message);
+  }
+
+  let timeZone = null;
+
+  if (zip) {
+    try {
+      timeZone = lookupZip(zip)?.timezone || null;
+    } catch (err) {
+      console.error(
+        `Unable to resolve timezone for HOA zip ${zip}:`,
+        err.message
+      );
+    }
+  }
+
+  if (!timeZone) {
+    timeZone = 'UTC';
+  }
+
+  hoaTimeZoneCache = {
+    zip,
+    timeZone,
+    expiresAt: now + HOA_TIMEZONE_CACHE_MS
+  };
+
+  return timeZone;
+}
+
+function hoaClockParts(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).formatToParts(date);
+
+  const clock = {};
+
+  for (const part of parts) {
+    clock[part.type] = part.value;
+  }
+
+  return clock;
+}
+
+async function hoaNow(conn) {
+  const timeZone = await getHoaTimeZone(conn);
+  const now = new Date();
+  const clock = hoaClockParts(now, timeZone);
+
+  return {
+    timeZone,
+
+    // 'MMDDYYYY-HHMMSS' plus two centiseconds, HOA local time.
+    transactionStamp:
+      `${clock.month}${clock.day}${clock.year}-` +
+      `${clock.hour}${clock.minute}${clock.second}` +
+      String(Math.floor(now.getMilliseconds() / 10)).padStart(2, '0'),
+
+    // 'YYYY-MM-DD HH:MM:SS' in UTC, for audit timestamps.
+    utcDateTime: now.toISOString().slice(0, 19).replace('T', ' '),
+
+    // 'YYYY-MM-DD HH:MM:SS' in HOA local time, for reporting/debugging.
+    hoaLocalDateTime:
+      `${clock.year}-${clock.month}-${clock.day} ` +
+      `${clock.hour}:${clock.minute}:${clock.second}`
+  };
+}
+
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
@@ -1084,15 +1196,9 @@ app.get('/api/check-register/next-check-number', async (req, res) => {
 
 async function generateCheckTransactionNumber(conn) {
   for (let attempt = 0; attempt < 200; attempt++) {
-    const [clockRows] = await conn.query(`
-      SELECT CONCAT(
-        'CHK',
-        DATE_FORMAT(NOW(2), '%m%d%Y-%H%i%s'),
-        LEFT(DATE_FORMAT(NOW(2), '%f'), 2)
-      ) AS TransactionNumber
-    `);
+    const stamp = await hoaNow(conn);
 
-    const txn = clockRows[0]?.TransactionNumber;
+    const txn = `CHK${stamp.transactionStamp}`;
 
     if (!txn) {
       throw new Error(
@@ -1326,7 +1432,7 @@ const initialCurrentBalance =
       OperatorID,
       TimeStampCreated
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Y', 'SYSTEM', NOW())
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Y', 'SYSTEM', ?)
   `, [
     tenant.MgtCoClientID,
     tenant.HOALicenseNumber,
@@ -1340,7 +1446,8 @@ const initialCurrentBalance =
     fiscalYearEndDate,
     requestedBalance,
     requestedMonth,
-    initialCurrentBalance
+    initialCurrentBalance,
+    (await hoaNow(conn)).utcDateTime
   ]);
 
   const [createdRows] = await conn.query(`
@@ -1424,16 +1531,10 @@ app.get('/api/cash-flow', async (req, res) => {
         StartMonth,
         LastPostedTransactionDate,
         LastPostedDateTime,
+        -- TimeStampUpdated is stored in UTC (see hoaNow()), so the
+        -- Cash Flow page can render it in the HOA timezone.
         DATE_FORMAT(
-          TIMESTAMPADD(
-            MINUTE,
-            -TIMESTAMPDIFF(
-              MINUTE,
-              UTC_TIMESTAMP(),
-              NOW()
-            ),
-            TimeStampUpdated
-          ),
+          TimeStampUpdated,
           '%Y-%m-%dT%H:%i:%sZ'
         ) AS TimeStampUpdatedUTC
       FROM CashFlowLedgerMaster
@@ -1901,6 +2002,7 @@ app.post('/api/check-register', async (req, res) => {
     const txnNum = await generateCheckTransactionNumber(connection);
     const bankAccountId = c.bank_account_id || 1;
     const amount = parseFloat(c.amount) || 0.00;
+    const createdAt = (await hoaNow(connection)).utcDateTime;
 
     await connection.query(`
       INSERT INTO CheckRegister (
@@ -1908,7 +2010,7 @@ app.post('/api/check-register', async (req, res) => {
         DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
         VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, CheckAllowedYN, EscrowFlag, Status,
         DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', ?)
     `, [
       txnNum,
       c.check_number || '',
@@ -1926,13 +2028,15 @@ app.post('/api/check-register', async (req, res) => {
       c.bank_account || 'Operating 101',
       bankAccountId,
       c.check_allowed || 'Y',
-      c.escrow_flag || 'N'
+      c.escrow_flag || 'N',
+      createdAt
     ]);
 
     await connection.commit();
     res.status(201).json({
       success: true,
       check_txn_num: txnNum,
+      timeStampCreatedUTC: createdAt,
       message: 'Check posted successfully'
     });
   } catch (err) {
@@ -2111,17 +2215,21 @@ const ledgerMaster = ledgerRows[0];
   Number(ledgerMaster.CurrentBalance || 0) -
   Number(check.Amount || 0);
 
+const postedAt = (await hoaNow(connection)).utcDateTime;
+
 await connection.query(`
   UPDATE CashFlowLedgerMaster
   SET
     CurrentBalance = ?,
     LastPostedTransactionDate = ?,
-    LastPostedDateTime = NOW(),
-    TimeStampUpdated = NOW()
+    LastPostedDateTime = ?,
+    TimeStampUpdated = ?
   WHERE CashFlowLedgerID = ?
 `, [
   newCurrentBalance,
   clearedDate,
+  postedAt,
+  postedAt,
   ledgerMaster.CashFlowLedgerID
 ]);
 
@@ -2136,11 +2244,12 @@ await connection.query(`
         DateCheckCleared = ?,
         MonthCleared = ?,
         Status = 'Cleared',
-        TimeStampUpdated = NOW()
+        TimeStampUpdated = ?
       WHERE CheckTransactionNumber = ?
     `, [
       clearedDate,
       monthCleared,
+      postedAt,
       transactionNumber
     ]);
 
@@ -2486,6 +2595,8 @@ const ledgerMaster = ledgerRows[0];
     );
 
     if (!cashFlowPosting.alreadyPosted) {
+    const postedAt = (await hoaNow(connection)).utcDateTime;
+
     await connection.query(`
     UPDATE CashFlowLedgerMaster
     SET
@@ -2494,13 +2605,15 @@ const ledgerMaster = ledgerRows[0];
         + ?
         - ?,
       LastPostedTransactionDate = ?,
-      LastPostedDateTime = NOW(),
-      TimeStampUpdated = NOW()
+      LastPostedDateTime = ?,
+      TimeStampUpdated = ?
     WHERE CashFlowLedgerID = ?
   `, [
     Number(cashFlowPosting.cashInAmount || 0),
     Number(cashFlowPosting.cashOutAmount || 0),
     depositDate,
+    postedAt,
+    postedAt,
     ledgerMaster.CashFlowLedgerID
   ]);
 }
@@ -3657,6 +3770,8 @@ if (!ledgerRows[0]) {
 
 const ledgerMaster = ledgerRows[0];
 
+  const postedAt = (await hoaNow(connection)).utcDateTime;
+
   await connection.query(`
     UPDATE CashFlowLedgerMaster
     SET
@@ -3665,13 +3780,15 @@ const ledgerMaster = ledgerRows[0];
         - ?
         + ?,
       LastPostedTransactionDate = ?,
-      LastPostedDateTime = NOW(),
-      TimeStampUpdated = NOW()
+      LastPostedDateTime = ?,
+      TimeStampUpdated = ?
     WHERE CashFlowLedgerID = ?
   `, [
     Number(cashFlowRow.ActiveCashInAmount || 0),
     Number(cashFlowRow.ActiveCashOutAmount || 0),
     cashFlowRow.TransactionDate,
+    postedAt,
+    postedAt,
     ledgerMaster.CashFlowLedgerID
   ]);
 
@@ -3752,15 +3869,17 @@ const ledgerMaster = ledgerRows[0];
       });
     }
 
+    const voidedAt = (await hoaNow(connection)).utcDateTime;
+
     await connection.query(`
       UPDATE CheckRegister
       SET
         Status = 'Voided',
         DateCheckCleared = NULL,
         MonthCleared = NULL,
-        TimeStampUpdated = NOW()
+        TimeStampUpdated = ?
       WHERE CheckTransactionNumber = ?
-    `, [transactionNumber]);
+    `, [voidedAt, transactionNumber]);
 
     await connection.commit();
 
@@ -7041,18 +7160,22 @@ if (!ledgerRows[0]) {
   );
 }
 
+const postedAt = (await hoaNow(conn)).utcDateTime;
+
 await conn.query(`
   UPDATE CashFlowLedgerMaster
   SET
     CurrentBalance =
       COALESCE(CurrentBalance, 0) + ?,
     LastPostedTransactionDate = ?,
-    LastPostedDateTime = NOW(),
-    TimeStampUpdated = NOW()
+    LastPostedDateTime = ?,
+    TimeStampUpdated = ?
   WHERE CashFlowLedgerID = ?
 `, [
   Number(group.amount || 0),
   payDate,
+  postedAt,
+  postedAt,
   ledgerRows[0].CashFlowLedgerID
 ]);
 
