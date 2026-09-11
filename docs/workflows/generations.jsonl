@@ -18,3 +18,16 @@
 {"timestamp": "2026-09-03T15:16:20.364078Z", "prompt": "BACKEND Jose ultimas 2 semanas — 7 logros B1-B7 DuesType CashFlow V6", "model": "meta/muse-image", "file": "estado-migracion-fig2-backend_20260903.png", "cost": 0.01}
 {"timestamp": "2026-09-03T15:16:20.364096Z", "prompt": "FRONTEND Hal/Rick ultimas 2 semanas — 4 entregas APR split-bank", "model": "meta/muse-image", "file": "estado-migracion-fig3-frontend_20260903.png", "cost": 0.01}
 {"timestamp": "2026-09-03T15:16:20.364108Z", "prompt": "Proximo paso semaforo hecho/en curso/pendiente", "model": "meta/muse-image", "file": "estado-migracion-fig4-proximo_20260903.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "HOA Local Time Rule overview - 3 clocks Chicago/Denver/UTC", "model": "meta/muse-image", "file": "cr-tz-fig1-overview_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "CHK number before vs after - Chicago vs Denver", "model": "meta/muse-image", "file": "cr-tz-fig2-chknumber_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "Audit stamps flow - stored UTC shown Denver", "model": "meta/muse-image", "file": "cr-tz-fig3-auditflow_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "HOA time helpers map - call sites", "model": "meta/muse-image", "file": "cr-tz-fig4-helpers_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "GIF frame 1/5 - three clocks", "model": "meta/muse-image", "file": "cr-tz-gif-f1_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "GIF frame 2/5 - CHK number Denver", "model": "meta/muse-image", "file": "cr-tz-gif-f2_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "GIF frame 3/5 - stamps stored UTC", "model": "meta/muse-image", "file": "cr-tz-gif-f3_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "GIF frame 4/5 - clear posts to Cash Flow", "model": "meta/muse-image", "file": "cr-tz-gif-f4_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T11:11:09.181Z", "prompt": "GIF frame 5/5 - shown in Denver", "model": "meta/muse-image", "file": "cr-tz-gif-f5_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T12:14:24.530Z", "prompt": "APR chain T1-T4, tech dark style, estilo_test ref", "model": "meta/muse-image", "file": "apr-figA-chain-tech_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T12:14:24.530Z", "prompt": "APR safeguards, tech dark style, estilo_test ref", "model": "meta/muse-image", "file": "apr-figB-guards-tech_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T12:14:24.530Z", "prompt": "GL 50000 asset/liability, tech dark style, estilo_test ref", "model": "meta/muse-image", "file": "apr-figC-gl50000-tech_20260911.png", "cost": 0.01}
+{"timestamp": "2026-09-11T12:14:24.530Z", "prompt": "Dev setup fixes, tech dark style, estilo_test ref", "model": "meta/muse-image", "file": "apr-figD-setup-tech_20260911.png", "cost": 0.01}
