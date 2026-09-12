@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DP Bank Reconciliation Clearing — Report for 4cd016f</title>
+<style>
+  :root { --accent:#0ea5e9; --ink:#0f172a; --muted:#475569; --line:#e2e8f0; --bg:#f8fafc; --card:#ffffff; --ok:#16a34a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:#0c4a6e; color:#fff; padding:28px 24px; }
+  header h1 { margin:0 0 6px; font-size:24px; }
+  header p { margin:2px 0; color:#bae6fd; font-size:14px; }
+  header code { background:rgba(255,255,255,.15); padding:1px 6px; border-radius:4px; }
+  main { max-width:960px; margin:0 auto; padding:24px; }
+  section.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px 22px; margin:0 0 20px; box-shadow:0 1px 3px rgba(2,132,199,.08); }
+  h2 { margin:0 0 10px; font-size:18px; color:#0c4a6e; }
+  h2 .n { display:inline-block; background:var(--accent); color:#fff; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; font-size:14px; margin-right:8px; }
+  figure { margin:14px 0 4px; }
+  figure img { width:100%; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  figcaption { font-size:12px; color:var(--muted); margin-top:6px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:10px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { background:#f0f9ff; color:#0c4a6e; }
+  .ok { color:var(--ok); font-weight:700; }
+  code { background:#f1f5f9; padding:1px 6px; border-radius:4px; font-size:13px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:0 0 32px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DP Bank Reconciliation Clearing — Report for <code>4cd016f</code></h1>
+  <p>BravoFrontend · Reviewer: Jose · 2026-09-12 · Images: meta/muse-image (~$0.04)</p>
+</header>
+<main>
+  <section class="card">
+    <h2><span class="n">1</span>What changed</h2>
+    <p><code>POST /api/deposit-register</code> now enters deposits as <strong>Pending</strong> (no Cash Flow).
+    A new <code>POST /api/deposit-register/clear</code> (STATUS/SAVE workflow) validates the cleared date,
+    posts Cash Flow, updates the ledger and marks the deposit <strong>Cleared</strong>.
+    The DP void path is now Pending-only.</p>
+    <figure><img src="dp-clear-flow_20260912.png" alt="DP clear flow"><figcaption>Fig.1 — Pending → Cleared flow with guards.</figcaption></figure>
+    <figure><img src="dp-clear-before-after_20260912.png" alt="Before vs after"><figcaption>Fig.2 — Before (immediate posting) vs after (two-phase).</figcaption></figure>
+  </section>
+  <section class="card">
+    <h2><span class="n">2</span>UTC preservation</h2>
+    <p>Clear routine uses <code>(await hoaNow(connection)).utcDateTime</code> for
+    <code>CashFlowLedgerMaster</code> and <code>DepositRegister</code> update stamps. CR/APR untouched.</p>
+    <figure><img src="dp-clear-tz-arch_20260912.png" alt="Timezone architecture"><figcaption>Fig.3 — hoaNow architecture; TimeStampCreated still MySQL-time (fix #2 pending).</figcaption></figure>
+  </section>
+  <section class="card">
+    <h2><span class="n">3</span>Live DP clear test <span class="ok">✅</span></h2>
+    <table>
+      <tr><th>Item</th><th>Value</th></tr>
+      <tr><td>Txn</td><td><code>DP09122026-05403960</code></td></tr>
+      <tr><td>Amount / bank / GL</td><td>$3.00 · bank 1 · GL 40000</td></tr>
+      <tr><td>Flow</td><td>Pending → Cleared (2026-09-12, month 9)</td></tr>
+      <tr><td>Ledger</td><td>146712.66 → 146715.66</td></tr>
+      <tr><td>Stamps</td><td>10:40:41 = system UTC <span class="ok">✅</span></td></tr>
+      <tr><td>Guards</td><td>double-clear 409 · void-cleared blocked <span class="ok">✅</span></td></tr>
+    </table>
+    <figure><img src="dp-clear-test_20260912.png" alt="Test result"><figcaption>Fig.4 — Test result card.</figcaption></figure>
+    <p>Notes: bank 101 → 409 (ledger uses BankAccountID 1); GL 4000 → outside Cash Flow ranges (used 40000). Trial deposits voided.</p>
+  </section>
+  <section class="card">
+    <h2><span class="n">4</span>Next steps</h2>
+    <p>1) Rick: txn number → <code>hoaNow.transactionStamp</code>; <code>TimeStampCreated</code> → UTC (no overlap, DP is his).
+    2) Then: <code>zipcode-detail-lookup</code> (83 MB) → <code>zip-to-tz</code> (34 KB).
+    Test artifacts in dev: 2 voided pendings + 1 cleared $3.</p>
+  </section>
+</main>
+<footer>wmplus · docs/workflows/dp-clear-report_20260912.html · for commit 4cd016f</footer>
+</body>
+</html>
