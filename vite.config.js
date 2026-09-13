@@ -22,7 +22,11 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/managereactv1-backend/',
   server: {
     proxy: {
-      '/api': { target: 'http://127.0.0.1:3011', changeOrigin: true }
+      // Mismo-origen en dev: el navegador ve un solo host y la cookie
+      // de sesión es first-party (evita rechazo cross-site SameSite=Lax).
+      // En producción Apache ya proxea /api; aquí el target es configurable
+      // para demos (VITE_API_PROXY) con default al backend local 3011.
+      '/api': { target: process.env.VITE_API_PROXY || 'http://127.0.0.1:3011', changeOrigin: true }
     }
   },
   define: {
