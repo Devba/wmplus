@@ -2,7 +2,8 @@
    Política de clave temporal: se genera aleatoria (12 chars), se devuelve
    UNA vez al admin; el hash scrypt es lo único que se persiste. */
 const crypto = require('crypto');
-const db = require('../db');
+// FASE B-demo: identidad vive en authDb (AUTH_DB_*; default = pool de negocio).
+const db = require('../db').authDb;
 const { hashPassword } = require('../middleware/auth');
 
 function tempPassword() {

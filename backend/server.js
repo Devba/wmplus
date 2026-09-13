@@ -5424,6 +5424,9 @@ app.post('/api/apr/recalculate', async (req, res) => {
    ruta (requireAuth/requireReadWrite) se aplica en Fase A2.
    Tablas: ver backend/migrate-auth-tables.js
    =========================================================== */
+/* FASE B-demo: queries de identidad van a authDb (AUTH_DB_*).
+   Negocio sigue en db.* (DB_*). */
+const adb = db.authDb;
 
 function clientIp(req) {
   return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
@@ -5438,7 +5441,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!loginName || !password) {
       return res.status(400).json({ error: 'loginName y password requeridos' });
     }
-    const [users] = await db.query(
+    const [users] = await adb.query(
       `SELECT u.id AS user_id, u.mgt_company_id, u.login_name, u.display_name,
               u.email, u.authorization_level, u.read_only_flag,
               u.can_view_escrow_flag, u.can_view_cc_flag, u.active_flag,
@@ -5461,19 +5464,19 @@ app.post('/api/auth/login', async (req, res) => {
       const failed = (row.failed_attempts || 0) + 1;
       const lock = failed >= authMid.MAX_FAILED
         ? `, locked_until = DATE_ADD(NOW(), INTERVAL ${authMid.LOCK_MINUTES} MINUTE)` : '';
-      await db.query(
+      await adb.query(
         `UPDATE user_credential SET failed_attempts = ?${lock} WHERE user_id = ?`,
         [failed, row.user_id]
       );
       return denied();
     }
-    await db.query(
+    await adb.query(
       `UPDATE user_credential SET failed_attempts = 0, locked_until = NULL, last_login_at = NOW()
         WHERE user_id = ?`,
       [row.user_id]
     );
     // Oportunista: purga sesiones expiradas del usuario
-    await db.query(`DELETE FROM user_session WHERE user_id = ? AND expires_at <= NOW()`, [row.user_id]);
+    await adb.query(`DELETE FROM user_session WHERE user_id = ? AND expires_at <= NOW()`, [row.user_id]);
     const token = await authMid.createSession(row.user_id, req.headers['user-agent']);
     res.setHeader('Set-Cookie', authMid.sessionCookieHeader(token, req));
     const is_admin = (row.authorization_level || 0) >= 9;
@@ -5524,7 +5527,7 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/auth/hoas', async (req, res) => {
   try {
     if (req.authUser.is_admin) {
-      const [rows] = await db.query(
+      const [rows] = await adb.query(
         `SELECT id AS hoa_id, hoa_code, legal_name, state_code, city FROM hoa
           WHERE active_flag='Y' ORDER BY hoa_code`);
       return res.json({ hoas: rows });
@@ -5538,8 +5541,8 @@ app.get('/api/auth/hoas', async (req, res) => {
 // GET /api/auth/scope -> HOA activa validada + settings + integraciones
 app.get('/api/auth/scope', authMid.requireHoaScope, async (req, res) => {
   try {
-    const [pay] = await db.query(`SELECT * FROM hoa_payment_settings WHERE hoa_id=? LIMIT 1`, [req.hoaId]);
-    const [integ] = await db.query(
+    const [pay] = await adb.query(`SELECT * FROM hoa_payment_settings WHERE hoa_id=? LIMIT 1`, [req.hoaId]);
+    const [integ] = await adb.query(
       `SELECT provider, external_account_id, active_flag, activated_at FROM hoa_integration
         WHERE hoa_id=? ORDER BY provider`, [req.hoaId]);
     res.json({ hoa: req.hoa, payment_settings: pay[0] || null, integrations: integ });
@@ -5554,7 +5557,7 @@ app.post('/api/auth/change-password', async (req, res) => {
     const cur = String(req.body.currentPassword || '');
     const neu = String(req.body.newPassword || '');
     if (neu.length < 8) return res.status(400).json({ error: 'Nueva clave >= 8 caracteres' });
-    const [rows] = await db.query(`SELECT password_hash FROM user_credential WHERE user_id=? LIMIT 1`,
+    const [rows] = await adb.query(`SELECT password_hash FROM user_credential WHERE user_id=? LIMIT 1`,
       [req.authUser.user_id]);
     if (!rows.length || !authMid.verifyPassword(cur, rows[0].password_hash)) {
       return res.status(401).json({ error: 'Clave actual incorrecta' });
@@ -5575,14 +5578,14 @@ const usersLib = require('./lib/users');
 // GET /api/admin/users -> usuarios + asignaciones + flag credencial
 app.get('/api/admin/users', authMid.requireAdmin, async (req, res) => {
   try {
-    const [users] = await db.query(
+    const [users] = await adb.query(
       `SELECT u.id AS user_id, u.login_name, u.display_name, u.email,
               u.authorization_level, u.read_only_flag, u.active_flag,
               u.can_view_escrow_flag, u.can_view_cc_flag,
               (c.user_id IS NOT NULL) AS has_credential, c.last_login_at
          FROM app_user u LEFT JOIN user_credential c ON c.user_id = u.id
         ORDER BY u.login_name`);
-    const [asg] = await db.query(
+    const [asg] = await adb.query(
       `SELECT a.id, a.user_id, a.hoa_id, h.hoa_code, h.legal_name, a.role, a.active_flag
          FROM hoa_assignment a JOIN hoa h ON h.id = a.hoa_id ORDER BY a.user_id, h.hoa_code`);
     res.json({ users, assignments: asg });
@@ -5606,7 +5609,7 @@ app.post('/api/admin/users', authMid.requireAdmin, async (req, res) => {
     });
     const asg = req.body.assignments || [];
     for (const a of asg) {
-      await db.query(
+      await adb.query(
         `INSERT INTO hoa_assignment (user_id, hoa_id, role) VALUES (?,?,?)`,
         [id, a.hoa_id, a.role || 'viewer']);
     }
@@ -5620,7 +5623,7 @@ app.post('/api/admin/users', authMid.requireAdmin, async (req, res) => {
 app.put('/api/admin/users/:id', authMid.requireAdmin, async (req, res) => {
   try {
     const b = req.body;
-    const [r] = await db.query(
+    const [r] = await adb.query(
       `UPDATE app_user SET display_name = COALESCE(?, display_name),
          email = COALESCE(?, email),
          authorization_level = COALESCE(?, authorization_level),
@@ -5635,7 +5638,7 @@ app.put('/api/admin/users/:id', authMid.requireAdmin, async (req, res) => {
        b.active_flag ?? null, req.params.id]);
     if (!r.affectedRows) return res.status(404).json({ error: 'Usuario inexistente' });
     if (String(b.active_flag).toUpperCase() === 'N') {
-      await db.query(`UPDATE user_session SET revoked_flag='Y' WHERE user_id=?`, [req.params.id]);
+      await adb.query(`UPDATE user_session SET revoked_flag='Y' WHERE user_id=?`, [req.params.id]);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -5661,7 +5664,7 @@ app.post('/api/admin/users/:id/assignments', authMid.requireAdmin, async (req, r
     if (!hoa_id || !['manager', 'accountant', 'viewer'].includes(role)) {
       return res.status(400).json({ error: 'hoa_id y role válido requeridos' });
     }
-    await db.query(
+    await adb.query(
       `INSERT INTO hoa_assignment (user_id, hoa_id, role, active_flag)
        VALUES (?,?,?,'Y') ON DUPLICATE KEY UPDATE role=VALUES(role), active_flag='Y'`,
       [req.params.id, hoa_id, role]);
@@ -5674,7 +5677,7 @@ app.post('/api/admin/users/:id/assignments', authMid.requireAdmin, async (req, r
 // DELETE /api/admin/users/:id/assignments/:assignId
 app.delete('/api/admin/users/:id/assignments/:assignId', authMid.requireAdmin, async (req, res) => {
   try {
-    const [r] = await db.query(`DELETE FROM hoa_assignment WHERE id=? AND user_id=?`,
+    const [r] = await adb.query(`DELETE FROM hoa_assignment WHERE id=? AND user_id=?`,
       [req.params.assignId, req.params.id]);
     if (!r.affectedRows) return res.status(404).json({ error: 'Asignación inexistente' });
     res.json({ ok: true });

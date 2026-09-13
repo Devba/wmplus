@@ -9,7 +9,8 @@
      (Fase A2; Fase A solo instala el gate de login).
    =========================================================== */
 const crypto = require('crypto');
-const db = require('../db');
+// FASE B-demo: identidad vive en authDb (AUTH_DB_*; default = pool de negocio).
+const db = require('../db').authDb;
 
 const SESSION_TTL_MIN = Math.max(5, parseInt(process.env.SESSION_TTL_MINUTES || '30', 10));
 const COOKIE_NAME = 'wm_session';

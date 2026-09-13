@@ -48,4 +48,21 @@ pool.withTransaction = async (callback) => {
   }
 };
 
+/* FASE B-demo (dual-pool): pool de identidad/autorización.
+   Lee AUTH_DB_* y cae a la misma config del pool de negocio cuando no
+   están definidas -> producción single-DB sin cambios.
+   Demo: DB_NAME=hoamanager26_dev + AUTH_DB_NAME=hoam26_auth. */
+const authPool = mysql.createPool({
+  host: process.env.AUTH_DB_HOST || process.env.DB_HOST || 'www.1mag1na.xyz',
+  port: parseInt(process.env.AUTH_DB_PORT || process.env.DB_PORT || '3306'),
+  user: process.env.AUTH_DB_USER || process.env.DB_USER || 'Ricktest',
+  password: process.env.AUTH_DB_PASSWORD || process.env.DB_PASSWORD || '12345',
+  database: process.env.AUTH_DB_NAME || process.env.DB_NAME || 'hoamanager26',
+  waitForConnections: true,
+  connectionLimit: 5,
+  queueLimit: 0,
+  dateStrings: true
+});
+pool.authDb = authPool;
+
 module.exports = pool;
