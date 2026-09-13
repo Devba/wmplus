@@ -224,16 +224,24 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
 
 
 
-{/* FASE A: chip de usuario/scope visible */}
+{/* FASE A: chip de usuario/scope visible + acciones explícitas */}
 {user && (
   <div className="ribbon-group" title={`Sesión: ${user.login_name}`}>
     <div className="ribbon-buttons">
-      <div className="ribbon-btn" onClick={onLogout} style={{ cursor: 'pointer' }} title="Cerrar sesión">
+      <div className="ribbon-btn" style={{ cursor: 'default' }}>
         <div className="icon icon-showdetailspage"></div>
         <div className="label">{user.display_name || user.login_name}<br />{scopeLabel}</div>
       </div>
+      <div className="ribbon-btn" onClick={() => onSelectPage('my-account')} style={{ cursor: 'pointer' }} title="Mi cuenta y cambio de clave">
+        <div className="icon icon-addressbook"></div>
+        <div className="label">Mi<br />cuenta</div>
+      </div>
+      <div className="ribbon-btn" onClick={onLogout} style={{ cursor: 'pointer' }} title="Cerrar sesión">
+        <div className="icon icon-archive-ar"></div>
+        <div className="label">Cerrar<br />sesión</div>
+      </div>
     </div>
-    <div className="group-label">USUARIO (clic = salir)</div>
+    <div className="group-label">USUARIO</div>
   </div>
 )}
 
@@ -267,7 +275,16 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
         ))}
       </select>
     </div>
-    <div className="group-label">HOA ACTIVA</div>
+    <div className="group-label">
+      <span style={{
+        display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+        background: activeHoa ? '#10b981' : '#64748b', marginRight: 4,
+      }} />
+      {(() => {
+        const cur = hoas.find((h) => String(h.hoa_id || h.id) === String(activeHoa));
+        return cur ? `HOA: ${cur.hoa_code}` : 'SIN HOA';
+      })()}
+    </div>
   </div>
 )}
 

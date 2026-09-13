@@ -39,6 +39,7 @@ function App() {
   // FASE A (auth): gate de sesión. Sin usuario -> pantalla Login (gate PWUF del VBA).
   const [authUser, setAuthUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [expiredNotice, setExpiredNotice] = useState(false);
 
   // FASE A2: HOA activa (selector TopRibbon; persiste; viaja como X-HOA-ID)
   const [activeHoa, setActiveHoa] = useState(
@@ -53,8 +54,8 @@ function App() {
   }
 
   useEffect(() => {
-    // FASE A2: ante 401 global (sesión expirada) volver al Login
-    function onUnauthorized() { setAuthUser(null); }
+    // FASE A2: ante 401 global (sesión expirada) volver al Login con aviso
+    function onUnauthorized() { setAuthUser(null); setExpiredNotice(true); }
     window.addEventListener('wm-unauthorized', onUnauthorized);
     return () => window.removeEventListener('wm-unauthorized', onUnauthorized);
   }, []);
@@ -216,7 +217,11 @@ function handleNavigationDiscard() {
 
     return (
       <div className="dev-placeholder">
-        {currentPage}
+        <h2 style={{ margin: '0 0 0.5rem' }}>Página inexistente</h2>
+        <p style={{ margin: '0 0 1rem' }}>“{currentPage}” no existe en esta versión.</p>
+        <button onClick={() => handleSelectPage('master-navigation-panel')}>
+          Volver al panel
+        </button>
       </div>
     );
   }
@@ -226,7 +231,7 @@ function handleNavigationDiscard() {
       {!authChecked ? (
         <div className="dev-placeholder">Verificando sesión…</div>
       ) : !authUser ? (
-        <Login onLogin={setAuthUser} />
+        <Login onLogin={(u) => { setExpiredNotice(false); setAuthUser(u); }} expiredNotice={expiredNotice} />
       ) : (<>
       <div className="top-ribbon">
         <TopRibbon onSelectPage={handleSelectPage} user={authUser} onLogout={handleLogout}
@@ -234,6 +239,14 @@ function handleNavigationDiscard() {
       </div>
 
       <div className="middle-content">
+          {authUser && !activeHoa && (
+            <div style={{
+              background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)',
+              color: '#fcd34d', fontSize: '0.8rem', padding: '0.4rem 0.9rem',
+            }}>
+              Selecciona la HOA activa arriba (grupo HOA) para operar con scope de datos.
+            </div>
+          )}
           {renderPage()}
 
           {activeOverlay && (

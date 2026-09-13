@@ -4,7 +4,7 @@ import './Login.css';
 
 // FASE A (auth): gate de login por roles. Reemplaza el formulario PWUF del VBA.
 // Usa fetch crudo (no apiFetch) para no disparar el estado offline ante un 401.
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, expiredNotice }) {
   const [loginName, setLoginName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -40,6 +40,11 @@ export default function Login({ onLogin }) {
       <form className="login-card" onSubmit={handleSubmit}>
         <h1>W M+</h1>
         <p className="login-sub">Acceso por rol (admin / solo lectura)</p>
+        {expiredNotice && (
+          <div className="login-error" style={{ borderColor: '#f59e0b', color: '#fcd34d', background: 'rgba(245,158,11,0.12)' }}>
+            Sesión expirada, ingresa de nuevo.
+          </div>
+        )}
         <label>
           Usuario
           <input value={loginName} onChange={(e) => setLoginName(e.target.value)} autoComplete="username" />

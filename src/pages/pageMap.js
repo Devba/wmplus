@@ -12,6 +12,7 @@ import Settings from './Settings';
 import VendorIdList from './VendorIdList';
 import Login from './Login/Login';
 import UserAdmin from './UserAdmin/UserAdmin';
+import MyAccount from './MyAccount/MyAccount';
 
 
 
@@ -27,5 +28,6 @@ export const pageMap = {
   'vendor-id-list': VendorIdList,
   'login': Login,
   'user-admin': UserAdmin,
+  'my-account': MyAccount,
   };
 
