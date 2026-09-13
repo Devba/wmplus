@@ -9,6 +9,8 @@ import { API_BASE_URL } from '../../config/api';
 function DepositRegister({ onSelectPage }) {
   const [depositRows, setDepositRows] = useState([]);
   const [selectedDepositRow, setSelectedDepositRow] = useState(null);
+  const [selectedBankId, setSelectedBankId] = useState(101);
+  const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
   useEffect(() => {
     async function loadDepositRegister() {
       try {
@@ -26,6 +28,7 @@ function DepositRegister({ onSelectPage }) {
           amount: row.amount,
           depositAmount: row.amount,
           bankAccount: row.bank_account_display || row.bank_account || '',
+          bankId: Number(row.bank_id) || 0,
           glAccount: row.gl_name || '',
           depositDate: row.date_deposited || '',
           date: row.date_deposited || '',
@@ -69,11 +72,15 @@ function DepositRegister({ onSelectPage }) {
   const [registerFilter, setRegisterFilter] = useState(null);
 
   const displayedDepositRows = useMemo(() => {
+    const bankRows = depositRows.filter(
+     (row) => Number(row.bankId) === Number(selectedBankId)
+    );
+
     if (!registerFilter) {
-      return depositRows;
+      return bankRows;
     }
 
-    return depositRows.filter((row) => {
+    return bankRows.filter((row) => {
       if (registerFilter.filterType === 'resident') {
         const residentAccount = String(
           row.ownerAccount || row.depositorId || ''
@@ -89,7 +96,7 @@ function DepositRegister({ onSelectPage }) {
 
       return true;
     });
-  }, [depositRows, registerFilter]);
+  }, [depositRows, registerFilter, selectedBankId]);
 
   const handleAddDeposit = (newDeposit) => {
     setDepositRows((currentRows) => [...currentRows, newDeposit]);
@@ -124,6 +131,7 @@ function DepositRegister({ onSelectPage }) {
           }
         : currentRow
     );
+      setBalanceRefreshKey((key) => key + 1);
   };
 
 
@@ -157,6 +165,8 @@ function DepositRegister({ onSelectPage }) {
             onSelectPage={onSelectPage}
             onAddDeposit={handleAddDeposit}
             onDepositCleared={handleDepositCleared}
+            onBankChange={setSelectedBankId}
+            balanceRefreshKey={balanceRefreshKey}
             depositRows={depositRows}
             selectedDepositRow={selectedDepositRow}
             onApplyVendorResidentFilter={
