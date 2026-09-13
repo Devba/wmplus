@@ -129,6 +129,20 @@ function isReadOnly(user) {
   return !user || String(user.read_only_flag).toUpperCase() === 'Y';
 }
 
+// Piloto filtro por HOA (tablas legacy con HOALicenseNumber).
+// Admin global -> sin filtro. Requiere requireHoaScope previo (req.hoa).
+// Devuelve { clause, params } para anteponer a queries de negocio.
+// Tablas nuevas Fase B+ usarán hoa_id (variante hoaIdFilter).
+function hoaFilter(req, alias) {
+  if (!req.authUser) throw new Error('requireAuth previo requerido');
+  if (req.authUser.is_admin) return { clause: '', params: [] };
+  if (!req.hoa || !req.hoa.license_number) {
+    throw new Error('requireHoaScope previo requerido');
+  }
+  const col = alias ? `${alias}.HOALicenseNumber` : 'HOALicenseNumber';
+  return { clause: `AND ${col} = ?`, params: [req.hoa.license_number] };
+}
+
 // 401 si no hay sesión válida. Adjunta req.authUser.
 async function requireAuth(req, res, next) {
   try {
@@ -166,8 +180,10 @@ async function requireHoaScope(req, res, next) {
     const hoaId = parseInt(raw, 10);
     if (!hoaId) return res.status(400).json({ error: 'HOA activa requerida (X-HOA-ID)' });
     const [rows] = await db.query(
-      `SELECT id, hoa_code, legal_name, state_code, city FROM hoa
-        WHERE id = ? AND active_flag = 'Y' LIMIT 1`,
+      `SELECT h.id, h.hoa_code, h.legal_name, h.state_code, h.city,
+              h.license_number, mc.code AS mgt_code
+         FROM hoa h LEFT JOIN mgt_company mc ON mc.id = h.mgt_company_id
+        WHERE h.id = ? AND h.active_flag = 'Y' LIMIT 1`,
       [hoaId]
     );
     if (!rows.length) return res.status(403).json({ error: 'HOA inexistente o inactiva' });
@@ -208,6 +224,7 @@ module.exports = {
   requireReadWrite,
   requireAdmin,
   requireHoaScope,
+  hoaFilter,
   loadUserHoas,
   publicUser,
 };

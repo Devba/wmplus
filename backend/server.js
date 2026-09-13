@@ -54,7 +54,7 @@ function parseDecimal(val, defaultVal = 0.00) {
   return isNaN(num) ? defaultVal : num;
 }
 
-app.get('/api/residents', async (req, res) => {
+app.get('/api/residents', authMid.requireHoaScope, async (req, res) => {
   try {
     const limit = 1000;
 
@@ -75,6 +75,14 @@ app.get('/api/residents', async (req, res) => {
     `;
 
     const params = [];
+
+    // Piloto filtro por HOA (sesión). Admin: sin filtro.
+    try {
+      const f = authMid.hoaFilter(req);
+      if (f.clause) { whereClause += `\n      ${f.clause}\n    `; params.push(...f.params); }
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
 
     if (search) {
       const searchValue = `%${search}%`;
@@ -260,8 +268,17 @@ app.get('/api/residents/:account_id/current', async (req, res) => {
   }
 });
 
-app.get('/api/main-directory/residents', async (req, res) => {
+app.get('/api/main-directory/residents', authMid.requireHoaScope, async (req, res) => {
   try {
+    // Piloto filtro por HOA (sesión). Admin: sin filtro.
+    let hoaClause = '';
+    let hoaParams = [];
+    try {
+      const f = authMid.hoaFilter(req);
+      hoaClause = f.clause; hoaParams = f.params;
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
     const [rows] = await db.query(`
       SELECT
         ResidentAccountID as account_id,
@@ -294,12 +311,13 @@ app.get('/api/main-directory/residents', async (req, res) => {
         NextYearSpecialAssmtDues as next_year_special_assmt_dues,
         ResidentNotes as resident_notes
       FROM ResidentMaster
-      WHERE DeletedFlag IS NULL OR DeletedFlag != 'Y'
+      WHERE (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+      ${hoaClause}
       ORDER BY
         LastName ASC,
         FirstName ASC,
         ResidentAccountID ASC
-    `);
+    `, hoaParams);
 
     res.json({
       residents: rows
@@ -365,9 +383,13 @@ app.get('/api/residents/check-address', async (req, res) => {
 
 
 
-app.post('/api/residents', async (req, res) => {
+app.post('/api/residents', authMid.requireHoaScope, async (req, res) => {
   try {
     const r = req.body;
+    // Piloto sellado HOA: license/MgtCo/operador SIEMPRE de sesión, nunca del body.
+    const sesLicense = req.hoa.license_number;
+    const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
+    const sesOperator = req.authUser.login_name || 'SYSTEM';
     const residenceAddress =
   String(r.residence_address || '')
     .trim()
@@ -379,9 +401,10 @@ const [duplicateAddressRows] = await db.query(
     FROM ResidentMaster
     WHERE LOWER(TRIM(ResidenceAddress)) = LOWER(?)
       AND (DeletedFlag IS NULL OR DeletedFlag <> 'Y')
+      AND HOALicenseNumber = ?
     LIMIT 1
   `,
-  [residenceAddress]
+  [residenceAddress, sesLicense]
 );
 
 if (duplicateAddressRows.length > 0) {
@@ -433,7 +456,8 @@ const [existingResidentRows] = await db.query(`
     END
   ) AS maxResidentNumber
   FROM ResidentMaster
-`);
+  WHERE HOALicenseNumber = ?
+`, [sesLicense]);
 const maxResidentNumber =
   Number(existingResidentRows[0]?.maxResidentNumber) || 0;
 
@@ -463,7 +487,7 @@ if (nextResidentNumber > 999999) {
           AdditionalOwnerLastName, AdditionalOwnerEmail, AnnualDuesRate, AnnualDues, SpecialAssessmentRate,
           SpecialAssessmentDues, NextYearAnnualDues, NextYearSpecialAssmtDues, ResidentNotes,
           MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
       `, [
         residentAccountId,
         r.first_name || null,
@@ -493,7 +517,10 @@ if (nextResidentNumber > 999999) {
         specialReq,
         annualNextReq,
         specialNextReq,
-        r.resident_notes || null
+        r.resident_notes || null,
+        sesMgt,
+        sesLicense,
+        sesOperator
       ]);
       await initializeAssessmentRegister(conn, {
         residentAccountId,
@@ -501,7 +528,7 @@ if (nextResidentNumber > 999999) {
         address: r.residence_address,
         annualRateCode: r.annual_dues_rate,
         specialRateCode: r.special_assessment_rate,
-        operatorId: 'SYSTEM'
+        operatorId: sesOperator
       });
       return insRes;
     });
@@ -516,10 +543,20 @@ if (nextResidentNumber > 999999) {
   }
 });
 
-app.put('/api/residents/:account_id', async (req, res) => {
+app.put('/api/residents/:account_id', authMid.requireHoaScope, async (req, res) => {
   try {
     const { account_id } = req.params;
     const r = req.body;
+    // Piloto sellado HOA: solo filas de la HOA de sesión (404 si es ajena).
+    const sesLicense = req.hoa.license_number;
+    const [ownRows] = await db.query(
+      `SELECT ResidentAccountID FROM ResidentMaster
+        WHERE ResidentAccountID = ? AND HOALicenseNumber = ? LIMIT 1`,
+      [account_id, sesLicense]
+    );
+    if (!ownRows.length) {
+      return res.status(404).json({ error: 'Residente inexistente en tu HOA' });
+    }
     const residenceAddress =
   String(r.residence_address || '')
     .trim()
@@ -532,9 +569,10 @@ const [duplicateAddressRows] = await db.query(
     WHERE LOWER(TRIM(ResidenceAddress)) = LOWER(?)
       AND ResidentAccountID <> ?
       AND (DeletedFlag IS NULL OR DeletedFlag <> 'Y')
+      AND HOALicenseNumber = ?
     LIMIT 1
   `,
-  [residenceAddress, account_id]
+  [residenceAddress, account_id, sesLicense]
 );
 
 if (duplicateAddressRows.length > 0) {
@@ -581,7 +619,7 @@ if (duplicateAddressRows.length > 0) {
         NextYearSpecialAssmtDues = ?,
         ResidentNotes = ?,
         TimeStampUpdated = NOW()
-      WHERE ResidentAccountID = ?
+      WHERE ResidentAccountID = ? AND HOALicenseNumber = ?
     `, [
       r.first_name || null,
       r.middle_name || null,
@@ -611,7 +649,8 @@ if (duplicateAddressRows.length > 0) {
       annUpNextReq,
       specUpNextReq,
       r.resident_notes || null,
-      account_id
+      account_id,
+      sesLicense
     ]);
     // B4: sincronizar AssessmentRegister si cambió un valor relevante de assessment (preserva historial de pagos)
     try {

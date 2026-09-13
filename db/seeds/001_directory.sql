@@ -14,7 +14,7 @@ USE hoam26_auth;
 INSERT INTO mgt_company
   (id, code, legal_name, city, state_code, contact_name, contact_email, active_flag)
 VALUES
-  (1, 'MGT-001', 'Gestora Demo PLACEHOLDER', 'Miami', 'FL',
+  (1, 'MGTCO-001', 'Gestora Demo PLACEHOLDER', 'Miami', 'FL',
    'Rick Admin PLACEHOLDER', 'rick@example.com', 'Y')
 ON DUPLICATE KEY UPDATE legal_name = VALUES(legal_name);
 
