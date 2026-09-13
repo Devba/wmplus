@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CR + DP Consolidation — Report for e7ef7cf</title>
+<style>
+  :root { --accent:#0ea5e9; --ink:#0f172a; --muted:#475569; --line:#e2e8f0; --bg:#f8fafc; --card:#ffffff; --ok:#16a34a; --warn:#b45309; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:#0c4a6e; color:#fff; padding:28px 24px; }
+  header h1 { margin:0 0 6px; font-size:24px; }
+  header p { margin:2px 0; color:#bae6fd; font-size:14px; }
+  header code { background:rgba(255,255,255,.15); padding:1px 6px; border-radius:4px; }
+  main { max-width:960px; margin:0 auto; padding:24px; }
+  section.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px 22px; margin:0 0 20px; box-shadow:0 1px 3px rgba(2,132,199,.08); }
+  h2 { margin:0 0 10px; font-size:18px; color:#0c4a6e; }
+  h2 .n { display:inline-block; background:var(--accent); color:#fff; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; font-size:14px; margin-right:8px; }
+  figure { margin:14px 0 4px; }
+  figure img { width:100%; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  figcaption { font-size:12px; color:var(--muted); margin-top:6px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:10px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { background:#f0f9ff; color:#0c4a6e; }
+  .ok { color:var(--ok); font-weight:700; }
+  .warn { color:var(--warn); font-weight:700; }
+  code { background:#f1f5f9; padding:1px 6px; border-radius:4px; font-size:13px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:0 0 32px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CR + DP Consolidation — Report for <code>e7ef7cf</code></h1>
+  <p>BravoFrontend · Reviewer: Jose · 2026-09-13 · Images: meta/muse-image (~$0.04) · diff-review only, no live test (server.js hold-off)</p>
+</header>
+<main>
+  <section class="card">
+    <h2><span class="n">1</span>What changed</h2>
+    <table>
+      <tr><th>Front</th><th>Change</th><th>Status</th></tr>
+      <tr><td>B.2 ZIP</td><td><code>zipcode-detail-lookup</code> → <code>zip-to-tz</code>; Cash Flow uses <code>getHoaTimeZone</code></td><td class="ok">✅ verified</td></tr>
+      <tr><td>DP numbering</td><td><code>NOW(2)</code> → <code>hoaNow.transactionStamp</code></td><td class="ok">✅ verified</td></tr>
+      <tr><td>DP created</td><td><code>NOW()</code> → UTC <code>createdAt</code></td><td class="ok">✅ verified</td></tr>
+      <tr><td>CR clear</td><td>Pending→Cleared + date adjustment, no duplicate CashFlow</td><td class="ok">✅ verified</td></tr>
+      <tr><td>Outstanding</td><td><code>Issued</code> → <code>Pending</code></td><td class="ok">✅ verified</td></tr>
+      <tr><td>Alex hack</td><td>Temp printed-simulation with RESTORE comments</td><td><span class="warn">⚠ watch</span></td></tr>
+    </table>
+    <figure><img src="e7ef7cf-flow_20260913.png" alt="CR clear flow"><figcaption>Fig.1 — CR clear flow with adjustment branch.</figcaption></figure>
+    <figure><img src="e7ef7cf-deps_20260913.png" alt="B.2 + DP updates"><figcaption>Fig.2 — Dependency updates.</figcaption></figure>
+  </section>
+  <section class="card">
+    <h2><span class="n">2</span>Outstanding math <span class="ok">✅</span></h2>
+    <p>Current $147,731.43 − Outstanding $164.50 = Projected $147,566.93.</p>
+    <figure><img src="e7ef7cf-outstanding_20260913.png" alt="Outstanding logic"><figcaption>Fig.3 — Issued→Pending, formula card.</figcaption></figure>
+  </section>
+  <section class="card">
+    <h2><span class="n">3</span>Alex hack vs production <span class="warn">⚠ watch</span></h2>
+    <figure><img src="e7ef7cf-alex-hack_20260913.png" alt="Alex hack vs production"><figcaption>Fig.4 — Temp vs restore; remove when PRINT CHECKS is built.</figcaption></figure>
+  </section>
+  <section class="card">
+    <h2><span class="n">4</span>Next steps</h2>
+    <p>Rick finishes accounting cleanup → explicit “server.js clear” → rebase + push local docs. No live test run under hold-off; UTC clear lines unchanged in diff.</p>
+  </section>
+</main>
+<footer>wmplus · docs/workflows/e7ef7cf-report_20260913.html · for commit e7ef7cf</footer>
+</body>
+</html>
