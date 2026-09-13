@@ -15,6 +15,24 @@ const PORT = process.env.PORT || 3011;
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
+// FASE A2: gate de sesión global. Exentas: login, health y webhook github
+// (este último sin secreto propio; no tocar o se cortan los deploys).
+// NOTA: dentro de app.use('/api') req.path viene SIN el prefijo de montaje.
+const OPEN_API_PATHS = new Set(['/auth/login', '/health', '/webhook/github']);
+app.use('/api', (req, res, next) => {
+  if (OPEN_API_PATHS.has(req.path)) return next();
+  authMid.requireAuth(req, res, next);
+});
+// FASE A2: mutaciones exigen usuario no-read-only (view-only = solo GET).
+// Cubre: residents, vendors, check/deposit-register, modify-gl, void,
+// settings/*, apr/*, ai-filter, ocr/*, auth/logout exento (salir no es mutar).
+const MUTATION_OPEN_PATHS = new Set([...OPEN_API_PATHS, '/auth/logout']);
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  if (MUTATION_OPEN_PATHS.has(req.path)) return next();
+  authMid.requireReadWrite(req, res, next);
+});
+
 // Health Check
 app.get('/api/health', async (req, res) => {
   try {
@@ -5497,6 +5515,169 @@ app.get('/api/auth/me', async (req, res) => {
     const user = await authMid.getSessionUser(req);
     if (!user) return res.status(401).json({ error: 'Sin sesión' });
     res.json({ user: authMid.publicUser(user), ip: clientIp(req) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/auth/hoas -> asignadas (admin: todas las activas)
+app.get('/api/auth/hoas', async (req, res) => {
+  try {
+    if (req.authUser.is_admin) {
+      const [rows] = await db.query(
+        `SELECT id AS hoa_id, hoa_code, legal_name, state_code, city FROM hoa
+          WHERE active_flag='Y' ORDER BY hoa_code`);
+      return res.json({ hoas: rows });
+    }
+    res.json({ hoas: req.authUser.hoas || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/auth/scope -> HOA activa validada + settings + integraciones
+app.get('/api/auth/scope', authMid.requireHoaScope, async (req, res) => {
+  try {
+    const [pay] = await db.query(`SELECT * FROM hoa_payment_settings WHERE hoa_id=? LIMIT 1`, [req.hoaId]);
+    const [integ] = await db.query(
+      `SELECT provider, external_account_id, active_flag, activated_at FROM hoa_integration
+        WHERE hoa_id=? ORDER BY provider`, [req.hoaId]);
+    res.json({ hoa: req.hoa, payment_settings: pay[0] || null, integrations: integ });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/change-password { currentPassword, newPassword }
+app.post('/api/auth/change-password', async (req, res) => {
+  try {
+    const cur = String(req.body.currentPassword || '');
+    const neu = String(req.body.newPassword || '');
+    if (neu.length < 8) return res.status(400).json({ error: 'Nueva clave >= 8 caracteres' });
+    const [rows] = await db.query(`SELECT password_hash FROM user_credential WHERE user_id=? LIMIT 1`,
+      [req.authUser.user_id]);
+    if (!rows.length || !authMid.verifyPassword(cur, rows[0].password_hash)) {
+      return res.status(401).json({ error: 'Clave actual incorrecta' });
+    }
+    const users = require('./lib/users');
+    await users.setPassword(req.authUser.user_id, neu);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ===========================================================
+   FASE A2 (admin): gestión de usuarios (solo admin global).
+   =========================================================== */
+const usersLib = require('./lib/users');
+
+// GET /api/admin/users -> usuarios + asignaciones + flag credencial
+app.get('/api/admin/users', authMid.requireAdmin, async (req, res) => {
+  try {
+    const [users] = await db.query(
+      `SELECT u.id AS user_id, u.login_name, u.display_name, u.email,
+              u.authorization_level, u.read_only_flag, u.active_flag,
+              u.can_view_escrow_flag, u.can_view_cc_flag,
+              (c.user_id IS NOT NULL) AS has_credential, c.last_login_at
+         FROM app_user u LEFT JOIN user_credential c ON c.user_id = u.id
+        ORDER BY u.login_name`);
+    const [asg] = await db.query(
+      `SELECT a.id, a.user_id, a.hoa_id, h.hoa_code, h.legal_name, a.role, a.active_flag
+         FROM hoa_assignment a JOIN hoa h ON h.id = a.hoa_id ORDER BY a.user_id, h.hoa_code`);
+    res.json({ users, assignments: asg });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/users -> alta; devuelve clave temporal UNA vez
+app.post('/api/admin/users', authMid.requireAdmin, async (req, res) => {
+  try {
+    const temp = usersLib.tempPassword();
+    const id = await usersLib.createUser({
+      login: req.body.login_name,
+      password: temp,
+      display: req.body.display_name,
+      email: req.body.email,
+      level: req.body.authorization_level,
+      readOnly: req.body.read_only_flag,
+      mgtCompanyId: req.body.mgt_company_id,
+    });
+    const asg = req.body.assignments || [];
+    for (const a of asg) {
+      await db.query(
+        `INSERT INTO hoa_assignment (user_id, hoa_id, role) VALUES (?,?,?)`,
+        [id, a.hoa_id, a.role || 'viewer']);
+    }
+    res.status(201).json({ user_id: id, temp_password: temp });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/users/:id -> display/email/level/readOnly/flags/active
+app.put('/api/admin/users/:id', authMid.requireAdmin, async (req, res) => {
+  try {
+    const b = req.body;
+    const [r] = await db.query(
+      `UPDATE app_user SET display_name = COALESCE(?, display_name),
+         email = COALESCE(?, email),
+         authorization_level = COALESCE(?, authorization_level),
+         read_only_flag = COALESCE(?, read_only_flag),
+         can_view_escrow_flag = COALESCE(?, can_view_escrow_flag),
+         can_view_cc_flag = COALESCE(?, can_view_cc_flag),
+         active_flag = COALESCE(?, active_flag)
+       WHERE id = ?`,
+      [b.display_name ?? null, b.email ?? null,
+       b.authorization_level ?? null, b.read_only_flag ?? null,
+       b.can_view_escrow_flag ?? null, b.can_view_cc_flag ?? null,
+       b.active_flag ?? null, req.params.id]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Usuario inexistente' });
+    if (String(b.active_flag).toUpperCase() === 'N') {
+      await db.query(`UPDATE user_session SET revoked_flag='Y' WHERE user_id=?`, [req.params.id]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/users/:id/reset-password -> clave temporal (revoca sesiones)
+app.post('/api/admin/users/:id/reset-password', authMid.requireAdmin, async (req, res) => {
+  try {
+    const temp = usersLib.tempPassword();
+    await usersLib.setPassword(req.params.id, temp);
+    res.json({ temp_password: temp });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/users/:id/assignments { hoa_id, role } (upsert por unique)
+app.post('/api/admin/users/:id/assignments', authMid.requireAdmin, async (req, res) => {
+  try {
+    const { hoa_id, role } = req.body;
+    if (!hoa_id || !['manager', 'accountant', 'viewer'].includes(role)) {
+      return res.status(400).json({ error: 'hoa_id y role válido requeridos' });
+    }
+    await db.query(
+      `INSERT INTO hoa_assignment (user_id, hoa_id, role, active_flag)
+       VALUES (?,?,?,'Y') ON DUPLICATE KEY UPDATE role=VALUES(role), active_flag='Y'`,
+      [req.params.id, hoa_id, role]);
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/users/:id/assignments/:assignId
+app.delete('/api/admin/users/:id/assignments/:assignId', authMid.requireAdmin, async (req, res) => {
+  try {
+    const [r] = await db.query(`DELETE FROM hoa_assignment WHERE id=? AND user_id=?`,
+      [req.params.assignId, req.params.id]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Asignación inexistente' });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

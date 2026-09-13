@@ -40,6 +40,25 @@ function App() {
   const [authUser, setAuthUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
 
+  // FASE A2: HOA activa (selector TopRibbon; persiste; viaja como X-HOA-ID)
+  const [activeHoa, setActiveHoa] = useState(
+    () => localStorage.getItem('wm_active_hoa') || ''
+  );
+
+  function handleSelectHoa(id) {
+    const v = String(id || '');
+    setActiveHoa(v);
+    if (v) localStorage.setItem('wm_active_hoa', v);
+    else localStorage.removeItem('wm_active_hoa');
+  }
+
+  useEffect(() => {
+    // FASE A2: ante 401 global (sesión expirada) volver al Login
+    function onUnauthorized() { setAuthUser(null); }
+    window.addEventListener('wm-unauthorized', onUnauthorized);
+    return () => window.removeEventListener('wm-unauthorized', onUnauthorized);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -210,7 +229,8 @@ function handleNavigationDiscard() {
         <Login onLogin={setAuthUser} />
       ) : (<>
       <div className="top-ribbon">
-        <TopRibbon onSelectPage={handleSelectPage} user={authUser} onLogout={handleLogout} />
+        <TopRibbon onSelectPage={handleSelectPage} user={authUser} onLogout={handleLogout}
+          activeHoa={activeHoa} onSelectHoa={handleSelectHoa} />
       </div>
 
       <div className="middle-content">

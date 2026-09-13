@@ -34,14 +34,22 @@ export function subscribeToConnectionStatus(cb) {
 
 export async function apiFetch(endpoint, options = {}) {
   try {
+    // FASE A2: HOA activa en cada llamada (selector TopRibbon -> localStorage)
+    const activeHoa = typeof localStorage !== 'undefined'
+      ? localStorage.getItem('wm_active_hoa') : null;
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
       credentials: 'include', // FASE A: envía la cookie de sesión wm_session
       headers: {
         'Content-Type': 'application/json',
+        ...(activeHoa ? { 'X-HOA-ID': activeHoa } : {}),
         ...options.headers
       },
       ...options
     });
+    if (res.status === 401) {
+      // FASE A2: sesión ausente/expirada -> App vuelve al Login
+      try { window.dispatchEvent(new Event('wm-unauthorized')); } catch {}
+    }
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }

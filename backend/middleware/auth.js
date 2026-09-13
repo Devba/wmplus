@@ -148,6 +148,41 @@ function requireReadWrite(req, res, next) {
   next();
 }
 
+// 403 si no es admin global (authorization_level >= 9).
+function requireAdmin(req, res, next) {
+  if (!req.authUser || !req.authUser.is_admin) {
+    return res.status(403).json({ error: 'Requiere administrador' });
+  }
+  next();
+}
+
+// FASE A2: valida la HOA activa (header X-HOA-ID o ?hoa_id) contra las
+// asignaciones de la sesión. Admin bypass. Adjunta req.hoaId + req.hoa.
+// 400 si falta, 403 si es ajena o inactiva.
+async function requireHoaScope(req, res, next) {
+  try {
+    const raw = (req.headers['x-hoa-id'] || req.query.hoa_id || '').toString().trim();
+    const hoaId = parseInt(raw, 10);
+    if (!hoaId) return res.status(400).json({ error: 'HOA activa requerida (X-HOA-ID)' });
+    const [rows] = await db.query(
+      `SELECT id, hoa_code, legal_name, state_code, city FROM hoa
+        WHERE id = ? AND active_flag = 'Y' LIMIT 1`,
+      [hoaId]
+    );
+    if (!rows.length) return res.status(403).json({ error: 'HOA inexistente o inactiva' });
+    if (!req.authUser.is_admin) {
+      const ok = (req.authUser.hoas || []).some(
+        (h) => h.hoa_id === hoaId && String(h.role || '').length > 0);
+      if (!ok) return res.status(403).json({ error: 'HOA fuera de tu alcance' });
+    }
+    req.hoaId = hoaId;
+    req.hoa = rows[0];
+    next();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 function publicUser(user) {
   if (!user) return null;
   const { ...rest } = user;
@@ -170,6 +205,8 @@ module.exports = {
   isReadOnly,
   requireAuth,
   requireReadWrite,
+  requireAdmin,
+  requireHoaScope,
   loadUserHoas,
   publicUser,
 };

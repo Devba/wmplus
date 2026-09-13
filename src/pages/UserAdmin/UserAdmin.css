@@ -1,0 +1,16 @@
+.useradmin { padding: 1rem 1.25rem; color: #f1f5f9; }
+.useradmin h2 { margin: 0 0 0.75rem; }
+.useradmin h3 { margin: 1.25rem 0 0.5rem; font-size: 0.95rem; color: #a5b4fc; }
+.ua-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.ua-row input { padding: 0.4rem 0.55rem; border-radius: 0.375rem; border: 1px solid #475569; background: #0f172a; color: #f1f5f9; }
+.ua-row button, .ua-actions button, .ua-actions select {
+  padding: 0.4rem 0.6rem; border-radius: 0.375rem; border: 1px solid #4f46e5;
+  background: #312e81; color: #fff; cursor: pointer; font-size: 0.8rem;
+}
+.ua-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+.ua-table th, .ua-table td { border: 1px solid #334155; padding: 0.35rem 0.5rem; text-align: left; }
+.ua-table th { background: #1e293b; }
+.ua-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.ua-error { color: #fca5a5; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); padding: 0.5rem; border-radius: 0.375rem; }
+.ua-notice { color: #6ee7b7; background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.4); padding: 0.5rem; border-radius: 0.375rem; }
+.ua-hint { font-size: 0.75rem; color: #94a3b8; }

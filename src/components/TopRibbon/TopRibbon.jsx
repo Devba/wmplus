@@ -1,8 +1,29 @@
 
-import './TopRibbon.css'
+import { useEffect, useState } from 'react';
+import './TopRibbon.css';
+import { apiFetch } from '../../config/api';
 
 
-function TopRibbon({ onSelectPage, user, onLogout }) {
+function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
+  const [hoas, setHoas] = useState([]);
+
+  // FASE A2: HOAs alcanzables (asignadas; admin: todas). Auto-selección inicial.
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) { setHoas([]); return; }
+    (async () => {
+      try {
+        const data = await apiFetch('/auth/hoas');
+        if (cancelled) return;
+        const list = data.hoas || [];
+        setHoas(list);
+        if (!activeHoa && list.length === 1) onSelectHoa(list[0].hoa_id || list[0].id);
+      } catch {
+        if (!cancelled) setHoas([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
   const scopeLabel = !user
     ? ''
     : user.is_admin
@@ -213,6 +234,40 @@ function TopRibbon({ onSelectPage, user, onLogout }) {
       </div>
     </div>
     <div className="group-label">USUARIO (clic = salir)</div>
+  </div>
+)}
+
+{/* FASE A2: acceso a administración (solo admin global) */}
+{user && user.is_admin && (
+  <div className="ribbon-group" title="Administración de usuarios">
+    <div className="ribbon-buttons">
+      <div className="ribbon-btn" onClick={() => onSelectPage('user-admin')} style={{ cursor: 'pointer' }}>
+        <div className="icon icon-addressbook"></div>
+        <div className="label">Admin<br />Usuarios</div>
+      </div>
+    </div>
+    <div className="group-label">ADMIN</div>
+  </div>
+)}
+
+{/* FASE A2: selector de HOA activa */}
+{user && hoas.length > 0 && (
+  <div className="ribbon-group" title="HOA activa (scope de datos)">
+    <div className="ribbon-buttons">
+      <select
+        value={activeHoa || ''}
+        onChange={(e) => onSelectHoa(e.target.value)}
+        style={{ maxWidth: 170, padding: '0.35rem', borderRadius: 6 }}
+      >
+        <option value="">-- HOA --</option>
+        {hoas.map((h) => (
+          <option key={h.hoa_id || h.id} value={h.hoa_id || h.id}>
+            {h.hoa_code} · {h.legal_name}
+          </option>
+        ))}
+      </select>
+    </div>
+    <div className="group-label">HOA ACTIVA</div>
   </div>
 )}
 

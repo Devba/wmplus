@@ -11,6 +11,7 @@ import MainDirectory from './MainDirectory';
 import Settings from './Settings';
 import VendorIdList from './VendorIdList';
 import Login from './Login/Login';
+import UserAdmin from './UserAdmin/UserAdmin';
 
 
 
@@ -25,5 +26,6 @@ export const pageMap = {
   'settings': Settings,
   'vendor-id-list': VendorIdList,
   'login': Login,
+  'user-admin': UserAdmin,
   };
 
