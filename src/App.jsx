@@ -167,10 +167,21 @@ function handleNavigationDiscard() {
   }
 }
 
-function handleNavigationCancel() {
-  setPendingPage(null);
-  setShowNavigationPrompt(false);
-}
+  function handleNavigationCancel() {
+    setPendingPage(null);
+    setShowNavigationPrompt(false);
+  }
+
+  // FASE A: cierre de sesión (revoca en backend y vuelve al Login)
+  async function handleLogout() {
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+    } catch {
+      // igual se limpia el estado local
+    }
+    setAuthUser(null);
+    setCurrentPage('master-navigation-panel');
+  }
 
   function renderPage() {
     const Page = pageMap[currentPage];
@@ -199,7 +210,7 @@ function handleNavigationCancel() {
         <Login onLogin={setAuthUser} />
       ) : (<>
       <div className="top-ribbon">
-        <TopRibbon onSelectPage={handleSelectPage} />
+        <TopRibbon onSelectPage={handleSelectPage} user={authUser} onLogout={handleLogout} />
       </div>
 
       <div className="middle-content">

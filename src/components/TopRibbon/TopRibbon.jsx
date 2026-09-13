@@ -2,7 +2,12 @@
 import './TopRibbon.css'
 
 
-function TopRibbon({ onSelectPage }) {
+function TopRibbon({ onSelectPage, user, onLogout }) {
+  const scopeLabel = !user
+    ? ''
+    : user.is_admin
+      ? 'admin · todas las HOAs'
+      : (user.hoas || []).map((h) => `${h.hoa_code} · ${h.role}`).join(', ') || 'sin HOAs';
   return (
     <div className="top-ribbon">
     <div className="ribbon-inner">
@@ -197,6 +202,19 @@ function TopRibbon({ onSelectPage }) {
 
 
 
+
+{/* FASE A: chip de usuario/scope visible */}
+{user && (
+  <div className="ribbon-group" title={`Sesión: ${user.login_name}`}>
+    <div className="ribbon-buttons">
+      <div className="ribbon-btn" onClick={onLogout} style={{ cursor: 'pointer' }} title="Cerrar sesión">
+        <div className="icon icon-showdetailspage"></div>
+        <div className="label">{user.display_name || user.login_name}<br />{scopeLabel}</div>
+      </div>
+    </div>
+    <div className="group-label">USUARIO (clic = salir)</div>
+  </div>
+)}
 
 {/* End ribbon-inner */}
   </div>
