@@ -91,8 +91,7 @@
 .apr-btn-filter,
 .apr-btn-reset,
 .apr-btn-back,
-.apr-btn-ach,
-.apr-btn-batch {
+.apr-btn-ach {
   color: #003cff;
 }
 
@@ -102,6 +101,46 @@
 
 .apr-btn-void {
   color: #d40000;
+}
+
+.apr-status-box-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.apr-status-box-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #000000;
+}
+
+.apr-status-box {
+  width: 105px;
+  height: 38px;
+  padding: 0 6px;
+  border: 1px solid #666666;
+  background: #ffffff;
+  color: #000000;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.apr-status-save-btn {
+  min-width: 70px !important;
+  width: 70px;
+  color: #000000;
+  background: #90ee90 !important;
+  border: 1px solid #000000 !important;
+}
+
+.apr-status-save-btn.dirty {
+  background: #ff6666 !important;
+}
+
+.apr-status-save-btn:disabled {
+  background: #d0d0d0 !important;
 }
 
 
@@ -204,6 +243,36 @@
   line-height: 1.1;
   text-align: center;
   white-space: normal;
+}
+
+.apr-table th:nth-child(1),
+.apr-table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+}
+
+.apr-table th:nth-child(2),
+.apr-table td:nth-child(2) {
+  position: sticky;
+  left: 100px;
+  z-index: 6;
+}
+
+.apr-table thead th:nth-child(1),
+.apr-table thead th:nth-child(2) {
+  z-index: 8;
+  background: #003b6f;
+}
+
+.apr-table tbody td:nth-child(1),
+.apr-table tbody td:nth-child(2) {
+  background: #ffffff;
+}
+
+.apr-table tbody tr:nth-child(even) td:nth-child(1),
+.apr-table tbody tr:nth-child(even) td:nth-child(2) {
+  background: #f7f9fc;
 }
 
 .apr-table tbody td {

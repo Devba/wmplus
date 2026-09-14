@@ -75,15 +75,17 @@ export async function executeVoid(tr, config) {
     return false;
   }
 
-  const eligibility = evaluateVoidEligibility(
-    tr,
-    config.statusColumn
+  if (config.page !== 'APR') {
+    const eligibility = evaluateVoidEligibility(
+      tr,
+      config.statusColumn
   );
 
   if (!eligibility.allowed) {
-    window.alert(eligibility.message);
-    return false;
+      window.alert(eligibility.message);
+      return false;
   }
+}
 
   const confirmed = window.confirm(
     config.confirmMessage ||

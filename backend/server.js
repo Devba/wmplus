@@ -7124,18 +7124,21 @@ app.post('/api/apr/enter-payment', async (req, res) => {
           parseDecimal(credit);
 
         const [insertResult] = await conn.query(`
-          INSERT INTO AssessmentPaymentRegister
+            INSERT INTO AssessmentPaymentRegister
             (TransactionNumber, ResidentAccountID, PaymentType, PaymentDate,
+             DateCleared, MonthCleared,
              AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount,
              BankAccountID, GLNumber, ElectronicPaymentID,
              MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins,
              Frequency, PeriodNumber, OperatorID)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         `, [
           transactionNumber,
           residentAccountId,
           paymentType,
           payDate,
+          payDate,
+          Number(payDate.slice(5, 7)),
           annualPayment,
           specialPayment,
           credit,
@@ -7162,6 +7165,9 @@ app.post('/api/apr/enter-payment', async (req, res) => {
           frequency,
           periodNumber,
           paymentDate: payDate,
+          dateCleared: payDate,
+          monthCleared: Number(payDate.slice(5, 7)),
+          status: 'POSTED',
           electronicPaymentId: electronicPaymentId || null,
           bankAccountId,
           glNumber: rowGlNumber || glNumber || null
@@ -8163,7 +8169,7 @@ app.get('/api/apr/list', async (req, res) => {
        AND aps.MgtCoClientID = apr.MgtCoClientID
        AND aps.HOALicenseNumber = apr.HOALicenseNumber
 
-      WHERE apr.DeletedFlag != 'Y'
+      WHERE apr.Status IN ('POSTED', 'VOID')
 
       ORDER BY apr.TimeStampCreated ASC
 
@@ -8246,6 +8252,760 @@ async function resolveEffectiveAssessmentBank(conn, sectionType, payDate, effMgt
   if (!isHistorical && String(b.ActiveFlag||'Y').toUpperCase() !== 'Y') throw Object.assign(new Error(`${sectionType} receiving bank is not active.`), { status: 400 });
   return { bankAccountId: resolved, bankType: b.BankType, bankName: b.BankName||'', bankId: b.BankID||'', revenueGlNumber: row.RevenueGLNumber||null };
 }
+
+// ============================================================
+// APR - ADJUST CLEARED DATE
+// PaymentDate remains the original deposit/payment date.
+// Only DateCleared / MonthCleared and Cash Flow TransactionDate
+// are changed. Bank ledger CurrentBalance is NOT changed.
+// ============================================================
+app.post('/api/apr/adjust-cleared-date', async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const transactionNumber =
+      String(req.body?.transactionNumber || '').trim();
+
+    const clearedDate =
+      String(req.body?.clearedDate || '').trim();
+
+    if (!transactionNumber || !clearedDate) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error:
+          'Transaction number and cleared date are required.'
+      });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(clearedDate)) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Cleared date must be YYYY-MM-DD.'
+      });
+    }
+
+    const [yearText, monthText, dayText] =
+      clearedDate.split('-');
+
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+
+    const clearDateCheck =
+      new Date(year, month - 1, day);
+
+    if (
+      clearDateCheck.getFullYear() !== year ||
+      clearDateCheck.getMonth() !== month - 1 ||
+      clearDateCheck.getDate() !== day
+    ) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Invalid cleared date.'
+      });
+    }
+
+    const hoaNowValue = await hoaNow(connection);
+
+    const todayText =
+      hoaNowValue.hoaLocalDateTime.slice(0, 10);
+
+    if (clearedDate > todayText) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        error: 'Cleared date cannot be in the future.'
+      });
+    }
+
+    const [aprRows] = await connection.query(`
+      SELECT
+        APRTransactionID,
+        TransactionNumber,
+        PaymentDate,
+        DateCleared,
+        MonthCleared,
+        BankAccountID,
+        Status,
+        DeletedFlag
+      FROM AssessmentPaymentRegister
+      WHERE TransactionNumber = ?
+        AND Status = 'POSTED'
+        AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+      FOR UPDATE
+    `, [transactionNumber]);
+
+    if (aprRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        error:
+          'Active APR transaction was not found.'
+      });
+    }
+
+    const originalClearedDate =
+      aprRows[0].DateCleared instanceof Date
+        ? aprRows[0].DateCleared
+            .toISOString()
+            .slice(0, 10)
+        : String(
+            aprRows[0].DateCleared || ''
+          ).slice(0, 10);
+
+    if (!originalClearedDate) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error:
+          'This APR transaction does not have a cleared date.'
+      });
+    }
+
+    const originalClearedYear =
+      Number(originalClearedDate.slice(0, 4));
+
+    if (originalClearedYear !== year) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error:
+          'Moving an APR payment into a different fiscal year is not yet supported.'
+      });
+    }
+
+    const bankAccountIds = [
+      ...new Set(
+        aprRows
+          .map((row) => Number(row.BankAccountID))
+          .filter((value) => value > 0)
+      )
+    ];
+
+    if (bankAccountIds.length === 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        error:
+          'APR receiving bank could not be determined.'
+      });
+    }
+
+    const updatedAt =
+      hoaNowValue.utcDateTime;
+
+    for (const bankAccountId of bankAccountIds) {
+      const [bankRows] = await connection.query(`
+        SELECT
+          BankAccountID,
+          BankID
+        FROM BankAccount
+        WHERE BankAccountID = ?
+        LIMIT 1
+      `, [bankAccountId]);
+
+      if (!bankRows[0]?.BankID) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          error:
+            `BankAccountID ${bankAccountId} could not be resolved.`
+        });
+      }
+
+      const cashFlowTable =
+        getCashFlowBankTableName(
+          bankRows[0].BankID
+        );
+
+      const [cashFlowRows] =
+        await connection.query(`
+          SELECT
+            CashFlowTransactionID
+          FROM ${cashFlowTable}
+          WHERE SourceRegister = 'APR'
+            AND SourceTransactionNumber = ?
+            AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+            AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+          FOR UPDATE
+        `, [transactionNumber]);
+
+      if (cashFlowRows.length === 0) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          error:
+            `Active APR Cash Flow transaction was not found in ${cashFlowTable}.`
+        });
+      }
+
+      await connection.query(`
+        UPDATE ${cashFlowTable}
+        SET
+          TransactionDate = ?,
+          TimeStampUpdated = ?
+        WHERE SourceRegister = 'APR'
+          AND SourceTransactionNumber = ?
+          AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+          AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+      `, [
+        clearedDate,
+        updatedAt,
+        transactionNumber
+      ]);
+
+      const [ledgerRows] =
+        await connection.query(`
+          SELECT
+            CashFlowLedgerID
+          FROM CashFlowLedgerMaster
+          WHERE BankAccountID = ?
+            AND FiscalYearLabel = ?
+            AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+          LIMIT 1
+          FOR UPDATE
+        `, [
+          bankAccountId,
+          String(year)
+        ]);
+
+      if (!ledgerRows[0]) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          error:
+            'Cash Flow Ledger Master is not established for this bank and fiscal year.'
+        });
+      }
+
+      const [lastPostedRows] =
+        await connection.query(`
+          SELECT
+            MAX(TransactionDate)
+              AS LastPostedTransactionDate
+          FROM ${cashFlowTable}
+          WHERE BankAccountID = ?
+            AND TransactionDate BETWEEN ? AND ?
+            AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+            AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+        `, [
+          bankAccountId,
+          `${year}-01-01`,
+          `${year}-12-31`
+        ]);
+
+      const lastPostedTransactionDate =
+        lastPostedRows[0]
+          ?.LastPostedTransactionDate || null;
+
+      await connection.query(`
+        UPDATE CashFlowLedgerMaster
+        SET
+          LastPostedTransactionDate = ?,
+          LastPostedDateTime = ?,
+          TimeStampUpdated = ?
+        WHERE CashFlowLedgerID = ?
+      `, [
+        lastPostedTransactionDate,
+        updatedAt,
+        updatedAt,
+        ledgerRows[0].CashFlowLedgerID
+      ]);
+    }
+
+    await connection.query(`
+      UPDATE AssessmentPaymentRegister
+      SET
+        DateCleared = ?,
+        MonthCleared = ?,
+        TimeStampUpdated = ?
+      WHERE TransactionNumber = ?
+        AND Status = 'POSTED'
+        AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+    `, [
+      clearedDate,
+      month,
+      updatedAt,
+      transactionNumber
+    ]);
+
+    await connection.commit();
+
+    return res.json({
+      success: true,
+      message:
+        'APR cleared date adjusted successfully.',
+      transactionNumber,
+      clearedDate,
+      monthCleared: month,
+      status: 'Cleared'
+    });
+
+  } catch (err) {
+    try {
+      await connection.rollback();
+    } catch (_) {}
+
+    console.error(
+      'Error adjusting APR cleared date:',
+      err
+    );
+
+    return res.status(500).json({
+      error:
+        'Failed to adjust APR cleared date.',
+      details: err.message
+    });
+
+  } finally {
+    connection.release();
+  }
+});
+
+
+
+// ============================================================
+// APR - ADJUST CLEARED DATE - MULTIPLE SELECTED PAYMENTS
+// All selected APR transactions are changed as one DB transaction.
+// If any selected transaction fails validation, NONE are changed.
+// PaymentDate remains unchanged.
+// Cash Flow TransactionDate follows the revised DateCleared.
+// Bank ledger CurrentBalance is NOT changed.
+// ============================================================
+app.post(
+  '/api/apr/adjust-cleared-date-batch',
+  async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const transactionNumbers = [
+        ...new Set(
+          (Array.isArray(req.body?.transactionNumbers)
+            ? req.body.transactionNumbers
+            : []
+          )
+            .map((value) =>
+              String(value || '').trim()
+            )
+            .filter(Boolean)
+        )
+      ];
+
+      const clearedDate =
+        String(
+          req.body?.clearedDate || ''
+        ).trim();
+
+      if (
+        transactionNumbers.length === 0 ||
+        !clearedDate
+      ) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          error:
+            'At least one transaction number and a cleared date are required.'
+        });
+      }
+
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(
+          clearedDate
+        )
+      ) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          error:
+            'Cleared date must be YYYY-MM-DD.'
+        });
+      }
+
+      const [
+        yearText,
+        monthText,
+        dayText
+      ] = clearedDate.split('-');
+
+      const year = Number(yearText);
+      const month = Number(monthText);
+      const day = Number(dayText);
+
+      const clearDateCheck =
+        new Date(
+          year,
+          month - 1,
+          day
+        );
+
+      if (
+        clearDateCheck.getFullYear() !== year ||
+        clearDateCheck.getMonth() !==
+          month - 1 ||
+        clearDateCheck.getDate() !== day
+      ) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          error: 'Invalid cleared date.'
+        });
+      }
+
+      const hoaNowValue =
+        await hoaNow(connection);
+
+      const todayText =
+        hoaNowValue.hoaLocalDateTime
+          .slice(0, 10);
+
+      if (clearedDate > todayText) {
+        await connection.rollback();
+
+        return res.status(400).json({
+          error:
+            'Cleared date cannot be in the future.'
+        });
+      }
+
+      const updatedAt =
+        hoaNowValue.utcDateTime;
+
+      const affectedBankAccountIds =
+        new Set();
+
+      for (
+        const transactionNumber
+        of transactionNumbers
+      ) {
+        const [aprRows] =
+          await connection.query(`
+            SELECT
+              APRTransactionID,
+              TransactionNumber,
+              PaymentDate,
+              DateCleared,
+              MonthCleared,
+              BankAccountID,
+              Status,
+              DeletedFlag
+            FROM AssessmentPaymentRegister
+            WHERE TransactionNumber = ?
+              AND Status = 'POSTED'
+              AND (
+                DeletedFlag IS NULL
+                OR DeletedFlag != 'Y'
+              )
+            FOR UPDATE
+          `, [transactionNumber]);
+
+        if (aprRows.length === 0) {
+          await connection.rollback();
+
+          return res.status(404).json({
+            error:
+              `Active APR transaction ${transactionNumber} was not found.`
+          });
+        }
+
+        const originalClearedDate =
+          aprRows[0].DateCleared
+            instanceof Date
+            ? aprRows[0].DateCleared
+                .toISOString()
+                .slice(0, 10)
+            : String(
+                aprRows[0].DateCleared || ''
+              ).slice(0, 10);
+
+        if (!originalClearedDate) {
+          await connection.rollback();
+
+          return res.status(409).json({
+            error:
+              `APR transaction ${transactionNumber} does not have a cleared date.`
+          });
+        }
+
+        const originalClearedYear =
+          Number(
+            originalClearedDate.slice(0, 4)
+          );
+
+        if (
+          originalClearedYear !== year
+        ) {
+          await connection.rollback();
+
+          return res.status(409).json({
+            error:
+              `APR transaction ${transactionNumber} cannot be moved into a different fiscal year.`
+          });
+        }
+
+        const bankAccountIds = [
+          ...new Set(
+            aprRows
+              .map((row) =>
+                Number(row.BankAccountID)
+              )
+              .filter(
+                (value) => value > 0
+              )
+          )
+        ];
+
+        if (
+          bankAccountIds.length === 0
+        ) {
+          await connection.rollback();
+
+          return res.status(409).json({
+            error:
+              `Receiving bank could not be determined for APR transaction ${transactionNumber}.`
+          });
+        }
+
+        for (
+          const bankAccountId
+          of bankAccountIds
+        ) {
+          const [bankRows] =
+            await connection.query(`
+              SELECT
+                BankAccountID,
+                BankID
+              FROM BankAccount
+              WHERE BankAccountID = ?
+              LIMIT 1
+            `, [bankAccountId]);
+
+          if (!bankRows[0]?.BankID) {
+            await connection.rollback();
+
+            return res.status(409).json({
+              error:
+                `BankAccountID ${bankAccountId} could not be resolved.`
+            });
+          }
+
+          const cashFlowTable =
+            getCashFlowBankTableName(
+              bankRows[0].BankID
+            );
+
+          const [cashFlowRows] =
+            await connection.query(`
+              SELECT
+                CashFlowTransactionID
+              FROM ${cashFlowTable}
+              WHERE SourceRegister = 'APR'
+                AND SourceTransactionNumber = ?
+                AND (
+                  VoidFlag IS NULL
+                  OR VoidFlag != 'Y'
+                )
+                AND (
+                  DeletedFlag IS NULL
+                  OR DeletedFlag != 'Y'
+                )
+              FOR UPDATE
+            `, [transactionNumber]);
+
+          if (
+            cashFlowRows.length === 0
+          ) {
+            await connection.rollback();
+
+            return res.status(409).json({
+              error:
+                `Active APR Cash Flow transaction ${transactionNumber} was not found in ${cashFlowTable}.`
+            });
+          }
+
+          const [ledgerRows] =
+            await connection.query(`
+              SELECT
+                CashFlowLedgerID
+              FROM CashFlowLedgerMaster
+              WHERE BankAccountID = ?
+                AND FiscalYearLabel = ?
+                AND (
+                  ActiveFlag IS NULL
+                  OR ActiveFlag != 'N'
+                )
+              LIMIT 1
+              FOR UPDATE
+            `, [
+              bankAccountId,
+              String(year)
+            ]);
+
+          if (!ledgerRows[0]) {
+            await connection.rollback();
+
+            return res.status(409).json({
+              error:
+                'Cash Flow Ledger Master is not established for this bank and fiscal year.'
+            });
+          }
+
+          await connection.query(`
+            UPDATE ${cashFlowTable}
+            SET
+              TransactionDate = ?,
+              TimeStampUpdated = ?
+            WHERE SourceRegister = 'APR'
+              AND SourceTransactionNumber = ?
+              AND (
+                VoidFlag IS NULL
+                OR VoidFlag != 'Y'
+              )
+              AND (
+                DeletedFlag IS NULL
+                OR DeletedFlag != 'Y'
+              )
+          `, [
+            clearedDate,
+            updatedAt,
+            transactionNumber
+          ]);
+
+          affectedBankAccountIds.add(
+            bankAccountId
+          );
+        }
+
+        await connection.query(`
+          UPDATE AssessmentPaymentRegister
+          SET
+            DateCleared = ?,
+            MonthCleared = ?,
+            TimeStampUpdated = ?
+          WHERE TransactionNumber = ?
+            AND Status = 'POSTED'
+            AND (
+              DeletedFlag IS NULL
+              OR DeletedFlag != 'Y'
+            )
+        `, [
+          clearedDate,
+          month,
+          updatedAt,
+          transactionNumber
+        ]);
+      }
+
+      for (
+        const bankAccountId
+        of affectedBankAccountIds
+      ) {
+        const [bankRows] =
+          await connection.query(`
+            SELECT BankID
+            FROM BankAccount
+            WHERE BankAccountID = ?
+            LIMIT 1
+          `, [bankAccountId]);
+
+        const cashFlowTable =
+          getCashFlowBankTableName(
+            bankRows[0].BankID
+          );
+
+        const [lastPostedRows] =
+          await connection.query(`
+            SELECT
+              MAX(TransactionDate)
+                AS LastPostedTransactionDate
+            FROM ${cashFlowTable}
+            WHERE BankAccountID = ?
+              AND TransactionDate
+                BETWEEN ? AND ?
+              AND (
+                VoidFlag IS NULL
+                OR VoidFlag != 'Y'
+              )
+              AND (
+                DeletedFlag IS NULL
+                OR DeletedFlag != 'Y'
+              )
+          `, [
+            bankAccountId,
+            `${year}-01-01`,
+            `${year}-12-31`
+          ]);
+
+        const lastPostedTransactionDate =
+          lastPostedRows[0]
+            ?.LastPostedTransactionDate ||
+          null;
+
+        await connection.query(`
+          UPDATE CashFlowLedgerMaster
+          SET
+            LastPostedTransactionDate = ?,
+            LastPostedDateTime = ?,
+            TimeStampUpdated = ?
+          WHERE BankAccountID = ?
+            AND FiscalYearLabel = ?
+            AND (
+              ActiveFlag IS NULL
+              OR ActiveFlag != 'N'
+            )
+        `, [
+          lastPostedTransactionDate,
+          updatedAt,
+          updatedAt,
+          bankAccountId,
+          String(year)
+        ]);
+      }
+
+      await connection.commit();
+
+      return res.json({
+        success: true,
+        message:
+          'Selected APR cleared dates adjusted successfully.',
+        transactionNumbers,
+        transactionCount:
+          transactionNumbers.length,
+        clearedDate,
+        monthCleared: month,
+        status: 'Cleared'
+      });
+
+    } catch (err) {
+      try {
+        await connection.rollback();
+      } catch (_) {}
+
+      console.error(
+        'Error adjusting selected APR cleared dates:',
+        err
+      );
+
+      return res.status(500).json({
+        error:
+          'Failed to adjust selected APR cleared dates.',
+        details: err.message
+      });
+
+    } finally {
+      connection.release();
+    }
+  }
+);
+
+
+
 
 // POST /api/apr/void — void server-side with full shared-transaction reversal + historical full-year replay (V6 RECONCILED)
 app.post('/api/apr/void', async (req, res) => {
@@ -8393,8 +9153,10 @@ app.post('/api/apr/void', async (req, res) => {
     try {
       await conn.query(
         `UPDATE ${perBankTable}
-         SET VoidFlag='Y',
-             DeletedFlag='Y'
+         SET ActiveCashInAmount=0.00,
+          ActiveCashOutAmount=0.00,
+          VoidFlag='Y',
+          DeletedFlag='Y'
          WHERE SourceRegister='APR'
            AND SourceTransactionNumber=?`,
         [transactionNumber]
@@ -8406,6 +9168,138 @@ app.post('/api/apr/void', async (req, res) => {
     }
   }
 } catch (e) {}
+
+// ------------------------------------------------------------
+// APR VOID - REVERSE BANK LEDGER BALANCE
+// Reverse each bank by only the APR amount originally posted
+// to that bank. Cash Flow rows have already been marked VOID.
+// ------------------------------------------------------------
+const voidAmountsByBank = new Map();
+
+for (const row of rows) {
+  const bankAccountId =
+    Number(row.BankAccountID) || 0;
+
+  const rowAmount =
+    Number(row.TotalAmount) || 0;
+
+  if (bankAccountId > 0 && rowAmount !== 0) {
+    voidAmountsByBank.set(
+      bankAccountId,
+      (voidAmountsByBank.get(bankAccountId) || 0) +
+        rowAmount
+    );
+  }
+}
+
+const voidPostedAt =
+  (await hoaNow(conn)).utcDateTime;
+
+const fiscalYearLabel =
+  String(fiscalYearBegins || '')
+    .slice(0, 4);
+
+for (
+  const [bankAccountId, amountToReverse]
+  of voidAmountsByBank.entries()
+) {
+  const [ledgerRows] = await conn.query(`
+    SELECT
+      CashFlowLedgerID,
+      CurrentBalance
+    FROM CashFlowLedgerMaster
+    WHERE BankAccountID = ?
+      AND FiscalYearLabel = ?
+      AND (
+        ActiveFlag IS NULL
+        OR ActiveFlag != 'N'
+      )
+    LIMIT 1
+    FOR UPDATE
+  `, [
+    bankAccountId,
+    fiscalYearLabel
+  ]);
+
+  if (!ledgerRows[0]) {
+    throw Object.assign(
+      new Error(
+        `Cash Flow Ledger Master is not established for BankAccountID ${bankAccountId} and fiscal year ${fiscalYearLabel}.`
+      ),
+      { status: 409 }
+    );
+  }
+
+  const [bankRows] = await conn.query(`
+    SELECT BankID
+    FROM BankAccount
+    WHERE BankAccountID = ?
+    LIMIT 1
+  `, [bankAccountId]);
+
+  if (!bankRows[0]?.BankID) {
+    throw Object.assign(
+      new Error(
+        `BankAccountID ${bankAccountId} could not be resolved.`
+      ),
+      { status: 409 }
+    );
+  }
+
+  const cashFlowTable =
+    getCashFlowBankTableName(
+      bankRows[0].BankID
+    );
+
+  const [lastPostedRows] = await conn.query(`
+    SELECT
+      MAX(TransactionDate)
+        AS LastPostedTransactionDate
+    FROM ${cashFlowTable}
+    WHERE BankAccountID = ?
+      AND TransactionDate BETWEEN ? AND ?
+      AND (
+        VoidFlag IS NULL
+        OR VoidFlag != 'Y'
+      )
+      AND (
+        DeletedFlag IS NULL
+        OR DeletedFlag != 'Y'
+      )
+  `, [
+    bankAccountId,
+    `${fiscalYearLabel}-01-01`,
+    `${fiscalYearLabel}-12-31`
+  ]);
+
+  const lastPostedTransactionDate =
+    lastPostedRows[0]
+      ?.LastPostedTransactionDate || null;
+
+  const newCurrentBalance =
+    Number(
+      ledgerRows[0].CurrentBalance || 0
+    ) -
+    Number(amountToReverse || 0);
+
+  await conn.query(`
+    UPDATE CashFlowLedgerMaster
+    SET
+      CurrentBalance = ?,
+      LastPostedTransactionDate = ?,
+      LastPostedDateTime = ?,
+      TimeStampUpdated = ?
+    WHERE CashFlowLedgerID = ?
+  `, [
+    newCurrentBalance,
+    lastPostedTransactionDate,
+    voidPostedAt,
+    voidPostedAt,
+    ledgerRows[0].CashFlowLedgerID
+  ]);
+}
+
+
         await conn.query(`SELECT RELEASE_LOCK(CONCAT('apr-replay:', ?, ':', ?, ':', ?))`, [mgtCoClientId, hoaLicenseNumber, residentAccountId]);
         await refreshAssessmentPaymentSummary(conn, { residentAccountId, mgt: mgtCoClientId, hoa: hoaLicenseNumber, paymentDate: null });
         return { success: true, transactionNumber, voided: true, historical: false, rowsVoided: rows.length, annualReversed: annualToReverse, specialReversed: specialToReverse, creditReversed: creditToReverse, totalReversed: totalAmountToReverse };
@@ -8483,14 +9377,14 @@ app.post('/api/apr/void', async (req, res) => {
           const specialApplied = Math.min(amount, specialDueBefore);
           const specialExcess = amount - specialApplied;
           if (specialApplied > 0) {
-            await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'SpecialAssessment', payDate, 0, specialApplied, 0, specialApplied, specialBank.bankAccountId, specialBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
+            await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, DateCleared, MonthCleared, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'SpecialAssessment', payDate, payDate, Number(payDate.slice(5, 7)), 0, specialApplied, 0, specialApplied, specialBank.bankAccountId, specialBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
             specialPaid += specialApplied;
           }
           if (specialExcess > 0) {
             const annualDueBeforeOverflow = Math.max(annualRequired - annualPaid, 0);
             const overflowToAnnual = Math.min(specialExcess, annualDueBeforeOverflow);
             const overflowToCredit = specialExcess - overflowToAnnual;
-            await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'AnnualDues', payDate, overflowToAnnual, 0, overflowToCredit, overflowToAnnual+overflowToCredit, annualBank.bankAccountId, annualBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
+            await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, DateCleared, MonthCleared, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'AnnualDues', payDate, payDate, Number(payDate.slice(5, 7)), overflowToAnnual, 0, overflowToCredit, overflowToAnnual+overflowToCredit, annualBank.bankAccountId, annualBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
             annualPaid += overflowToAnnual;
             annualCredit += overflowToCredit;
             if (overflowToCredit > 0) {
@@ -8501,7 +9395,7 @@ app.post('/api/apr/void', async (req, res) => {
           const annualDueBefore = Math.max(annualRequired - annualPaid, 0);
           const annualApplied = Math.min(amount, annualDueBefore);
           const annualExcess = amount - annualApplied;
-          await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'AnnualDues', payDate, annualApplied, 0, annualExcess, annualApplied+annualExcess, annualBank.bankAccountId, annualBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
+          await conn.query(`INSERT INTO AssessmentPaymentRegister (TransactionNumber, SubmissionKey, ResidentAccountID, PaymentType, PaymentDate, DateCleared, MonthCleared, AnnualDuesPayment, SpecialAssessmentPayment, CreditAmount, TotalAmount, BankAccountID, GLNumber, ElectronicPaymentID, MgtCoClientID, HOALicenseNumber, CurrentFiscalYearBegins, Frequency, PeriodNumber, OperatorID, Status, DeletedFlag, RecalcBatchID) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [txn, src.SubmissionKey, residentAccountId, 'AnnualDues', payDate, payDate, Number(payDate.slice(5, 7)), annualApplied, 0, annualExcess, annualApplied+annualExcess, annualBank.bankAccountId, annualBank.revenueGlNumber, src.ElectronicPaymentID||null, mgtCoClientId, hoaLicenseNumber, fyBegins, src.Frequency||null, src.PeriodNumber||null, src.OperatorID||operatorId, 'POSTED','N', batchId]);
           annualPaid += annualApplied;
           annualCredit += annualExcess;
           if (annualExcess > 0) {

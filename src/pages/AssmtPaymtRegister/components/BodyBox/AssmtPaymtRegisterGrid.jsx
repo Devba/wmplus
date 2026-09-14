@@ -1,19 +1,31 @@
 
 
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import HeaderRow from './HeaderRow';
 
 function AssmtPaymtRegisterGrid({
   paymentRows = [],
   onSelectPaymentRow,
+  onSelectPaymentRows,
   selectedPaymentRow
 }) {
   const [
-    selectedTransaction,
-    setSelectedTransaction
-  ] = useState(null);
+  selectedTransactions,
+  setSelectedTransactions
+] = useState([]);
+
+const selectionAnchorRef = useRef(null);
+const selectedRowRef = useRef(null);
+
+  useEffect(() => {
+    if (selectedRowRef.current) {
+      selectedRowRef.current.scrollIntoView({
+        block: 'end'
+      });
+    }
+  }, [selectedPaymentRow]);
 
   return (
     <div className="apr-table-wrap">
@@ -49,23 +61,107 @@ function AssmtPaymtRegisterGrid({
             (row, index) => (
               <tr
                 key={`${row.transaction}-${index}`}
+                ref={
+                selectedPaymentRow === row
+                  ? selectedRowRef
+                  : null
+              }
                 className={
-                  selectedPaymentRow === row
-                    ? 'is-selected'
-                    : ''
-                }
-                onClick={() => {
-                setSelectedTransaction(row.transaction);
-                onSelectPaymentRow?.(row);
-              }}
+  selectedTransactions.includes(row.transaction)
+    ? 'is-selected'
+    : ''
+}
+onClick={(event) => {
+  const transaction = row.transaction;
+
+  if (
+    event.shiftKey &&
+    selectionAnchorRef.current !== null
+  ) {
+    const start = Math.min(
+      selectionAnchorRef.current,
+      index
+    );
+
+    const end = Math.max(
+      selectionAnchorRef.current,
+      index
+    );
+
+    const rangeTransactions =
+      paymentRows
+        .slice(start, end + 1)
+        .map((item) => item.transaction);
+
+    const rangeRows =
+      paymentRows.slice(start, end + 1);
+
+    setSelectedTransactions(
+      rangeTransactions
+    );
+
+    onSelectPaymentRows?.(rangeRows);
+  } else if (event.ctrlKey) {
+    let nextTransactions;
+
+    if (
+      selectedTransactions.includes(
+        transaction
+      )
+    ) {
+      nextTransactions =
+        selectedTransactions.filter(
+          (item) => item !== transaction
+        );
+    } else {
+      nextTransactions = [
+        ...selectedTransactions,
+        transaction
+      ];
+    }
+
+    setSelectedTransactions(
+      nextTransactions
+    );
+
+    const nextRows =
+      paymentRows.filter((item) =>
+        nextTransactions.includes(
+          item.transaction
+        )
+      );
+
+    onSelectPaymentRows?.(nextRows);
+
+    selectionAnchorRef.current = index;
+  } else {
+    setSelectedTransactions([
+      transaction
+    ]);
+
+    onSelectPaymentRows?.([row]);
+
+    selectionAnchorRef.current = index;
+  }
+
+  onSelectPaymentRow?.(row);
+}}
               >
                 <td>{row.ownerAcct}</td>
                 <td>{row.ownerName}</td>
                 <td>{row.address}</td>
                 <td>{row.amount}</td>
                 <td>{row.dateDeposited}</td>
-                <td>{row.dateCleared}</td>
-                <td>{row.monthCleared}</td>
+                <td>
+                  {String(row.status || '').toUpperCase() === 'VOID'
+                    ? 'VOIDED'
+                    : row.dateCleared}
+                </td>
+                <td>
+                  {String(row.status || '').toUpperCase() === 'VOID'
+                    ? ''
+                    : row.monthCleared}
+                </td>
                 <td>{row.annualPayment}</td>
                 <td>{row.specialPayment}</td>
                 <td>{row.credit}</td>

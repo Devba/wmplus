@@ -1,5 +1,6 @@
 
 
+
 import TitleRow from './TitleRow';
 import ButtonRow from './ButtonRow';
 import TotalsRow from './TotalsRow';
@@ -11,7 +12,9 @@ function TopSection({
   onResetResidentFilter,
   onAddPayment,
   onVoidSuccess,
+  onPaymentCleared,
   selectedPaymentRow,
+  selectedPaymentRows,
   allResidentTotals
 }) {
   return (
@@ -21,8 +24,10 @@ function TopSection({
       <ButtonRow
         onSelectPage={onSelectPage}
         residents={residents}
+        selectedPaymentRow={selectedPaymentRow}
+        selectedPaymentRows={selectedPaymentRows}
         onApplyResidentFilter={
-          onApplyResidentFilter
+        onApplyResidentFilter
         }
         onResetResidentFilter={
           onResetResidentFilter
@@ -33,11 +38,14 @@ function TopSection({
         onVoidSuccess={
           onVoidSuccess
         }
+        onPaymentCleared={
+          onPaymentCleared
+        }
       />
 
-      <TotalsRow 
-      selectedPaymentRow={selectedPaymentRow}
-       allResidentTotals={allResidentTotals}
+      <TotalsRow
+        selectedPaymentRow={selectedPaymentRow}
+        allResidentTotals={allResidentTotals}
       />
     </div>
   );
