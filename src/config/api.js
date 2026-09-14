@@ -4,10 +4,9 @@ const getBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
-  // If running in browser on remote server
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `${window.location.protocol}//${window.location.hostname}/api`;
-  }
+  // Mismo-origen siempre: en dev lo sirve el proxy de vite y en producción
+  // el proxy Apache. (Antes se deducía por hostname y se dropeaba el puerto,
+  // rompiendo el acceso vía 127.0.0.1 o cualquier host no-localhost.)
   return '/api';
 };
 
