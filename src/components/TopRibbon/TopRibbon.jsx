@@ -268,6 +268,9 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
         style={{ maxWidth: 170, padding: '0.35rem', borderRadius: 6 }}
       >
         <option value="">-- HOA --</option>
+        {user && user.is_admin && (
+          <option value="all">Todas las HOAs</option>
+        )}
         {hoas.map((h) => (
           <option key={h.hoa_id || h.id} value={h.hoa_id || h.id}>
             {h.hoa_code} · {h.legal_name}
@@ -281,6 +284,7 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
         background: activeHoa ? '#10b981' : '#64748b', marginRight: 4,
       }} />
       {(() => {
+        if (String(activeHoa).toLowerCase() === 'all') return 'HOA: TODAS';
         const cur = hoas.find((h) => String(h.hoa_id || h.id) === String(activeHoa));
         return cur ? `HOA: ${cur.hoa_code}` : 'SIN HOA';
       })()}

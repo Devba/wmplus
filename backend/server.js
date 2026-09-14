@@ -387,6 +387,9 @@ app.post('/api/residents', authMid.requireHoaScope, async (req, res) => {
   try {
     const r = req.body;
     // Piloto sellado HOA: license/MgtCo/operador SIEMPRE de sesión, nunca del body.
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta para crear (no "Todas")' });
+    }
     const sesLicense = req.hoa.license_number;
     const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
     const sesOperator = req.authUser.login_name || 'SYSTEM';
@@ -548,6 +551,9 @@ app.put('/api/residents/:account_id', authMid.requireHoaScope, async (req, res) 
     const { account_id } = req.params;
     const r = req.body;
     // Piloto sellado HOA: solo filas de la HOA de sesión (404 si es ajena).
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta para editar (no "Todas")' });
+    }
     const sesLicense = req.hoa.license_number;
     const [ownRows] = await db.query(
       `SELECT ResidentAccountID FROM ResidentMaster

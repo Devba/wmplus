@@ -130,12 +130,16 @@ function isReadOnly(user) {
 }
 
 // Piloto filtro por HOA (tablas legacy con HOALicenseNumber).
-// Admin global -> sin filtro. Requiere requireHoaScope previo (req.hoa).
-// Devuelve { clause, params } para anteponer a queries de negocio.
-// Tablas nuevas Fase B+ usarán hoa_id (variante hoaIdFilter).
+// - Admin con X-HOA-ID=all -> sin filtro (ver todo).
+// - Admin con HOA concreta -> filtra igual que un manager (operar en contexto).
+// - Manager -> filtra por su HOA (requireHoaScope ya validó pertenencia).
+// Requiere requireHoaScope previo (req.hoa / req.hoaId).
 function hoaFilter(req, alias) {
   if (!req.authUser) throw new Error('requireAuth previo requerido');
-  if (req.authUser.is_admin) return { clause: '', params: [] };
+  if (req.hoaId === 'all') {
+    if (!req.authUser.is_admin) throw new Error('Vista global solo para administrador');
+    return { clause: '', params: [] };
+  }
   if (!req.hoa || !req.hoa.license_number) {
     throw new Error('requireHoaScope previo requerido');
   }
@@ -173,10 +177,19 @@ function requireAdmin(req, res, next) {
 
 // FASE A2: valida la HOA activa (header X-HOA-ID o ?hoa_id) contra las
 // asignaciones de la sesión. Admin bypass. Adjunta req.hoaId + req.hoa.
+// Valor especial 'all': solo admin (ver todo); resto -> 403.
 // 400 si falta, 403 si es ajena o inactiva.
 async function requireHoaScope(req, res, next) {
   try {
     const raw = (req.headers['x-hoa-id'] || req.query.hoa_id || '').toString().trim();
+    if (raw.toLowerCase() === 'all') {
+      if (!req.authUser.is_admin) {
+        return res.status(403).json({ error: 'Vista global solo para administrador' });
+      }
+      req.hoaId = 'all';
+      req.hoa = null;
+      return next();
+    }
     const hoaId = parseInt(raw, 10);
     if (!hoaId) return res.status(400).json({ error: 'HOA activa requerida (X-HOA-ID)' });
     const [rows] = await db.query(

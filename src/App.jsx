@@ -208,7 +208,9 @@ function handleNavigationDiscard() {
 
     if (Page) {
   return (
+  // key por HOA: al cambiar el selector la página se remonta y re-pide datos con el nuevo scope
   <Page
+    key={`${currentPage}::${activeHoa || 'no-hoa'}`}
     onSelectPage={handleSelectPage}
     registerNavigationGuard={registerNavigationGuard}
   />
