@@ -1511,85 +1511,61 @@ app.post('/api/deposit-register', async (req, res) => {
    5. SETTINGS: HOA PROFILE
    =========================================================== */
 
-app.get('/api/settings/hoa-profile', async (req, res) => {
+app.get('/api/settings/hoa-profile', authMid.requireHoaScope, async (req, res) => {
   try {
-    const [rows] = await db.query(`
-      SELECT 
-        ProfileID,
-        MgtCoClientID,
-        HOALicenseNumber,
-        HOAName,
-        HOABillingName,
-        HOALetterName,
-        HOAAddress,
-        HOAEmail,
-        ContactName,
-        ContactPhone,
-        ContactEmail,
-        HOANotes,
-        LicenseStatus,
-        SubscriptionRenewalDate,
-        LicenseType,
-        LicenseSize,
-        ClientNotes,
-        SelfManaged,
-        MgtCoName,
-        MgtCoAddress,
-        MgtCoContactName,
-        MgtCoContactTel,
-        MgtCoContactEmail,
-        ClientRepresentative,
-        RepPhone,
-        RepEmail,
-        MgtCoLetterEmail,
-        MgtCoLetterPhone,
-        ManagementNotes
-      FROM HOAProfile
-      LIMIT 1
-    `);
-    
-    if (rows.length === 0) {
-      return res.json({
-        hoaProfile: {},
-        clientInfo: {},
-        management: {}
-      });
+    // El directorio (hoam26_auth.hoa) ES el perfil: cambia con el combo.
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
     }
-
-    const r = rows[0];
+    const [mrows] = await adb.query(
+      `SELECT m.code AS mgt_code, m.legal_name AS mgt_name FROM mgt_company m
+        WHERE m.id = ? LIMIT 1`,
+      [req.hoa.mgt_company_id || 0]
+    );
+    const m = mrows[0] || {};
+    const h = req.hoa;
+    // req.hoa trae id/hoa_code/legal_name/state_code/city/license_number;
+    // se completa con la fila para billing/letter/status.
+    const [full] = await adb.query(
+      `SELECT billing_name, letter_name, address_line1, license_status,
+              license_type, subscription_renewal_date, self_managed, notes
+         FROM hoa WHERE id = ? LIMIT 1`,
+      [h.id]
+    );
+    const f = full[0] || {};
     res.json({
       hoaProfile: {
-        hoaCorporateName: r.HOAName || '',
-        hoaBillingName: r.HOABillingName || '',
-        hoaLetterName: r.HOALetterName || '',
-        hoaAddress: r.HOAAddress || '',
-        hoaEmail: r.HOAEmail || '',
-        hoaContactName: r.ContactName || '',
-        hoaContactTel: r.ContactPhone || '',
-        hoaNotes: r.HOANotes || ''
+        hoaCorporateName: h.legal_name || '',
+        hoaBillingName: f.billing_name || '',
+        hoaLetterName: f.letter_name || '',
+        hoaAddress: f.address_line1 || '',
+        hoaEmail: '',
+        hoaContactName: '',
+        hoaContactTel: '',
+        hoaNotes: f.notes || ''
       },
       clientInfo: {
-        clientId: r.MgtCoClientID || '',
-        licenseNumber: r.HOALicenseNumber || '',
-        licenseStatus: r.LicenseStatus || 'Active',
-        subscriptionRenewalDate: r.SubscriptionRenewalDate || '2026-12-31',
-        licenseType: r.LicenseType || 'Standard',
-        licenseSize: r.LicenseSize || '100',
-        clientNotes: r.ClientNotes || ''
+        clientId: m.mgt_code || '',
+        licenseNumber: h.license_number || '',
+        licenseStatus: f.license_status || 'Active',
+        subscriptionRenewalDate: f.subscription_renewal_date || '2026-12-31',
+        licenseType: f.license_type || 'Standard',
+        licenseSize: '100',
+        clientNotes: ''
       },
       management: {
-        selfManaged: r.SelfManaged || 'N',
-        mgtCoName: r.MgtCoName || '',
-        mgtCoAddress: r.MgtCoAddress || '',
-        mgtCoContactName: r.MgtCoContactName || '',
-        mgtCoContactTel: r.MgtCoContactTel || '',
-        mgtCoContactEmail: r.MgtCoContactEmail || '',
-        clientRepresentative: r.ClientRepresentative || '',
-        repTel: r.RepPhone || '',
-        repEmail: r.RepEmail || '',
-        mgtCoLetterEmail: r.MgtCoLetterEmail || '',
-        mgtCoLetterTel: r.MgtCoLetterPhone || '',
-        managementNotes: r.ManagementNotes || ''
+        selfManaged: f.self_managed || 'N',
+        mgtCoName: m.mgt_name || '',
+        mgtCoAddress: '',
+        mgtCoContactName: '',
+        mgtCoContactTel: '',
+        mgtCoContactEmail: '',
+        clientRepresentative: '',
+        repTel: '',
+        repEmail: '',
+        mgtCoLetterEmail: '',
+        mgtCoLetterTel: '',
+        managementNotes: ''
       }
     });
   } catch (err) {
@@ -1598,75 +1574,39 @@ app.get('/api/settings/hoa-profile', async (req, res) => {
   }
 });
 
-app.put('/api/settings/hoa-profile', async (req, res) => {
+app.put('/api/settings/hoa-profile', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
     const data = req.body;
     const hp = data.hoaProfile || {};
     const ci = data.clientInfo || {};
-    const mgt = data.management || {};
 
-    await db.query(`
-      UPDATE HOAProfile SET
-        HOAName = ?,
-        HOABillingName = ?,
-        HOALetterName = ?,
-        HOAAddress = ?,
-        HOAEmail = ?,
-        ContactName = ?,
-        ContactPhone = ?,
-        ContactEmail = ?,
-        HOANotes = ?,
-        MgtCoClientID = ?,
-        HOALicenseNumber = ?,
-        LicenseStatus = ?,
-        SubscriptionRenewalDate = ?,
-        LicenseType = ?,
-        LicenseSize = ?,
-        ClientNotes = ?,
-        SelfManaged = ?,
-        MgtCoName = ?,
-        MgtCoAddress = ?,
-        MgtCoContactName = ?,
-        MgtCoContactTel = ?,
-        MgtCoContactEmail = ?,
-        ClientRepresentative = ?,
-        RepPhone = ?,
-        RepEmail = ?,
-        MgtCoLetterEmail = ?,
-        MgtCoLetterPhone = ?,
-        ManagementNotes = ?,
-        TimeStampUpdated = NOW()
-      WHERE ProfileID = 1 OR MgtCoClientID = ?
+    // Solo columnas existentes en el directorio; license_number es identidad (no editable aquí).
+    await adb.query(`
+      UPDATE hoa SET
+        legal_name = ?,
+        billing_name = ?,
+        letter_name = ?,
+        address_line1 = ?,
+        license_status = ?,
+        license_type = ?,
+        subscription_renewal_date = ?,
+        self_managed = ?,
+        notes = ?
+      WHERE id = ?
     `, [
-      hp.hoaCorporateName || '',
+      hp.hoaCorporateName || req.hoa.legal_name,
       hp.hoaBillingName || '',
       hp.hoaLetterName || '',
       hp.hoaAddress || '',
-      hp.hoaEmail || '',
-      hp.hoaContactName || '',
-      hp.hoaContactTel || '',
-      hp.hoaEmail || '',
-      hp.hoaNotes || '',
-      ci.clientId || '',
-      ci.licenseNumber || '',
       ci.licenseStatus || 'Active',
-      ci.subscriptionRenewalDate || '',
-      ci.licenseType || '',
-      ci.licenseSize || '',
-      ci.clientNotes || '',
-      mgt.selfManaged || 'N',
-      mgt.mgtCoName || '',
-      mgt.mgtCoAddress || '',
-      mgt.mgtCoContactName || '',
-      mgt.mgtCoContactTel || '',
-      mgt.mgtCoContactEmail || '',
-      mgt.clientRepresentative || '',
-      mgt.repTel || '',
-      mgt.repEmail || '',
-      mgt.mgtCoLetterEmail || '',
-      mgt.mgtCoLetterTel || '',
-      mgt.managementNotes || '',
-      ci.clientId || 'MGTCO-001'
+      ci.licenseType || 'Standard',
+      ci.subscriptionRenewalDate || null,
+      (data.management || {}).selfManaged || 'N',
+      hp.hoaNotes || '',
+      req.hoa.id
     ]);
 
     res.json({ success: true, message: 'HOA Profile updated successfully' });
@@ -2263,10 +2203,17 @@ Rules:
    6. SETTINGS: BANKING & FISCAL YEAR
    =========================================================== */
 
-app.get('/api/settings/banking', async (req, res) => {
+app.get('/api/settings/banking', authMid.requireHoaScope, async (req, res) => {
   try {
-    const [bankRows] = await db.query(`SELECT * FROM BankAccount ORDER BY BankAccountID ASC`);
-    const [fiscalRows] = await db.query(`SELECT * FROM FiscalYearSetup LIMIT 1`);
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const [bankRows] = await db.query(
+      `SELECT * FROM BankAccount WHERE HOALicenseNumber = ? ORDER BY BankAccountID ASC`,
+      [req.hoa.license_number]);
+    const [fiscalRows] = await db.query(
+      `SELECT * FROM FiscalYearSetup WHERE HOALicenseNumber = ? LIMIT 1`,
+      [req.hoa.license_number]);
 
     const banks = bankRows.map(b => ({
       id: b.BankAccountID,
@@ -2310,8 +2257,12 @@ app.get('/api/settings/banking', async (req, res) => {
   }
 });
 
-app.put('/api/settings/banking', async (req, res) => {
+app.put('/api/settings/banking', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const { banks, fiscalSetup } = req.body;
 
     if (Array.isArray(banks)) {
@@ -2323,12 +2274,12 @@ app.put('/api/settings/banking', async (req, res) => {
               StartCheckNumber=?, GLCashAccount=?, AccountNumber=?, RoutingNumber=?,
               StartingBalance=?, StartingMonth=?, ContactPerson=?, ContactTel=?,
               ContactEmail=?, CoMingled=?, CoMingledWith=?, Notes=?, TimeStampUpdated=NOW()
-            WHERE BankAccountID=?
+            WHERE BankAccountID=? AND HOALicenseNumber=?
           `, [
             b.bankType||'', b.bankName||'', b.bankId||'', b.active||'Y', b.checkMode||'None',
             b.startCheck||'', b.glCashAccount||'', b.accountNumber||'', b.routingNumber||'',
             b.startingBalance||0.00, b.startingMonth||'January', b.contactPerson||'', b.contactTel||'',
-            b.contactEmail||'', b.coMingled||'N', b.coMingledWith||'', b.notes||'', b.id
+            b.contactEmail||'', b.coMingled||'N', b.coMingledWith||'', b.notes||'', b.id, sesLicense
           ]);
         }
       }
@@ -2342,12 +2293,12 @@ app.put('/api/settings/banking', async (req, res) => {
           AccountsReceivable=?, AccountsPayable=?, InterestEarned=?,
           PreviousYearsEndingIncome=?, MiscAssetEntry=?, MiscLiabilityEntry=?,
           Notes=?, TimeStampUpdated=NOW()
-        WHERE FiscalYearSetupID=1
+        WHERE HOALicenseNumber=?
       `, [
         f.openingRetainedEarnings||0, f.endingRetainedEarnings||0, f.currentFiscalYearIncome||0,
         f.accountsReceivable||0, f.accountsPayable||0, f.interestEarned||0,
         f.previousYearsEndingIncome||0, f.miscAssetEntry||0, f.miscLiabilityEntry||0,
-        f.notes||''
+        f.notes||'', sesLicense
       ]);
     }
 
@@ -2541,14 +2492,18 @@ app.post('/api/void/execute', async (req, res) => {
    SETTINGS: FINES / LATE FEES PROGRAMMING
    =========================================================== */
 
-app.get('/api/settings/fines-late-fees', async (req, res) => {
+app.get('/api/settings/fines-late-fees', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const [[configRow]] = await db.query(`
       SELECT *
       FROM FinesConfig
-      WHERE FinesConfigID = 1
+      WHERE HOALicenseNumber = ?
       LIMIT 1
-    `);
+    `, [sesLicense]);
 
     const [fineTypeRows] = await db.query(`
       SELECT
@@ -2560,21 +2515,23 @@ app.get('/api/settings/fines-late-fees', async (req, res) => {
         FineAmount,
         ActiveFlag
       FROM FineTypesList
+      WHERE HOALicenseNumber = ?
       ORDER BY FineCategory, SortOrder
-    `);
+    `, [sesLicense]);
 
     const [letterRows] = await db.query(`
       SELECT *
       FROM LetterRules
+      WHERE HOALicenseNumber = ?
       ORDER BY LetterRulesID
-    `);
+    `, [sesLicense]);
 
     const [[timingRow]] = await db.query(`
       SELECT *
       FROM TimingSchedule
-      WHERE TimingScheduleID = 1
+      WHERE HOALicenseNumber = ?
       LIMIT 1
-    `);
+    `, [sesLicense]);
 
     function buildFineTypeList(category) {
       return fineTypeRows
@@ -2684,8 +2641,12 @@ app.get('/api/settings/fines-late-fees', async (req, res) => {
 });
 
 
-app.put('/api/settings/fines-late-fees', async (req, res) => {
+app.put('/api/settings/fines-late-fees', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const {
       violationFineRules = {},
       fineTypesList = {},
@@ -2695,17 +2656,32 @@ app.put('/api/settings/fines-late-fees', async (req, res) => {
       timingSchedule = {}
     } = req.body;
 
-    await db.query(`
-      UPDATE FinesConfig
-      SET
-        RestartDays = ?,
-        FineAmount = ?,
-        TimeStampUpdated = NOW()
-      WHERE FinesConfigID = 1
-    `, [
-      Number(violationFineRules.restartDays || 0),
-      Number(violationFineRules.fineAmount || 0)
-    ]);
+    // Upsert por HOA (sin UNIQUE: SELECT luego INSERT/UPDATE).
+    const [fcRows] = await db.query(
+      `SELECT FinesConfigID FROM FinesConfig WHERE HOALicenseNumber = ? LIMIT 1`, [sesLicense]);
+    if (fcRows.length) {
+      await db.query(`
+        UPDATE FinesConfig
+        SET
+          RestartDays = ?,
+          FineAmount = ?,
+          TimeStampUpdated = NOW()
+        WHERE HOALicenseNumber = ?
+      `, [
+        Number(violationFineRules.restartDays || 0),
+        Number(violationFineRules.fineAmount || 0),
+        sesLicense
+      ]);
+    } else {
+      await db.query(`
+        INSERT INTO FinesConfig (HOALicenseNumber, RestartDays, FineAmount)
+        VALUES (?, ?, ?)
+      `, [
+        sesLicense,
+        Number(violationFineRules.restartDays || 0),
+        Number(violationFineRules.fineAmount || 0)
+      ]);
+    }
 
     async function saveFineTypeCategory(
       category,
@@ -2725,6 +2701,7 @@ app.put('/api/settings/fines-late-fees', async (req, res) => {
             ActiveFlag = ?
           WHERE FineCategory = ?
             AND SortOrder = ?
+            AND HOALicenseNumber = ?
         `, [
           i,
           row[0] || '',
@@ -2733,7 +2710,8 @@ app.put('/api/settings/fines-late-fees', async (req, res) => {
           Number(row[3] || 0),
           row[4] || 'Y',
           category,
-          i
+          i,
+          sesLicense
         ]);
       }
     }
@@ -2767,6 +2745,7 @@ app.put('/api/settings/fines-late-fees', async (req, res) => {
           FinalGL = ?,
           TimeStampUpdated = NOW()
         WHERE RuleType = ?
+          AND HOALicenseNumber = ?
       `, [
         Number(rule.letter1Amount || 0),
         rule.letter1PercentYN || 'N',
@@ -2778,7 +2757,8 @@ app.put('/api/settings/fines-late-fees', async (req, res) => {
         rule.letter2GL || '',
         Number(rule.finalAmount || 0),
         rule.finalGL || '',
-        ruleType
+        ruleType,
+        sesLicense
       ]);
     }
 
@@ -2797,23 +2777,42 @@ app.put('/api/settings/fines-late-fees', async (req, res) => {
       specialAssessmentLateFees
     );
 
-    await db.query(`
-      UPDATE TimingSchedule
-      SET
-        Warning1Days = ?,
-        Warning2Days = ?,
-        Collection1Days = ?,
-        Collection2Days = ?,
-        FinalDays = ?,
-        TimeStampUpdated = NOW()
-      WHERE TimingScheduleID = 1
-    `, [
-      Number(timingSchedule.warning1Days || 30),
-      Number(timingSchedule.warning2Days || 60),
-      Number(timingSchedule.collection1Days || 90),
-      Number(timingSchedule.collection2Days || 120),
-      Number(timingSchedule.finalDays || 150)
-    ]);
+    const [tsRows] = await db.query(
+      `SELECT TimingScheduleID FROM TimingSchedule WHERE HOALicenseNumber = ? LIMIT 1`, [sesLicense]);
+    if (tsRows.length) {
+      await db.query(`
+        UPDATE TimingSchedule
+        SET
+          Warning1Days = ?,
+          Warning2Days = ?,
+          Collection1Days = ?,
+          Collection2Days = ?,
+          FinalDays = ?,
+          TimeStampUpdated = NOW()
+        WHERE HOALicenseNumber = ?
+      `, [
+        Number(timingSchedule.warning1Days || 30),
+        Number(timingSchedule.warning2Days || 60),
+        Number(timingSchedule.collection1Days || 90),
+        Number(timingSchedule.collection2Days || 120),
+        Number(timingSchedule.finalDays || 150),
+        sesLicense
+      ]);
+    } else {
+      await db.query(`
+        INSERT INTO TimingSchedule
+          (HOALicenseNumber, Warning1Days, Warning2Days, Collection1Days,
+           Collection2Days, FinalDays)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [
+        sesLicense,
+        Number(timingSchedule.warning1Days || 30),
+        Number(timingSchedule.warning2Days || 60),
+        Number(timingSchedule.collection1Days || 90),
+        Number(timingSchedule.collection2Days || 120),
+        Number(timingSchedule.finalDays || 150)
+      ]);
+    }
 
     res.json({
       success: true,
@@ -2914,11 +2913,16 @@ async function activateDueBankChanges() {
 
 
 
-app.get('/api/settings/dues-programming', async (req, res) => {
+app.get('/api/settings/dues-programming', authMid.requireHoaScope, async (req, res) => {
   try {
 
     await activateDueBankChanges();
 
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
+    const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
     const [programRows] = await db.query(`
       SELECT
           DuesType,
@@ -2931,10 +2935,10 @@ app.get('/api/settings/dues-programming', async (req, res) => {
             '%m/%d/%Y'
           ) AS BankChangeEffectiveDate
         FROM DuesProgramming
-      WHERE MgtCoClientID = 'MGTCO-001'
-        AND HOALicenseNumber = 'HOA-FL-2024-001'
+      WHERE MgtCoClientID = ?
+        AND HOALicenseNumber = ?
         AND ActiveFlag = 'Y'
-    `);
+    `, [sesMgt, sesLicense]);
 
     const [rateRows] = await db.query(`
       SELECT
@@ -2943,8 +2947,9 @@ app.get('/api/settings/dues-programming', async (req, res) => {
         CurrentRate,
         NextRate
       FROM DuesRates
+      WHERE HOALicenseNumber = ?
       ORDER BY DuesRateID
-    `);
+    `, [sesLicense]);
 
     function buildSection(sectionType) {
       const program =
@@ -3030,8 +3035,14 @@ function firstDayOfNextMonth() {
 }
 
 
-app.put('/api/settings/dues-programming', async (req, res) => {
+app.put('/api/settings/dues-programming', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
+    const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
+    const sesOperator = req.authUser.login_name || 'USER';
     const {
       annualDues = {},
       specialAssessment = {}
@@ -3063,11 +3074,11 @@ app.put('/api/settings/dues-programming', async (req, res) => {
           PendingDepositBankAccountID,
           BankChangeEffectiveDate
         FROM DuesProgramming
-        WHERE MgtCoClientID = 'MGTCO-001'
-          AND HOALicenseNumber = 'HOA-FL-2024-001'
+        WHERE MgtCoClientID = ?
+          AND HOALicenseNumber = ?
           AND DuesType = ?
         LIMIT 1
-      `, [duesType]);
+      `, [sesMgt, sesLicense, duesType]);
 
       if (existing.length > 0) {
 
@@ -3107,8 +3118,8 @@ app.put('/api/settings/dues-programming', async (req, res) => {
   const [pendingHistory] = await db.query(`
     SELECT AssessmentBankAssignmentHistoryID
     FROM AssessmentBankAssignmentHistory
-    WHERE MgtCoClientID = 'MGTCO-001'
-      AND HOALicenseNumber = 'HOA-FL-2024-001'
+    WHERE MgtCoClientID = ?
+      AND HOALicenseNumber = ?
       AND DuesType = ?
       AND OldBankAccountID = ?
       AND NewBankAccountID = ?
@@ -3116,6 +3127,8 @@ app.put('/api/settings/dues-programming', async (req, res) => {
       AND Status = 'PENDING'
     LIMIT 1
   `, [
+    sesMgt,
+    sesLicense,
     duesType,
     currentBankId,
     requestedBankId,
@@ -3137,22 +3150,25 @@ app.put('/api/settings/dues-programming', async (req, res) => {
         TimeStampUpdated
       )
       VALUES (
-        'MGTCO-001',
-        'HOA-FL-2024-001',
+        ?,
+        ?,
         ?,
         ?,
         ?,
         NOW(),
         ?,
         'PENDING',
-        'USER',
+        ?,
         NOW()
       )
     `, [
+      sesMgt,
+      sesLicense,
       duesType,
       currentBankId,
       requestedBankId,
-      bankChangeEffectiveDateToSave
+      bankChangeEffectiveDateToSave,
+      sesOperator
     ]);
   }
 }
@@ -3167,16 +3183,21 @@ app.put('/api/settings/dues-programming', async (req, res) => {
               PendingDepositBankAccountID = ?,
               BankChangeEffectiveDate = ?,
               ActiveFlag = 'Y',
-              OperatorID = 'USER',
+              OperatorID = ?,
               TimeStampUpdated = NOW()
             WHERE DuesProgrammingID = ?
+              AND MgtCoClientID = ?
+              AND HOALicenseNumber = ?
         `, [
               section.paymentFrequency || 'Annually',
               sqlDate(section.dueDate),
               activeBankIdToSave,
               pendingBankIdToSave,
               bankChangeEffectiveDateToSave,
-              existing[0].DuesProgrammingID
+              sesOperator,
+              existing[0].DuesProgrammingID,
+              sesMgt,
+              sesLicense
             ]);
       } else {
         await db.query(`
@@ -3190,16 +3211,17 @@ app.put('/api/settings/dues-programming', async (req, res) => {
           ActiveFlag,
           OperatorID
         )
-        VALUES (?, ?, ?, ?, ?, ?, 'Y', 'USER')
+        VALUES (?, ?, ?, ?, ?, ?, 'Y', ?)
         `, [
-          'MGTCO-001',
-          'HOA-FL-2024-001',
+          sesMgt,
+          sesLicense,
           duesType,
           section.paymentFrequency || 'Annually',
           sqlDate(section.dueDate),
           section.depositBankAccountID
             ? Number(section.depositBankAccountID)
-            : null
+            : null,
+          sesOperator
         ]);
       }
     }
@@ -3245,6 +3267,7 @@ app.put('/api/settings/dues-programming', async (req, res) => {
         rateTypes.map(() => '?').join(',');
 
       params.push(
+        sesLicense,
         sectionType,
         ...rateTypes
       );
@@ -3262,7 +3285,8 @@ app.put('/api/settings/dues-programming', async (req, res) => {
               ${nextCases.join('\n')}
               ELSE NextRate
             END
-        WHERE SectionType = ?
+        WHERE HOALicenseNumber = ?
+          AND SectionType = ?
           AND RateType IN (${placeholders})
       `, params);
     }
@@ -3312,9 +3336,13 @@ app.put('/api/settings/dues-programming', async (req, res) => {
    7. SETTINGS: GENERAL SYSTEM PROGRAMMING
    =========================================================== */
 
-app.get('/api/settings/system', async (req, res) => {
+app.get('/api/settings/system', authMid.requireHoaScope, async (req, res) => {
   try {
-    const [rows] = await db.query(`SELECT * FROM SystemSettings LIMIT 1`);
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const [rows] = await db.query(`SELECT * FROM SystemSettings WHERE HOALicenseNumber = ? LIMIT 1`,
+      [req.hoa.license_number]);
     if (rows.length === 0) {
       return res.json({ success: true, systemSettings: {} });
     }
@@ -3380,10 +3408,19 @@ app.get('/api/settings/system', async (req, res) => {
   }
 });
 
-app.put('/api/settings/system', async (req, res) => {
+app.put('/api/settings/system', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const { printing={}, numbering={}, streetNames={}, webPlus={}, cfoManage={}, easyPay={}, estoppel={} } = req.body;
 
+    const [sysRows] = await db.query(
+      `SELECT SystemSettingsID FROM SystemSettings WHERE HOALicenseNumber = ? LIMIT 1`, [sesLicense]);
+    if (!sysRows.length) {
+      await db.query(`INSERT INTO SystemSettings (HOALicenseNumber) VALUES (?)`, [sesLicense]);
+    }
     await db.query(`
       UPDATE SystemSettings SET
         PrintingMode=?, PrinterName=?, WebPrinterID=?, NetworkAddress=?, PrintingNotes=?,
@@ -3394,7 +3431,7 @@ app.put('/api/settings/system', async (req, res) => {
         EasyPayActive=?, FinesPaidFirst=?, ResidentPaysCharges=?, ACHActive=?, EasyPayNotes=?,
         ResidentEstoppelFee=?, EstoppelLetterCode=?, PaidDirectlyToMgtCo=?, PayableToHoaSentToMgt=?, TransferWorkingCapitalFee=?, EstoppelNotes=?,
         TimeStampUpdated=NOW()
-      WHERE SystemSettingsID=1
+      WHERE HOALicenseNumber=?
     `, [
       printing.printingMode||'Local', printing.printerName||'', printing.webPrinterId||'', printing.networkAddress||'', printing.notes||'',
       numbering.residentStartingAcct||'', numbering.vendorStartingAcct||'', numbering.notes||'',
@@ -3402,7 +3439,8 @@ app.put('/api/settings/system', async (req, res) => {
       webPlus.webPlusActive||'N', webPlus.webPageIpName||'', webPlus.webPageManager||'', webPlus.webManagerContact||'', webPlus.notes||'',
       cfoManage.cfoActive||'N', cfoManage.cfoCompanyName||'', cfoManage.cfoAddress||'', cfoManage.cfoTel||'', cfoManage.cfoRepName||'', cfoManage.cfoRepTel||'', cfoManage.cfoRepEmail||'', cfoManage.cfoVendorId||'', cfoManage.notes||'',
       easyPay.easyPayActive||'N', easyPay.finesPaidFirst||'N', easyPay.residentPaysCharges||'N', easyPay.achActive||'N', easyPay.notes||'',
-      estoppel.residentEstoppelFee||300.00, estoppel.letterCode||'99', estoppel.paidDirectlyToMgtCo||'NO', estoppel.payableToHoaSentToMgt||'NO', estoppel.transferWorkingCapitalFee||63.00, estoppel.notes||''
+      estoppel.residentEstoppelFee||300.00, estoppel.letterCode||'99', estoppel.paidDirectlyToMgtCo||'NO', estoppel.payableToHoaSentToMgt||'NO', estoppel.transferWorkingCapitalFee||63.00, estoppel.notes||'',
+      sesLicense
     ]);
 
     res.json({ success: true, message: 'System settings saved successfully' });
@@ -3416,10 +3454,13 @@ app.put('/api/settings/system', async (req, res) => {
    8. SETTINGS: DUES PROGRAMMING
    =========================================================== */
 
-app.get('/api/settings/dues', async (req, res) => {
+app.get('/api/settings/dues', authMid.requireHoaScope, async (req, res) => {
   try {
-    const [progRows] = await db.query(`SELECT * FROM DuesProgramming`);
-    const [rateRows] = await db.query(`SELECT * FROM DuesRates`);
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const [progRows] = await db.query(`SELECT * FROM DuesProgramming WHERE HOALicenseNumber = ?`, [req.hoa.license_number]);
+    const [rateRows] = await db.query(`SELECT * FROM DuesRates WHERE HOALicenseNumber = ?`, [req.hoa.license_number]);
 
     const annualProg = progRows.find(p => p.SectionType === 'annualDues') || {};
     const specialProg = progRows.find(p => p.SectionType === 'specialAssessment') || {};
@@ -3452,29 +3493,33 @@ app.get('/api/settings/dues', async (req, res) => {
   }
 });
 
-app.put('/api/settings/dues', async (req, res) => {
+app.put('/api/settings/dues', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const { annualDues={}, specialAssessment={} } = req.body;
 
     if (annualDues.paymentFrequency || annualDues.dueDate) {
-      await db.query(`UPDATE DuesProgramming SET PaymentFrequency=?, DueDate=?, TimeStampUpdated=NOW() WHERE SectionType='annualDues'`,
-        [annualDues.paymentFrequency||'Annually', annualDues.dueDate||'']);
+      await db.query(`UPDATE DuesProgramming SET PaymentFrequency=?, DueDate=?, TimeStampUpdated=NOW() WHERE SectionType='annualDues' AND HOALicenseNumber=?`,
+        [annualDues.paymentFrequency||'Annually', annualDues.dueDate||'', sesLicense]);
     }
     if (specialAssessment.paymentFrequency || specialAssessment.dueDate) {
-      await db.query(`UPDATE DuesProgramming SET PaymentFrequency=?, DueDate=?, TimeStampUpdated=NOW() WHERE SectionType='specialAssessment'`,
-        [specialAssessment.paymentFrequency||'Annually', specialAssessment.dueDate||'']);
+      await db.query(`UPDATE DuesProgramming SET PaymentFrequency=?, DueDate=?, TimeStampUpdated=NOW() WHERE SectionType='specialAssessment' AND HOALicenseNumber=?`,
+        [specialAssessment.paymentFrequency||'Annually', specialAssessment.dueDate||'', sesLicense]);
     }
 
     if (annualDues.rates) {
       for (const [rateType, vals] of Object.entries(annualDues.rates)) {
-        await db.query(`UPDATE DuesRates SET CurrentRate=?, NextRate=? WHERE SectionType='annualDues' AND RateType=?`,
-          [vals.current||0, vals.next||0, rateType]);
+        await db.query(`UPDATE DuesRates SET CurrentRate=?, NextRate=? WHERE SectionType='annualDues' AND RateType=? AND HOALicenseNumber=?`,
+          [vals.current||0, vals.next||0, rateType, sesLicense]);
       }
     }
     if (specialAssessment.rates) {
       for (const [rateType, vals] of Object.entries(specialAssessment.rates)) {
-        await db.query(`UPDATE DuesRates SET CurrentRate=?, NextRate=? WHERE SectionType='specialAssessment' AND RateType=?`,
-          [vals.current||0, vals.next||0, rateType]);
+        await db.query(`UPDATE DuesRates SET CurrentRate=?, NextRate=? WHERE SectionType='specialAssessment' AND RateType=? AND HOALicenseNumber=?`,
+          [vals.current||0, vals.next||0, rateType, sesLicense]);
       }
     }
 
@@ -3489,12 +3534,16 @@ app.put('/api/settings/dues', async (req, res) => {
    9. SETTINGS: FINES & LATE FEES
    =========================================================== */
 
-app.get('/api/settings/fines', async (req, res) => {
+app.get('/api/settings/fines', authMid.requireHoaScope, async (req, res) => {
   try {
-    const [cfgRows] = await db.query(`SELECT * FROM FinesConfig LIMIT 1`);
-    const [typeRows] = await db.query(`SELECT * FROM FineTypesList ORDER BY SortOrder ASC`);
-    const [ruleRows] = await db.query(`SELECT * FROM LetterRules`);
-    const [timeRows] = await db.query(`SELECT * FROM TimingSchedule LIMIT 1`);
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
+    const [cfgRows] = await db.query(`SELECT * FROM FinesConfig WHERE HOALicenseNumber = ? LIMIT 1`, [sesLicense]);
+    const [typeRows] = await db.query(`SELECT * FROM FineTypesList WHERE HOALicenseNumber = ? ORDER BY SortOrder ASC`, [sesLicense]);
+    const [ruleRows] = await db.query(`SELECT * FROM LetterRules WHERE HOALicenseNumber = ?`, [sesLicense]);
+    const [timeRows] = await db.query(`SELECT * FROM TimingSchedule WHERE HOALicenseNumber = ? LIMIT 1`, [sesLicense]);
 
     const cfg = cfgRows[0] || {};
     const timing = timeRows[0] || {};
@@ -3545,19 +3594,37 @@ app.get('/api/settings/fines', async (req, res) => {
   }
 });
 
-app.put('/api/settings/fines', async (req, res) => {
+app.put('/api/settings/fines', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const data = req.body;
 
     if (data.restartDays !== undefined || data.fineAmount !== undefined) {
-      await db.query(`UPDATE FinesConfig SET RestartDays=?, FineAmount=?, TimeStampUpdated=NOW() WHERE FinesConfigID=1`,
-        [data.restartDays||0, data.fineAmount||0]);
+      const [fcRows] = await db.query(
+        `SELECT FinesConfigID FROM FinesConfig WHERE HOALicenseNumber = ? LIMIT 1`, [sesLicense]);
+      if (fcRows.length) {
+        await db.query(`UPDATE FinesConfig SET RestartDays=?, FineAmount=?, TimeStampUpdated=NOW() WHERE HOALicenseNumber=?`,
+          [data.restartDays||0, data.fineAmount||0, sesLicense]);
+      } else {
+        await db.query(`INSERT INTO FinesConfig (HOALicenseNumber, RestartDays, FineAmount) VALUES (?,?,?)`,
+          [sesLicense, data.restartDays||0, data.fineAmount||0]);
+      }
     }
 
     if (data.timingSchedule) {
       const t = data.timingSchedule;
-      await db.query(`UPDATE TimingSchedule SET Warning1Days=?, Warning2Days=?, Collection1Days=?, Collection2Days=?, FinalDays=?, TimeStampUpdated=NOW() WHERE TimingScheduleID=1`,
-        [t.warning1Days||30, t.warning2Days||60, t.collection1Days||90, t.collection2Days||120, t.finalDays||150]);
+      const [tsRows] = await db.query(
+        `SELECT TimingScheduleID FROM TimingSchedule WHERE HOALicenseNumber = ? LIMIT 1`, [sesLicense]);
+      if (tsRows.length) {
+        await db.query(`UPDATE TimingSchedule SET Warning1Days=?, Warning2Days=?, Collection1Days=?, Collection2Days=?, FinalDays=?, TimeStampUpdated=NOW() WHERE HOALicenseNumber=?`,
+          [t.warning1Days||30, t.warning2Days||60, t.collection1Days||90, t.collection2Days||120, t.finalDays||150, sesLicense]);
+      } else {
+        await db.query(`INSERT INTO TimingSchedule (HOALicenseNumber, Warning1Days, Warning2Days, Collection1Days, Collection2Days, FinalDays) VALUES (?,?,?,?,?,?)`,
+          [sesLicense, t.warning1Days||30, t.warning2Days||60, t.collection1Days||90, t.collection2Days||120, t.finalDays||150]);
+      }
     }
 
     const saveRules = async (ruleType, rulesObj) => {
@@ -3567,11 +3634,11 @@ app.put('/api/settings/fines', async (req, res) => {
           Letter1Amount=?, Letter1PercentYN=?, Letter1Percent=?, Letter1GL=?,
           Letter2Amount=?, Letter2PercentYN=?, Letter2Percent=?, Letter2GL=?,
           FinalAmount=?, FinalGL=?, TimeStampUpdated=NOW()
-        WHERE RuleType=?
+        WHERE RuleType=? AND HOALicenseNumber=?
       `, [
         rulesObj.letter1Amount||0, rulesObj.letter1PercentYN||'N', rulesObj.letter1Percent||0, rulesObj.letter1GL||'',
         rulesObj.letter2Amount||0, rulesObj.letter2PercentYN||'N', rulesObj.letter2Percent||0, rulesObj.letter2GL||'',
-        rulesObj.finalAmount||0, rulesObj.finalGL||'', ruleType
+        rulesObj.finalAmount||0, rulesObj.finalGL||'', ruleType, sesLicense
       ]);
     };
 
@@ -3593,8 +3660,11 @@ app.put('/api/settings/fines', async (req, res) => {
 
 
 
-app.get('/api/settings/gl-mapping', async (req, res) => {
+app.get('/api/settings/gl-mapping', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
      const [rows] = await db.query(`
   SELECT
     child.*
@@ -3605,6 +3675,7 @@ app.get('/api/settings/gl-mapping', async (req, res) => {
    AND parent.PC = 'P'
    AND parent.ActiveFlag = 'Y'
   WHERE child.ActiveFlag = 'Y'
+    AND child.HOALicenseNumber = ?
   ORDER BY
   CASE
     /* Normal child: use its parent's GL# as the section anchor */
@@ -3638,7 +3709,7 @@ app.get('/api/settings/gl-mapping', async (req, res) => {
 
   child.SortOrder ASC,
   child.GLAccountID ASC
-`);
+`, [req.hoa.license_number]);
     const mapped = rows.map(r => ({
       id: r.GLAccountID,
       glNumber: r.GLNumber,
@@ -3670,7 +3741,7 @@ app.get('/api/settings/gl-mapping', async (req, res) => {
   }
 });
 
-app.put('/api/settings/gl-mapping', async (req, res) => {
+app.put('/api/settings/gl-mapping', authMid.requireHoaScope, async (req, res) => {
   const { glAccounts, structuralSave } = req.body;
 
   if (!Array.isArray(glAccounts)) {
@@ -3678,6 +3749,11 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
       error: 'glAccounts must be an array'
     });
   }
+
+  if (req.hoaId === 'all' || !req.hoa) {
+    return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+  }
+  const sesLicense = req.hoa.license_number;
 
   // -----------------------------------------------------------
   // STRUCTURAL SAVE
@@ -3719,6 +3795,7 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
               UseInXFER=?,
               TimeStampUpdated=NOW()
             WHERE GLAccountID=?
+              AND HOALicenseNumber=?
           `, [
             r.glNumber || '',
             r.glName || '',
@@ -3740,7 +3817,8 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
             r.useInAPR || 'N',
             r.useInBDC || 'N',
             r.useInXFER || r.useInXfer || 'N',
-            r.id
+            r.id,
+            sesLicense
           ]);
 
           submittedIds.push(Number(r.id));
@@ -3769,11 +3847,13 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
               UseInDP,
               UseInAPR,
               UseInBDC,
-              UseInXFER
+              UseInXFER,
+              HOALicenseNumber
             )
             VALUES (
               ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-              ?, ?, ?, ?, 'Y', ?, ?, ?, ?, ?, ?
+              ?, ?, ?, ?, 'Y', ?, ?, ?, ?, ?, ?,
+              ?
             )
           `, [
             r.glNumber || '',
@@ -3797,7 +3877,8 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
             r.useInDP || 'N',
             r.useInAPR || 'N',
             r.useInBDC || 'N',
-            r.useInXFER || r.useInXfer || 'N'
+            r.useInXFER || r.useInXfer || 'N',
+            sesLicense
           ]);
 
           submittedIds.push(Number(result.insertId));
@@ -3816,8 +3897,9 @@ app.put('/api/settings/gl-mapping', async (req, res) => {
               TimeStampUpdated=NOW()
           WHERE ActiveFlag='Y'
             AND SystemLocked=0
+            AND HOALicenseNumber=?
             AND GLAccountID NOT IN (${placeholders})
-        `, submittedIds);
+        `, [sesLicense, ...submittedIds]);
       }
 
       await connection.commit();

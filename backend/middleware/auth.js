@@ -194,7 +194,7 @@ async function requireHoaScope(req, res, next) {
     if (!hoaId) return res.status(400).json({ error: 'HOA activa requerida (X-HOA-ID)' });
     const [rows] = await db.query(
       `SELECT h.id, h.hoa_code, h.legal_name, h.state_code, h.city,
-              h.license_number, mc.code AS mgt_code
+              h.license_number, h.mgt_company_id, mc.code AS mgt_code
          FROM hoa h LEFT JOIN mgt_company mc ON mc.id = h.mgt_company_id
         WHERE h.id = ? AND h.active_flag = 'Y' LIMIT 1`,
       [hoaId]
