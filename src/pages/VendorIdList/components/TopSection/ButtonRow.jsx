@@ -2,6 +2,7 @@
 
 
 import { openOverlay } from "../../../../engines";
+import { exportCsv, printView } from "../../../../utils/exportCsv";
 
 import FilterUF from "../../../../components/FilterUF/FilterUF";
 
@@ -112,6 +113,30 @@ function ButtonRow({
         }
       >
         BACK TO CHECK REGISTER
+      </button>
+
+      <button
+        type="button"
+        className="vid-btn vid-btn-blue"
+        title="Exportar vendors a CSV"
+        onClick={() =>
+          exportCsv('vendors.csv', vendorRows || [], [
+            { key: 'vendorId', label: 'VENDOR ID' },
+            { key: 'vendorName', label: 'VENDOR NAME' },
+            { key: 'bankAccount', label: 'BANK ACCOUNT' },
+          ])
+        }
+      >
+        EXPORT CSV
+      </button>
+
+      <button
+        type="button"
+        className="vid-btn vid-btn-blue"
+        title="Imprimir vista actual"
+        onClick={printView}
+      >
+        IMPRIMIR
       </button>
     </div>
   );

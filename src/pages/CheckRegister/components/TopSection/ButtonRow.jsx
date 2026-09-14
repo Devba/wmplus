@@ -2,6 +2,7 @@
 
 
 import { openOverlay } from '../../../../engines';
+import { exportCsv, printView } from '../../../../utils/exportCsv';
 
 import EnterCheckUF from '../EnterCheckUF/EnterCheckUF';
 import ModifyGLCheckUF from '../ModifyGLCheckUF/ModifyGLCheckUF';
@@ -109,6 +110,34 @@ function ButtonRow({
         onClick={handleMonthlySummary}
       >
         MONTHLY SUMMARY
+      </button>
+
+      <button
+        id="btnCRExportCsv"
+        type="button"
+        className="checkreg-btn blueText"
+        title="Exportar checks a CSV"
+        onClick={() =>
+          exportCsv('checks.csv', checkRows || [], [
+            { key: 'checkNo', label: 'CHECK#' },
+            { key: 'amount', label: 'AMOUNT' },
+            { key: 'dateIssued', label: 'DATE ISSUED' },
+            { key: 'vendorOrResidentAcct', label: 'PAYEE/ACCT' },
+            { key: 'bankAccount', label: 'BANK' },
+          ])
+        }
+      >
+        EXPORT CSV
+      </button>
+
+      <button
+        id="btnCRPrint"
+        type="button"
+        className="checkreg-btn blueText"
+        title="Imprimir vista actual"
+        onClick={printView}
+      >
+        IMPRIMIR
       </button>
 
       <div className="checkreg-yellowbar">

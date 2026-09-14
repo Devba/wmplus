@@ -13,6 +13,9 @@ import VendorIdList from './VendorIdList';
 import Login from './Login/Login';
 import UserAdmin from './UserAdmin/UserAdmin';
 import MyAccount from './MyAccount/MyAccount';
+import LetterCodes from './Reports/LetterCodes';
+import GLAccounts from './Reports/GLAccounts';
+import DuesRates from './Reports/DuesRates';
 
 
 
@@ -29,5 +32,8 @@ export const pageMap = {
   'login': Login,
   'user-admin': UserAdmin,
   'my-account': MyAccount,
+  'report-letter-codes': LetterCodes,
+  'report-gl-accounts': GLAccounts,
+  'report-dues-rates': DuesRates,
   };
 

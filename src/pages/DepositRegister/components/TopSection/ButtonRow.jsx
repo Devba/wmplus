@@ -3,6 +3,7 @@
 
 
 import { openOverlay } from '../../../../engines';
+import { exportCsv, printView } from '../../../../utils/exportCsv';
 import EnterDepositUF from '../EnterDepositUF/EnterDepositUF';
 import MonthlySummaryUF from '../MonthlySummaryUF/MonthlySummaryUF';
 import VoidDepositUF from '../VoidDepositUF/VoidDepositUF.jsx';
@@ -103,6 +104,31 @@ const handleEnterDeposits = () => {
 
       <button className="depreg-btn-receivables">
         RECEIVABLES SUMMARY
+      </button>
+
+      <button
+        type="button"
+        className="depreg-btn-summary"
+        title="Exportar depósitos a CSV"
+        onClick={() =>
+          exportCsv('deposits.csv', depositRows || [], [
+            { key: 'depositorName', label: 'DEPOSITOR' },
+            { key: 'amount', label: 'AMOUNT' },
+            { key: 'dateDeposited', label: 'DATE' },
+            { key: 'bankAccountName', label: 'BANK' },
+          ])
+        }
+      >
+        EXPORT CSV
+      </button>
+
+      <button
+        type="button"
+        className="depreg-btn-summary"
+        title="Imprimir vista actual"
+        onClick={printView}
+      >
+        IMPRIMIR
       </button>
     </div>
   );

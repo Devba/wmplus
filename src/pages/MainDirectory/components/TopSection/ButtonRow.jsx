@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { openOverlay } from '../../../../engines';
+import { exportCsv, printView } from '../../../../utils/exportCsv';
 
 import FilterUF from '../../../../components/FilterUF/FilterUF';
 import AddResidentUF from '../AddResidentUF/AddResidentUF';
@@ -271,6 +272,38 @@ function ButtonRow({
         }
       >
         BACK TO NAV PANEL
+      </button>
+
+      <button
+        id="btnMDExportCsv"
+        type="button"
+        className="btn-blue"
+        title="Exportar residentes visibles a CSV"
+        onClick={() =>
+          exportCsv('residentes.csv', residents || [], [
+            { key: 'acctNo', label: 'ACCT#' },
+            { key: 'lastName', label: 'LAST NAME' },
+            { key: 'firstName', label: 'FIRST NAME' },
+            { key: 'residence', label: 'RESIDENCE' },
+            { key: 'city', label: 'CITY' },
+            { key: 'state', label: 'ST' },
+            { key: 'zip', label: 'ZIP' },
+            { key: 'phone', label: 'PHONE' },
+            { key: 'email', label: 'E-MAIL' },
+          ])
+        }
+      >
+        EXPORT CSV
+      </button>
+
+      <button
+        id="btnMDPrint"
+        type="button"
+        className="btn-blue"
+        title="Imprimir vista actual"
+        onClick={printView}
+      >
+        IMPRIMIR
       </button>
     </div>
   );

@@ -1,0 +1,43 @@
+/* Tier 1: impresión limpia de vistas tabulares. Solo afecta a impresión. */
+@media print {
+  .top-ribbon,
+  .offline-status-badge,
+  .md-button-row,
+  .dev-version-badge,
+  .login-shell {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .app-shell,
+  .middle-content,
+  .main-content {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  table {
+    font-size: 10pt;
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid #666 !important;
+    padding: 3px 5px !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  th {
+    background: #e5e7eb !important;
+  }
+
+  button, input, select {
+    display: none !important;
+  }
+}

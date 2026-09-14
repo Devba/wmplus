@@ -224,6 +224,25 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
 
 
 
+{/* Tier 1: grupo REPORTES (solo lectura; visible también a view-only) */}
+<div className="ribbon-group" title="Reportes por HOA activa">
+  <div className="ribbon-buttons">
+    <div className="ribbon-btn" onClick={() => onSelectPage('report-letter-codes')} style={{ cursor: 'pointer' }}>
+      <div className="icon icon-summarize"></div>
+      <div className="label">Letter<br />Codes</div>
+    </div>
+    <div className="ribbon-btn" onClick={() => onSelectPage('report-gl-accounts')} style={{ cursor: 'pointer' }}>
+      <div className="icon icon-showdetailspage"></div>
+      <div className="label">GL<br />Accounts</div>
+    </div>
+    <div className="ribbon-btn" onClick={() => onSelectPage('report-dues-rates')} style={{ cursor: 'pointer' }}>
+      <div className="icon icon-reviewacceptchange"></div>
+      <div className="label">Dues<br />Rates</div>
+    </div>
+  </div>
+  <div className="group-label">REPORTES</div>
+</div>
+
 {/* FASE A: chip de usuario/scope visible + acciones explícitas */}
 {user && (
   <div className="ribbon-group" title={`Sesión: ${user.login_name}`}>
