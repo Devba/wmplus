@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Traceability — Main Directory</title><style>body{font-family:Arial,Helvetica,sans-serif;max-width:860px;margin:36px auto;color:#0f172a;line-height:1.55;padding:0 16px}h1{font-size:23px;border-bottom:2px solid #1e3a8a;padding-bottom:6px}h2{font-size:18px;color:#1e3a8a;margin-top:26px}h3{font-size:15px;color:#334155}table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}th,td{border:1px solid #94a3b8;padding:4px 8px;text-align:left;vertical-align:top}th{background:#1e293b;color:#fff}code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12.5px}pre{background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;font-size:12.5px}pre code{background:none;color:inherit}</style></head><body><h1>Traceability — Main Directory</h1>
+<h2>Origen VBA</h2>
+<ul>
+<li>Hoja <code>MAIN DIRECTORY</code> (master JULY V4, <code>A1:AO2550</code>), 30 columnas:</li>
+</ul>
+<p><code>A FirstName, B MiddleName, C LastName, D Residence, E BillingAddress, F City,</code></p>
+<p><code>G St, H Zip, I Phone, J E-Mail, K Move in Date, L Type, M Acct#, N Community,</code></p>
+<p><code>O Owner, P ACH, Q ADDL OWNER FIRST NAME, R ADDL OWNER MIDDLE NAME,</code></p>
+<p><code>S ADDL OWNER LAST NAME, T BothFirstNames, U PRIMARY CELL, V SECONDARY CELL,</code></p>
+<p><code>W ADDL OWNER E-MAIL ADDRESS, X NOTES, AA Annual Dues Rate, AB Annual Dues,</code></p>
+<p><code>AC Special Assm&#x27;t Dues Rate, AD Special Assm&#x27;t Dues,</code></p>
+<p><code>AE Next Year Annual Dues, AF Next Year Special Assm&#x27;t Dues</code> (Y/Z vacías).</p>
+<ul>
+<li>Lectores VBA: <code>Sheet36.cls</code> (code-behind de la hoja), <code>modManageArrears.bas:46-49</code></li>
+</ul>
+<p>(lee <code>A1.CurrentRegion</code> completo), <code>modZegoExport</code>, <code>BatchType2uf</code>,</p>
+<p><code>YearEndGLSummaryReportUF</code>, <code>UPDATENXTYEARDUES</code>, <code>StartUpStartDateUF</code>.</p>
+<h2>Mapeo a BD (<code>hoamanager26_dev.ResidentMaster</code>)</h2>
+<p>Hoja → columnas PascalCase 1:1 (<code>FirstName→FirstName</code>, …, <code>Acct#→ResidentAccountID</code>),</p>
+<p>más <code>HOALicenseNumber</code>, <code>MgtCoClientID</code>, <code>DeletedFlag</code>, <code>ActiveResidentFlag</code>,</p>
+<p><code>DisplayName</code>, <code>TimeStampCreated/Updated</code> (gestión, sin antecedente en hoja).</p>
+<h2>Página app</h2>
+<p><code>src/pages/MainDirectory/MainDirectory.jsx</code> ← <code>GET /api/main-directory/residents</code></p>
+<p>(+ <code>GET /api/residents</code>), con scope por HOA, CSV e impresión (Tier 1).</p>
+<h2>Paridad de campos</h2>
+<table>
+<tr><th>Hoja VBA</th><th>App</th><th>Estado</th></tr>
+<tr><td>A–M (nombre, direcciones, ciudad, zip, teléfonos, email, move-in, type, acct)</td><td>mismos campos</td><td>✅</td></tr>
+<tr><td>Q–W (additional owners, cells, email)</td><td><code>addl*</code>, <code>primaryCell</code>, <code>secondaryCell</code></td><td>✅</td></tr>
+<tr><td>P ACH, X NOTES, AA–AF (rates/dues)</td><td><code>ach</code>, <code>notes</code>, <code>annual*/special*</code></td><td>✅</td></tr>
+<tr><td>N Community, O Owner</td><td>—</td><td>⚠️ ver D1</td></tr>
+<tr><td>T BothFirstNames</td><td><code>bothFirst</code> (derivado nombre + addl)</td><td>✅ derivado</td></tr>
+</table>
+<h2>Gaps y decisiones</h2>
+<ul>
+<li><strong>D1 — <code>Community</code>/<code>Owner</code> sin mapeo</strong>: la app no los lee ni escribe (service sin esos campos). Origen probable: multi-community por archivo. Decidir con Rick si se modelan (Fase directorio) o se descartan.</li>
+<li><strong>D2 — <code>DisplayName</code>, flags y auditoría</strong>: agregados del modelo <code>hoamanager26</code>, sin columna en hoja. Se conservan.</li>
+<li><strong>D3 — Y/Z vacías</strong>: ignoradas.</li>
+</ul></body></html>

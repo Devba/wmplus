@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Traceability — Violation Letter Codes (TRIAL, plantilla)</title><style>body{font-family:Arial,Helvetica,sans-serif;max-width:860px;margin:36px auto;color:#0f172a;line-height:1.55;padding:0 16px}h1{font-size:23px;border-bottom:2px solid #1e3a8a;padding-bottom:6px}h2{font-size:18px;color:#1e3a8a;margin-top:26px}h3{font-size:15px;color:#334155}table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}th,td{border:1px solid #94a3b8;padding:4px 8px;text-align:left;vertical-align:top}th{background:#1e293b;color:#fff}code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12.5px}pre{background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;font-size:12.5px}pre code{background:none;color:inherit}</style></head><body><h1>Traceability — Violation Letter Codes (TRIAL, plantilla)</h1>
+<h2>Origen VBA</h2>
+<ul>
+<li>Hoja <code>VIOLATION LETTER CODES</code> (master JULY V4, <code>A1:L77</code>), 3 zonas:</li>
+<li><strong>Tabla de tipos</strong> <code>A18:D48</code> → <code>LETTER CODES / VIOLATION TYPE / GL CODE / FINE $$</code> (31 filas: códigos 0–21+).</li>
+<li><strong>Bloques de reglas</strong> (filas 3–16, cols B–D y F–H): intervalos/días/montos para tipos 1–16, 17–29, 50–5x; <code>ANNUAL ASSESSMENT RULES</code>, <code>ARREARS RULES</code>, <code>SPECIAL ASSESSMENT RULES</code>.</li>
+<li>Bloque <code>ANNUAL DUES</code> (cols F–H): due date, deadlines, warning/collection/final days.</li>
+<li>Lectores VBA: <code>modViolations.bas:132,149,177</code> (combo <code>cmbViolation</code> ← <code>A18:D48</code>),</li>
+</ul>
+<p><code>frmViolationRegister.frm:141,506</code> (fine default ← <code>D19</code>), <code>:1092</code> (días ← <code>C13</code>).</p>
+<ul>
+<li>Consumidores: Violation Register (multas + cartas), <code>modManageArrears</code>, <code>BatchType1/2uf</code>, <code>ResARAging</code>, <code>CloseOpenUF</code>.</li>
+</ul>
+<h2>Mapeo a BD (<code>hoamanager26_dev</code>)</h2>
+<table>
+<tr><th>Hoja VBA</th><th>Tabla</th><th>Notas</th></tr>
+<tr><td><code>A18:D48</code> tipos</td><td><code>FineTypesList</code> (<code>LetterCode, ViolationType, GLCode, FineAmount</code>)</td><td>+ <code>FineCategory</code>, <code>SortOrder</code>, <code>ActiveFlag</code> (ver Decisiones)</td></tr>
+<tr><td>Bloques reglas 1–16/17+</td><td><code>FinesConfig</code> (<code>RestartDays, FineAmount</code>) + <code>TimingSchedule</code></td><td>1 fila por HOA</td></tr>
+<tr><td>Bloques arrears/annual/special</td><td><code>LetterRules</code> (3 filas: <code>arrearsRules, annualDuesLateFees, specialAssessmentLateFees</code>)</td><td>3 filas por HOA</td></tr>
+</table>
+<h2>Página app</h2>
+<p><code>src/pages/Reports/LetterCodes.jsx</code> ← <code>GET /api/settings/fines-late-fees</code> (solo <code>fineTypesList timed/immediate</code>).</p>
+<h2>Paridad de campos</h2>
+<table>
+<tr><th>VBA (hoja)</th><th>App</th><th>Estado</th></tr>
+<tr><td>LETTER CODES (A)</td><td>CODE</td><td>✅</td></tr>
+<tr><td>VIOLATION TYPE (B)</td><td>TYPE</td><td>✅</td></tr>
+<tr><td>GL CODE (C)</td><td>GL</td><td>✅</td></tr>
+<tr><td>FINE $$ (D)</td><td>AMOUNT</td><td>✅</td></tr>
+<tr><td>(agrupación por rangos 1–16/17+/50+)</td><td>CAT timed/immediate</td><td>⚠️ ver Decisiones</td></tr>
+<tr><td>Bloques de reglas (mismo sheet)</td><td>— (está en Settings › Fines/Late Fees)</td><td>✅ por referencia cruzada</td></tr>
+</table>
+<h2>Gaps y decisiones</h2>
+<ul>
+<li><strong>D1 — <code>FineCategory</code> timed/immediate sin antecedente VBA</strong>: el VBA agrupa por rangos numéricos en texto libre; la categoría es decisión del modelo <code>hoamanager26</code> (útil para el flujo de cartas). Se conserva; documentar si Rick pide los rangos originales.</li>
+<li><strong>D2 — Reglas fuera de esta página</strong>: a propósito; el pie de página enlaza a Settings › Fines/Late Fees.</li>
+<li><strong>Pendiente VBA</strong>: <code>Form Letters\All Violations Report Template.dotx</code> (plantilla Word 2017) — generación de cartas aún no migrada (Fase cartas).</li>
+</ul></body></html>
