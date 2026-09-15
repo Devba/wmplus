@@ -32,7 +32,7 @@ export default function LetterCodes() {
   return (
     <div className="reports-page">
       <h2>Violation Letter Codes</h2>
-      <p className="reports-sub">Catálogo por HOA activa · {rows.length} tipos</p>
+      <p className="reports-sub">Catálogo por HOA activa · {rows.length} tipos · Fuente VBA: hoja VIOLATION LETTER CODES A18:D48 · Reglas en Settings › Fines/Late Fees</p>
       <div className="reports-bar">
         <button onClick={() => exportCsv('letter-codes.csv', rows, [
           { key: 'cat', label: 'CATEGORY' }, { key: 'code', label: 'LETTER CODE' },
