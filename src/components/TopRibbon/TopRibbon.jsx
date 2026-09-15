@@ -239,6 +239,18 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
       <div className="icon icon-reviewacceptchange"></div>
       <div className="label">Dues<br />Rates</div>
     </div>
+    <div className="ribbon-btn" onClick={() => onSelectPage('report-open-checks')} style={{ cursor: 'pointer' }}>
+      <div className="icon icon-summarize"></div>
+      <div className="label">Open<br />Checks</div>
+    </div>
+    <div className="ribbon-btn" onClick={() => onSelectPage('report-payment-summary')} style={{ cursor: 'pointer' }}>
+      <div className="icon icon-showdetailspage"></div>
+      <div className="label">Payment<br />Summary</div>
+    </div>
+    <div className="ribbon-btn" onClick={() => onSelectPage('report-ar-summary')} style={{ cursor: 'pointer' }}>
+      <div className="icon icon-addressbook"></div>
+      <div className="label">AR<br />Summary</div>
+    </div>
   </div>
   <div className="group-label">REPORTES</div>
 </div>

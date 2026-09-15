@@ -938,8 +938,12 @@ app.delete('/api/vendors/:vendor_id', async (req, res) => {
    3. CHECK REGISTER (CheckRegister) & ACID TRANSACTION POSTING
    =========================================================== */
 
-app.get('/api/check-register', async (req, res) => {
+app.get('/api/check-register', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const [rows] = await db.query(`
       SELECT
         cr.CheckTransactionNumber AS check_txn_num,
@@ -991,13 +995,14 @@ app.get('/api/check-register', async (req, res) => {
       LEFT JOIN BankAccount ba
         ON ba.BankAccountID = cr.BankAccountID
 
-      WHERE cr.DeletedFlag IS NULL
-         OR cr.DeletedFlag != 'Y'
+      WHERE (cr.DeletedFlag IS NULL
+         OR cr.DeletedFlag != 'Y')
+        AND cr.HOALicenseNumber = ?
 
 
   ORDER BY
   cr.CheckTransactionNumber ASC
-    `);
+    `, [sesLicense]);
 
     res.json(rows);
 
@@ -1330,8 +1335,12 @@ if (page !== 'CR') {
    4. DEPOSIT REGISTER (DepositRegister) & ACID TRANSACTION POSTING
    =========================================================== */
 
-app.get('/api/deposit-register', async (req, res) => {
+app.get('/api/deposit-register', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const [rows] = await db.query(`
       SELECT
         dr.DepositTransactionNumber AS deposit_txn_num,
@@ -1380,13 +1389,14 @@ app.get('/api/deposit-register', async (req, res) => {
       LEFT JOIN BankAccount ba
         ON ba.BankAccountID = dr.BankAccountID
 
-      WHERE dr.DeletedFlag IS NULL
-         OR dr.DeletedFlag != 'Y'
+      WHERE (dr.DeletedFlag IS NULL
+         OR dr.DeletedFlag != 'Y')
+        AND dr.HOALicenseNumber = ?
 
       ORDER BY
         dr.DateDeposited ASC,
         dr.DepositTransactionNumber ASC
-    `);
+    `, [sesLicense]);
 
     res.json(rows);
 
@@ -5079,8 +5089,12 @@ if (annualInput > 0) {
 });
 
 // GET /api/apr/list — APR transactions with resident + maintained summary data
-app.get('/api/apr/list', async (req, res) => {
+app.get('/api/apr/list', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
     const limit = Math.min(
       parseInt(req.query.limit, 10) || 50,
       200
@@ -5131,11 +5145,12 @@ app.get('/api/apr/list', async (req, res) => {
        AND aps.HOALicenseNumber = apr.HOALicenseNumber
 
       WHERE apr.DeletedFlag != 'Y'
+        AND apr.HOALicenseNumber = ?
 
       ORDER BY apr.TimeStampCreated ASC
 
       LIMIT ?
-    `, [limit]);
+    `, [sesLicense, limit]);
 
     res.json({
       success: true,
@@ -5808,6 +5823,58 @@ app.delete('/api/admin/users/:id/assignments/:assignId', authMid.requireAdmin, a
       [req.params.assignId, req.params.id]);
     if (!r.affectedRows) return res.status(404).json({ error: 'Asignación inexistente' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ===========================================================
+   REPORTS Tier R3: saldos A/R por residente (scoped).
+   v1: balance actual por residente (sin buckets por vencimiento:
+   el modelo no tiene due-date por assessment; buckets en R4).
+   =========================================================== */
+app.get('/api/reports/ar-summary', authMid.requireHoaScope, async (req, res) => {
+  try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      // admin global: agrega todas las HOAs con su license
+      if (!req.authUser.is_admin) {
+        return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+      }
+      const [rows] = await db.query(`
+        SELECT ar.ResidentAccountID AS account_id,
+               rm.FirstName AS first_name, rm.LastName AS last_name,
+               ar.HOALicenseNumber AS hoa_license,
+               ar.TotalYearlyRequiredAnnualDues AS yearly_required,
+               ar.TotalAnnualDuesPaymentsYTD AS paid_ytd,
+               ar.AssessmentPaidBalanceDue AS balance_due,
+               ar.CurrentAssessmentPaymentDue AS current_due,
+               ar.TotalCurrentAR AS total_ar
+          FROM AssessmentRegister ar
+          LEFT JOIN ResidentMaster rm
+            ON rm.ResidentAccountID = ar.ResidentAccountID
+           AND rm.HOALicenseNumber = ar.HOALicenseNumber
+         WHERE (ar.ActiveFlag IS NULL OR ar.ActiveFlag != 'N')
+         ORDER BY ar.HOALicenseNumber, ar.TotalCurrentAR DESC
+      `);
+      return res.json({ rows });
+    }
+    const [rows] = await db.query(`
+      SELECT ar.ResidentAccountID AS account_id,
+             rm.FirstName AS first_name, rm.LastName AS last_name,
+             ar.TotalYearlyRequiredAnnualDues AS yearly_required,
+             ar.TotalAnnualDuesPaymentsYTD AS paid_ytd,
+             ar.AssessmentPaidBalanceDue AS balance_due,
+             ar.CurrentAssessmentPaymentDue AS current_due,
+             ar.TotalCurrentAR AS total_ar
+        FROM AssessmentRegister ar
+        LEFT JOIN ResidentMaster rm
+          ON rm.ResidentAccountID = ar.ResidentAccountID
+         AND rm.HOALicenseNumber = ar.HOALicenseNumber
+       WHERE (ar.ActiveFlag IS NULL OR ar.ActiveFlag != 'N')
+         AND ar.HOALicenseNumber = ?
+       ORDER BY ar.TotalCurrentAR DESC
+    `, [req.hoa.license_number]);
+    res.json({ rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

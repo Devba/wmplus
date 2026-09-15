@@ -16,6 +16,9 @@ import MyAccount from './MyAccount/MyAccount';
 import LetterCodes from './Reports/LetterCodes';
 import GLAccounts from './Reports/GLAccounts';
 import DuesRates from './Reports/DuesRates';
+import OpenChecks from './Reports/OpenChecks';
+import PaymentSummary from './Reports/PaymentSummary';
+import ARSummary from './Reports/ARSummary';
 
 
 
@@ -35,5 +38,8 @@ export const pageMap = {
   'report-letter-codes': LetterCodes,
   'report-gl-accounts': GLAccounts,
   'report-dues-rates': DuesRates,
+  'report-open-checks': OpenChecks,
+  'report-payment-summary': PaymentSummary,
+  'report-ar-summary': ARSummary,
   };
 
