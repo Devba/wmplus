@@ -8309,6 +8309,102 @@ app.delete('/api/admin/users/:id/assignments/:assignId', authMid.requireAdmin, a
    v1: balance actual por residente (sin buckets por vencimiento:
    el modelo no tiene due-date por assessment; buckets en R4).
    =========================================================== */
+// Escrow Account Summary: bank info + balance + GL breakdown for BankID 301
+app.get('/api/reports/escrow-summary', authMid.requireHoaScope, async (req, res) => {
+  try {
+    // 1. Bank info for Escrow (BankID 301) — cada HOA tiene su propia BD,
+    //    asi que BankAccount no necesita filtro de HOA.
+    const [bankRows] = await db.query(`
+      SELECT BankAccountID, BankID, BankType, BankName, GLCashAccount,
+             CoMingled, CoMingledWith, ActiveFlag
+        FROM BankAccount
+       WHERE BankType = 'Escrow'
+         AND ActiveFlag = 'Y'
+       LIMIT 1
+    `);
+
+    if (!bankRows[0]) {
+      return res.status(404).json({ error: 'No Escrow bank account found.' });
+    }
+    const bank = bankRows[0];
+    const bankTable = `CashFlow_BankID_${bank.BankID}`;
+
+    // 2. Current balance from ledger
+    const [ledgerRows] = await db.query(`
+      SELECT CurrentBalance, OpeningBalance, FiscalYearLabel, StartMonth,
+             DATE_FORMAT(LastPostedDateTime, '%Y-%m-%dT%H:%i:%sZ') AS LastPostedDateTime
+        FROM CashFlowLedgerMaster
+       WHERE BankAccountID = ?
+         AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+       ORDER BY FiscalYearLabel DESC
+       LIMIT 1
+    `, [bank.BankAccountID]);
+
+    // 3. GL breakdown for current FY (filtra por TransactionDate, igual que /api/cash-flow)
+    const fy = ledgerRows[0]?.FiscalYearLabel || new Date().getFullYear();
+    const fiscalYearStart = `${fy}-01-01`;
+    const fiscalYearEnd = `${fy}-12-31`;
+    const [glRows] = await db.query(`
+      SELECT cf.GLNumber AS gl_number,
+             COALESCE(gla.GLName, '') AS gl_name,
+             COALESCE(SUM(cf.CashInAmount), 0) AS cash_in,
+             COALESCE(SUM(cf.CashOutAmount), 0) AS cash_out
+        FROM ${bankTable} cf
+        LEFT JOIN GLAccounts gla
+          ON gla.GLNumber = cf.GLNumber
+       WHERE cf.BankAccountID = ?
+         AND cf.TransactionDate >= ?
+         AND cf.TransactionDate <= ?
+         AND (cf.VoidFlag IS NULL OR cf.VoidFlag != 'Y')
+         AND (cf.DeletedFlag IS NULL OR cf.DeletedFlag != 'Y')
+       GROUP BY cf.GLNumber, gla.GLName
+       ORDER BY cf.GLNumber
+    `, [bank.BankAccountID, fiscalYearStart, fiscalYearEnd]);
+
+    const totalIn = glRows.reduce((s, r) => s + Number(r.cash_in || 0), 0);
+    const totalOut = glRows.reduce((s, r) => s + Number(r.cash_out || 0), 0);
+
+    res.json({
+      bank: {
+        BankAccountID: bank.BankAccountID,
+        BankID: bank.BankID,
+        BankName: bank.BankName,
+        GLCashAccount: bank.GLCashAccount,
+        CoMingled: bank.CoMingled,
+        CoMingledWith: bank.CoMingledWith,
+      },
+      ledger: ledgerRows[0] || null,
+      fiscalYear: fy,
+      glBreakdown: glRows,
+      totals: { cash_in: totalIn, cash_out: totalOut, net: totalIn - totalOut },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Historic Escrow: per-FY balances over time
+app.get('/api/reports/escrow-historic', authMid.requireHoaScope, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT clm.FiscalYearLabel AS fiscal_year,
+             clm.OpeningBalance AS opening_balance,
+             clm.CurrentBalance AS closing_balance,
+             DATE_FORMAT(clm.LastPostedTransactionDate, '%Y-%m-%d') AS last_posted_date,
+             ba.BankID AS bank_id
+        FROM CashFlowLedgerMaster clm
+        JOIN BankAccount ba ON ba.BankAccountID = clm.BankAccountID
+       WHERE ba.BankType = 'Escrow'
+         AND ba.ActiveFlag = 'Y'
+       ORDER BY clm.FiscalYearLabel DESC
+    `);
+
+    res.json({ rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/reports/ar-summary', authMid.requireHoaScope, async (req, res) => {
   try {
     if (req.hoaId === 'all' || !req.hoa) {

@@ -89,7 +89,13 @@ function MasterNavPanel({ onSelectPage }) {
             <button className="mnp-btn" type="button">BUDGETS</button>
 
             <button className="mnp-btn" type="button">VIOLATIONS</button>
-            <button className="mnp-btn" type="button">ESCROW ACCT SUMMARY</button>
+            <button
+              className="mnp-btn"
+              type="button"
+              onClick={() => onSelectPage('escrow-account-summary')}
+            >
+              ESCROW ACCT SUMMARY
+            </button>
 
 
             {/* <button className="mnp-btn" type="button">SETTINGS</button> */}
