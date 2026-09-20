@@ -8407,6 +8407,177 @@ app.get('/api/reports/escrow-historic', authMid.requireHoaScope, async (req, res
   }
 });
 
+// Receivables Summary: AR totals agrupados por HOA y año fiscal
+// (util para admin global viendo "Todas las HOAs")
+app.get('/api/reports/receivables-summary', authMid.requireHoaScope, async (req, res) => {
+  try {
+    const allHoas = (req.hoaId === 'all' || !req.hoa);
+    const licenseFilter = allHoas ? '' : 'AND ar.HOALicenseNumber = ?';
+    const licenseParams = allHoas ? [] : [req.hoa.license_number];
+
+    const [rows] = await db.query(`
+      SELECT ar.HOALicenseNumber AS hoa_license,
+             ar.CurrentFiscalYearBegins AS fiscal_year,
+             COUNT(*) AS resident_count,
+             COALESCE(SUM(ar.RequiredAnnualDues), 0) AS required_annual,
+             COALESCE(SUM(ar.RequiredSpecialAssessment), 0) AS required_special,
+             COALESCE(SUM(ar.TotalAnnualDuesPaymentsYTD), 0) AS paid_annual_ytd,
+             COALESCE(SUM(ar.TotalSpecialAssessmentPaidYTD), 0) AS paid_special_ytd,
+             COALESCE(SUM(ar.CurrentAssessmentPaymentDue), 0) AS current_due,
+             COALESCE(SUM(ar.AssessmentPaidBalanceDue), 0) AS balance_due,
+             COALESCE(SUM(ar.SpecialAssessmentPaymentDue), 0) AS special_due,
+             COALESCE(SUM(ar.SpecialAssessmentPaidBalanceDue), 0) AS special_balance,
+             COALESCE(SUM(ar.TotalCurrentAR), 0) AS total_ar
+        FROM AssessmentRegister ar
+       WHERE (ar.ActiveFlag IS NULL OR ar.ActiveFlag != 'N')
+         ${licenseFilter}
+       GROUP BY ar.HOALicenseNumber, ar.CurrentFiscalYearBegins
+       ORDER BY ar.HOALicenseNumber, ar.CurrentFiscalYearBegins DESC
+    `, licenseParams);
+
+    const grand = rows.reduce((s, r) => s + Number(r.total_ar || 0), 0);
+    res.json({ rows, grand_total: grand });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// YTD Cash Flow Analysis: totales YTD por banco y GL
+app.get('/api/reports/ytd-cash-flow', authMid.requireHoaScope, async (req, res) => {
+  try {
+    const fiscalYear = parseInt(req.query.fiscalYear, 10) || new Date().getFullYear();
+    const bankId = req.query.bankId ? parseInt(req.query.bankId, 10) : null;
+
+    const [banks] = await db.query(`
+      SELECT BankAccountID, BankID, BankType, BankName
+        FROM BankAccount
+       WHERE ActiveFlag = 'Y'
+         ${bankId ? 'AND BankID = ?' : ''}
+       ORDER BY BankID
+    `, bankId ? [bankId] : []);
+
+    const fyStart = `${fiscalYear}-01-01`;
+    const fyEnd = `${fiscalYear}-12-31`;
+    const rows = [];
+    const totalsByGL = {};
+
+    for (const b of banks) {
+      const tableName = `CashFlow_BankID_${b.BankID}`;
+      let txns = [];
+      try {
+        const [r] = await db.query(`
+          SELECT cf.GLNumber AS gl_number,
+                 COALESCE(SUM(cf.CashInAmount), 0) AS cash_in,
+                 COALESCE(SUM(cf.CashOutAmount), 0) AS cash_out
+            FROM ${tableName} cf
+           WHERE cf.BankAccountID = ?
+             AND cf.TransactionDate >= ?
+             AND cf.TransactionDate <= ?
+             AND (cf.VoidFlag IS NULL OR cf.VoidFlag != 'Y')
+             AND (cf.DeletedFlag IS NULL OR cf.DeletedFlag != 'Y')
+           GROUP BY cf.GLNumber
+        `, [b.BankAccountID, fyStart, fyEnd]);
+        txns = r;
+      } catch (e) {
+        if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
+      }
+
+      for (const t of txns) {
+        const net = Number(t.cash_in) - Number(t.cash_out);
+        rows.push({
+          bank_id: b.BankID,
+          bank_name: b.BankName,
+          bank_type: b.BankType,
+          gl_number: t.gl_number,
+          cash_in: Number(t.cash_in),
+          cash_out: Number(t.cash_out),
+          net,
+        });
+        const k = t.gl_number;
+        if (!totalsByGL[k]) totalsByGL[k] = { gl_number: k, cash_in: 0, cash_out: 0, net: 0 };
+        totalsByGL[k].cash_in += Number(t.cash_in);
+        totalsByGL[k].cash_out += Number(t.cash_out);
+        totalsByGL[k].net += net;
+      }
+    }
+
+    const grandTotalIn = rows.reduce((s, r) => s + r.cash_in, 0);
+    const grandTotalOut = rows.reduce((s, r) => s + r.cash_out, 0);
+
+    res.json({
+      fiscalYear,
+      rows,
+      totalsByGL: Object.values(totalsByGL),
+      grand: { cash_in: grandTotalIn, cash_out: grandTotalOut, net: grandTotalIn - grandTotalOut },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Monthly GL Report: GL con columnas Ene-Dic para un FY (todos los bancos)
+app.get('/api/reports/monthly-gl', authMid.requireHoaScope, async (req, res) => {
+  try {
+    const fiscalYear = parseInt(req.query.fiscalYear, 10) || new Date().getFullYear();
+    const fyStart = `${fiscalYear}-01-01`;
+    const fyEnd = `${fiscalYear}-12-31`;
+
+    const [banks] = await db.query(`
+      SELECT BankAccountID, BankID, BankType, BankName
+        FROM BankAccount
+       WHERE ActiveFlag = 'Y'
+       ORDER BY BankID
+    `);
+
+    const monthMap = {};
+
+    for (const b of banks) {
+      const tableName = `CashFlow_BankID_${b.BankID}`;
+      let monthlyRows = [];
+      try {
+        const [r] = await db.query(`
+          SELECT cf.GLNumber AS gl_number,
+                 MONTH(cf.TransactionDate) AS m,
+                 COALESCE(SUM(cf.CashInAmount), 0) - COALESCE(SUM(cf.CashOutAmount), 0) AS net
+            FROM ${tableName} cf
+           WHERE cf.TransactionDate >= ?
+             AND cf.TransactionDate <= ?
+             AND (cf.VoidFlag IS NULL OR cf.VoidFlag != 'Y')
+             AND (cf.DeletedFlag IS NULL OR cf.DeletedFlag != 'Y')
+           GROUP BY cf.GLNumber, MONTH(cf.TransactionDate)
+        `, [fyStart, fyEnd]);
+        monthlyRows = r;
+      } catch (e) {
+        if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
+      }
+
+      for (const r of monthlyRows) {
+        const gl = r.gl_number;
+        if (!monthMap[gl]) {
+          monthMap[gl] = { gl_number: gl, m1: 0, m2: 0, m3: 0, m4: 0, m5: 0, m6: 0, m7: 0, m8: 0, m9: 0, m10: 0, m11: 0, m12: 0, total: 0 };
+        }
+        const k = 'm' + r.m;
+        monthMap[gl][k] += Number(r.net);
+        monthMap[gl].total += Number(r.net);
+      }
+    }
+
+    const rows = Object.values(monthMap).sort((a, b) => a.gl_number - b.gl_number);
+    const monthTotals = [0,0,0,0,0,0,0,0,0,0,0,0];
+    let grandTotal = 0;
+    for (const r of rows) {
+      for (let m = 1; m <= 12; m++) {
+        monthTotals[m-1] += r['m' + m];
+      }
+      grandTotal += r.total;
+    }
+
+    res.json({ fiscalYear, rows, monthTotals, grandTotal });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/reports/ar-summary', authMid.requireHoaScope, async (req, res) => {
   try {
     if (req.hoaId === 'all' || !req.hoa) {

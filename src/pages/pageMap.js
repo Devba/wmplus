@@ -19,6 +19,9 @@ import DuesRates from './Reports/DuesRates';
 import OpenChecks from './Reports/OpenChecks';
 import PaymentSummary from './Reports/PaymentSummary';
 import ARSummary from './Reports/ARSummary';
+import ReceivablesSummary from './Reports/ReceivablesSummary';
+import YTDCashFlow from './Reports/YTDCashFlow';
+import MonthlyGL from './Reports/MonthlyGL';
 import EscrowAccountSummary from './Reports/EscrowAccountSummary';
 import EscrowCF from './Reports/EscrowCF';
 import HistoricEscrow from './Reports/HistoricEscrow';
@@ -45,6 +48,9 @@ export const pageMap = {
   'report-open-checks': OpenChecks,
   'report-payment-summary': PaymentSummary,
   'report-ar-summary': ARSummary,
+  'report-receivables-summary': ReceivablesSummary,
+  'report-ytd-cash-flow': YTDCashFlow,
+  'report-monthly-gl': MonthlyGL,
   'escrow-account-summary': EscrowAccountSummary,
   'escrow-cf': EscrowCF,
   'historic-escrow': HistoricEscrow,
