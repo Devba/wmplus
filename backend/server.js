@@ -8461,6 +8461,13 @@ app.get('/api/reports/ytd-cash-flow', authMid.requireHoaScope, async (req, res) 
     const rows = [];
     const totalsByGL = {};
 
+    // Filtro por HOA: si hay scope especifico, solo transacciones de esa HOA.
+    // CashFlow_BankID_* tiene columna HOALicenseNumber (verificada en dev y prod),
+    // asi que filtramos ahi en vez de en BankAccount (que no tiene la columna en prod).
+    const allHoas = (req.hoaId === 'all' || !req.hoa);
+    const licenseFilter = allHoas ? '' : 'AND cf.HOALicenseNumber = ?';
+    const licenseParams = allHoas ? [] : [req.hoa.license_number];
+
     for (const b of banks) {
       const tableName = `CashFlow_BankID_${b.BankID}`;
       let txns = [];
@@ -8473,10 +8480,11 @@ app.get('/api/reports/ytd-cash-flow', authMid.requireHoaScope, async (req, res) 
            WHERE cf.BankAccountID = ?
              AND cf.TransactionDate >= ?
              AND cf.TransactionDate <= ?
+             ${licenseFilter}
              AND (cf.VoidFlag IS NULL OR cf.VoidFlag != 'Y')
              AND (cf.DeletedFlag IS NULL OR cf.DeletedFlag != 'Y')
            GROUP BY cf.GLNumber
-        `, [b.BankAccountID, fyStart, fyEnd]);
+        `, [b.BankAccountID, fyStart, fyEnd, ...licenseParams]);
         txns = r;
       } catch (e) {
         if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
@@ -8529,6 +8537,11 @@ app.get('/api/reports/monthly-gl', authMid.requireHoaScope, async (req, res) => 
        ORDER BY BankID
     `);
 
+    // Filtro por HOA: filtra en CashFlow_BankID_* (tiene HOALicenseNumber).
+    const allHoas = (req.hoaId === 'all' || !req.hoa);
+    const licenseFilter = allHoas ? '' : 'AND cf.HOALicenseNumber = ?';
+    const licenseParams = allHoas ? [] : [req.hoa.license_number];
+
     const monthMap = {};
 
     for (const b of banks) {
@@ -8542,10 +8555,11 @@ app.get('/api/reports/monthly-gl', authMid.requireHoaScope, async (req, res) => 
             FROM ${tableName} cf
            WHERE cf.TransactionDate >= ?
              AND cf.TransactionDate <= ?
+             ${licenseFilter}
              AND (cf.VoidFlag IS NULL OR cf.VoidFlag != 'Y')
              AND (cf.DeletedFlag IS NULL OR cf.DeletedFlag != 'Y')
            GROUP BY cf.GLNumber, MONTH(cf.TransactionDate)
-        `, [fyStart, fyEnd]);
+        `, [fyStart, fyEnd, ...licenseParams]);
         monthlyRows = r;
       } catch (e) {
         if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
