@@ -4,19 +4,22 @@ import Swal from 'sweetalert2';
 import './TopRibbon.css';
 import { apiFetch } from '../../config/api';
 
-// Reportes disponibles en el diálogo (mismos destinos que los botones originales)
+// Reportes disponibles en el diálogo (mismos destinos e iconos que los botones originales)
 const REPORT_ITEMS = [
-  { key: 'report-letter-codes', label: 'Letter Codes' },
-  { key: 'report-gl-accounts', label: 'GL Accounts' },
-  { key: 'report-dues-rates', label: 'Dues Rates' },
-  { key: 'report-open-checks', label: 'Open Checks' },
-  { key: 'report-payment-summary', label: 'Payment Summary' },
-  { key: 'report-ar-summary', label: 'AR Summary' },
+  { key: 'report-letter-codes', label: 'Letter Codes', icon: 'SUMMARIZE.png' },
+  { key: 'report-gl-accounts', label: 'GL Accounts', icon: 'ShowDetailsPage.png' },
+  { key: 'report-dues-rates', label: 'Dues Rates', icon: 'ReviewAcceptChange.png' },
+  { key: 'report-open-checks', label: 'Open Checks', icon: 'SUMMARIZE.png' },
+  { key: 'report-payment-summary', label: 'Payment Summary', icon: 'ShowDetailsPage.png' },
+  { key: 'report-ar-summary', label: 'AR Summary', icon: 'AddressBook.png' },
 ];
 
 function openReportsDialog(onSelectPage) {
+  const base = import.meta.env.BASE_URL || '/';
   const buttonsHtml = REPORT_ITEMS.map(
-    (r) => `<button type="button" data-report="${r.key}" class="swal-reports-btn">${r.label}</button>`
+    (r) => `<button type="button" data-report="${r.key}" class="swal-reports-btn">` +
+      `<img src="${base}icons/${r.icon}" alt="" class="swal-reports-icon" />` +
+      `<span>${r.label}</span></button>`
   ).join('');
   Swal.fire({
     title: 'Reportes',
