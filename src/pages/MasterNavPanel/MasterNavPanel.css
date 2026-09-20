@@ -147,5 +147,57 @@
     margin-top: 20px;
 }
 
+/* ===========================================================
+   RESPONSIVE - LAPTOP WIDTHS (<=1600px)
+   Slimmer left column, auto-fit button grid (3->2 cols),
+   smaller card text, wrapping legal notices.
+   =========================================================== */
+@media (max-width: 1600px) {
+  .mnp-mid {
+    grid-template-columns: 260px 1fr;
+    gap: 20px;
+  }
+
+  .mnp-header {
+    grid-template-columns: 260px 1fr;
+  }
+
+  .house {
+    width: 200px;
+  }
+
+  .mnp-logo-left img {
+    width: 230px;
+  }
+
+  .mnp-title {
+    transform: none;
+  }
+
+  .button-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .mnp-btn {
+    font-size: 14px;
+    height: 60px;
+    white-space: normal;
+    line-height: 1.15;
+    padding: 4px 8px;
+    overflow: hidden;
+  }
+
+  .mnp-bottom {
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .notice-left,
+  .notice-right {
+    width: 100%;
+    max-width: 560px;
+  }
+}
+
 
 

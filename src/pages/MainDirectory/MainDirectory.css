@@ -84,8 +84,10 @@
 
 .md-button-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+  row-gap: 8px;
   padding: 8px 12px;
   background: #ffffff;
 }

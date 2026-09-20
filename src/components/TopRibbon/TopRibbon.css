@@ -7,13 +7,15 @@
  .ribbon-inner{
     display:flex;
     align-items:stretch;
-    justify-content:flex-start;
+    justify-content:center;
     gap:6px;
     padding:6px 8px;
-    max-width:1440px;
-    margin:0 auto;
-    overflow:hidden;
-    flex-wrap:nowrap;
+    width:100%;
+    max-width:none;
+    margin:0;
+    overflow:visible;
+    flex-wrap:wrap;
+    row-gap:6px;
 }
 
 .ribbon-group{
@@ -175,6 +177,63 @@
 
 .ribbon-btn-daily-deposit {
     margin-left: 13px;
+}
+
+/* ===========================================================
+   COMPACT RIBBON FOR LAPTOP WIDTHS (<=1600px)
+   Smaller buttons/icons/fonts so wrapped rows stay short
+   (2 rows instead of 3) on laptop screens.
+   =========================================================== */
+@media (max-width: 1600px) {
+    .ribbon-inner {
+        gap: 4px;
+        padding: 4px 6px;
+    }
+
+    .ribbon-group {
+        padding: 2px 4px 2px 4px;
+    }
+
+    .ribbon-buttons {
+        gap: 4px;
+    }
+
+    .ribbon-btn {
+        width: 60px;
+        height: 58px;
+        padding: 4px 2px;
+    }
+
+    .ribbon-btn-master {
+        width: 60px;
+        height: 58px;
+    }
+
+    .icon {
+        width: 26px;
+        height: 26px;
+        margin-bottom: 2px;
+    }
+
+    .icon.icon-accesslistcontacts {
+        width: 34px;
+        height: 34px;
+    }
+
+    .label {
+        font-size: 10px;
+    }
+
+    .label-master {
+        width: 60px;
+        font-size: 11px;
+    }
+
+    .group-label {
+        font-size: 10px;
+        height: 24px;
+        padding: 2px 4px 4px;
+    }
 }
 
 
