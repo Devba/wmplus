@@ -182,6 +182,77 @@
 /* ===========================================================
    REPORTES DIALOG (SweetAlert2) - grid 2x3
    =========================================================== */
+.swal-reports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 2px;
+  min-width: 360px;
+}
+
+.swal-reports-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fffde7;
+  border: 1px solid #e0b030;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 6px;
+}
+
+.swal-reports-group-header:hover {
+  background: #fff176;
+}
+
+.swal-reports-group-chevron {
+  display: inline-block;
+  font-size: 14px;
+  color: #333;
+  transition: transform 0.2s ease;
+  width: 14px;
+}
+
+.swal-reports-group.is-collapsed .swal-reports-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.swal-reports-group-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #333;
+  flex: 1;
+}
+
+.swal-reports-group-count {
+  font-size: 11px;
+  color: #666;
+  background: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid #e0b030;
+}
+
+.swal-reports-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 4px;
+  max-height: 500px;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  opacity: 1;
+}
+
+.swal-reports-group.is-collapsed .swal-reports-group-body {
+  max-height: 0;
+  opacity: 0;
+  padding: 0 4px;
+  margin: 0;
+}
+
 .swal-reports-grid {
   display: flex;
   flex-direction: column;

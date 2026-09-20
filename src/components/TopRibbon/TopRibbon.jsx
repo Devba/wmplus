@@ -50,24 +50,74 @@ function openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout) {
   });
 }
 
-function openReportsDialog(onSelectPage, user) {
-  const base = import.meta.env.BASE_URL || '/';
-  // Filtra reportes Escrow si el usuario no tiene can_view_escrow_flag = 'Y'
-  const canEscrow = !user || user.can_view_escrow_flag !== 'N';
-  const items = REPORT_ITEMS.filter((r) => !r.escrow || canEscrow);
-  const buttonsHtml = items.map(
+function renderReportButtons(items, base) {
+  return items.map(
     (r) => `<button type="button" data-report="${r.key}" class="swal-reports-btn">` +
       `<img src="${base}icons/${r.icon}" alt="" class="swal-reports-icon" />` +
       `<span>${r.label}</span></button>`
   ).join('');
+}
+
+function renderReportGroup(groupId, label, count, itemsHtml, collapsed) {
+  return `<div class="swal-reports-group${collapsed ? ' is-collapsed' : ''}" data-group="${groupId}">
+    <div class="swal-reports-group-header" data-toggle="${groupId}">
+      <span class="swal-reports-group-chevron">▾</span>
+      <span class="swal-reports-group-label">${label}</span>
+      <span class="swal-reports-group-count">${count}</span>
+    </div>
+    <div class="swal-reports-group-body">${itemsHtml}</div>
+  </div>`;
+}
+
+function openReportsDialog(onSelectPage, user) {
+  const base = import.meta.env.BASE_URL || '/';
+  // Filtra reportes Escrow si el usuario no tiene can_view_escrow_flag = 'Y'
+  const canEscrow = !user || user.can_view_escrow_flag !== 'N';
+  const generalItems = REPORT_ITEMS.filter((r) => !r.escrow);
+  const escrowItems = canEscrow ? REPORT_ITEMS.filter((r) => r.escrow) : [];
+
+  // Lee estado colapsado de localStorage
+  const stored = (() => {
+    try { return JSON.parse(localStorage.getItem('swal_reports_collapsed') || '{}'); }
+    catch { return {}; }
+  })();
+  const generalCollapsed = !!stored.general;
+  const escrowCollapsed = !!stored.escrow;
+
+  const generalHtml = renderReportGroup(
+    'general', 'Generales', generalItems.length,
+    renderReportButtons(generalItems, base), generalCollapsed
+  );
+  const escrowHtml = escrowItems.length
+    ? renderReportGroup(
+        'escrow', 'Escrow', escrowItems.length,
+        renderReportButtons(escrowItems, base), escrowCollapsed
+      )
+    : '';
+
   Swal.fire({
     title: 'Reportes',
-    html: `<div class="swal-reports-grid">${buttonsHtml}</div>`,
+    html: `<div class="swal-reports-list">${generalHtml}${escrowHtml}</div>`,
     showConfirmButton: false,
     showCloseButton: true,
     width: 420,
     didOpen: () => {
       const container = Swal.getHtmlContainer();
+      // Toggle de grupos
+      container.querySelectorAll('[data-toggle]').forEach((header) => {
+        header.addEventListener('click', () => {
+          const groupId = header.getAttribute('data-toggle');
+          const group = header.parentElement;
+          group.classList.toggle('is-collapsed');
+          // Persistir estado
+          try {
+            const cur = JSON.parse(localStorage.getItem('swal_reports_collapsed') || '{}');
+            cur[groupId] = group.classList.contains('is-collapsed');
+            localStorage.setItem('swal_reports_collapsed', JSON.stringify(cur));
+          } catch { /* ignore */ }
+        });
+      });
+      // Click en botones de reporte
       container.querySelectorAll('[data-report]').forEach((btn) => {
         btn.addEventListener('click', () => {
           Swal.close();
