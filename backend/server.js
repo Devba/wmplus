@@ -8341,6 +8341,8 @@ app.get('/api/reports/escrow-summary', authMid.requireHoaScope, async (req, res)
     `, [bank.BankAccountID]);
 
     // 3. GL breakdown for current FY (filtra por TransactionDate, igual que /api/cash-flow)
+    //    Subquery DISTINCT en GLAccounts porque la tabla tiene 7 filas duplicadas
+    //    por cada GLNumber (bug que multiplicaba SUM por 7).
     const fy = ledgerRows[0]?.FiscalYearLabel || new Date().getFullYear();
     const fiscalYearStart = `${fy}-01-01`;
     const fiscalYearEnd = `${fy}-12-31`;
@@ -8350,7 +8352,7 @@ app.get('/api/reports/escrow-summary', authMid.requireHoaScope, async (req, res)
              COALESCE(SUM(cf.CashInAmount), 0) AS cash_in,
              COALESCE(SUM(cf.CashOutAmount), 0) AS cash_out
         FROM ${bankTable} cf
-        LEFT JOIN GLAccounts gla
+        LEFT JOIN (SELECT DISTINCT GLNumber, GLName FROM GLAccounts) gla
           ON gla.GLNumber = cf.GLNumber
        WHERE cf.BankAccountID = ?
          AND cf.TransactionDate >= ?
