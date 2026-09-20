@@ -14,6 +14,38 @@ const REPORT_ITEMS = [
   { key: 'report-ar-summary', label: 'AR Summary', icon: 'AddressBook.png' },
 ];
 
+function openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout) {
+  const base = import.meta.env.BASE_URL || '/';
+  const actions = [
+    { action: 'my-account', label: 'Mi cuenta', icon: 'AddressBook.png', title: 'Mi cuenta y cambio de clave' },
+    { action: 'logout', label: 'Cerrar sesión', icon: 'FileManageMenu.png', title: 'Cerrar sesión' },
+  ];
+  const buttonsHtml = actions.map(
+    (a) => `<button type="button" data-action="${a.action}" title="${a.title}" class="swal-reports-btn">` +
+      `<img src="${base}icons/${a.icon}" alt="" class="swal-reports-icon" />` +
+      `<span>${a.label}</span></button>`
+  ).join('');
+  Swal.fire({
+    title: `Sesión: ${user.login_name}`,
+    html: (scopeLabel ? `<p class="swal-usuario-scope">${scopeLabel}</p>` : '') +
+      `<div class="swal-reports-grid">${buttonsHtml}</div>`,
+    showConfirmButton: false,
+    showCloseButton: true,
+    width: 420,
+    didOpen: () => {
+      const container = Swal.getHtmlContainer();
+      container.querySelectorAll('[data-action]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const action = btn.getAttribute('data-action');
+          Swal.close();
+          if (action === 'logout') onLogout();
+          else onSelectPage('my-account');
+        });
+      });
+    },
+  });
+}
+
 function openReportsDialog(onSelectPage) {
   const base = import.meta.env.BASE_URL || '/';
   const buttonsHtml = REPORT_ITEMS.map(
@@ -271,21 +303,13 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
   <div className="group-label">REPORTES</div>
 </div>
 
-{/* FASE A: chip de usuario/scope visible + acciones explícitas */}
+{/* FASE A: grupo USUARIO comprimido a 1 icono (diálogo con Mi cuenta + Cerrar sesión) */}
 {user && (
   <div className="ribbon-group" title={`Sesión: ${user.login_name}`}>
     <div className="ribbon-buttons">
-      <div className="ribbon-btn" style={{ cursor: 'default' }}>
-        <div className="icon icon-showdetailspage"></div>
-        <div className="label">{user.display_name || user.login_name}<br />{scopeLabel}</div>
-      </div>
-      <div className="ribbon-btn" onClick={() => onSelectPage('my-account')} style={{ cursor: 'pointer' }} title="Mi cuenta y cambio de clave">
+      <div className="ribbon-btn" onClick={() => openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout)} style={{ cursor: 'pointer' }}>
         <div className="icon icon-addressbook"></div>
-        <div className="label">Mi<br />cuenta</div>
-      </div>
-      <div className="ribbon-btn" onClick={onLogout} style={{ cursor: 'pointer' }} title="Cerrar sesión">
-        <div className="icon icon-archive-ar"></div>
-        <div className="label">Cerrar<br />sesión</div>
+        <div className="label">{user.display_name || user.login_name}</div>
       </div>
     </div>
     <div className="group-label">USUARIO</div>
