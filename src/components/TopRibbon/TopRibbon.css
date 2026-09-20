@@ -189,6 +189,10 @@
   padding: 6px 2px;
 }
 
+.swal-reports-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .swal-reports-btn {
   display: flex;
   align-items: center;

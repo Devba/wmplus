@@ -4,7 +4,8 @@ import Swal from 'sweetalert2';
 import './TopRibbon.css';
 import { apiFetch } from '../../config/api';
 
-// Reportes disponibles en el diálogo (mismos destinos e iconos que los botones originales)
+// Reportes disponibles en el diálogo. `escrow: true` indica que requiere
+// can_view_escrow_flag = 'Y' (si no, se oculta para ese usuario).
 const REPORT_ITEMS = [
   { key: 'report-letter-codes', label: 'Letter Codes', icon: 'SUMMARIZE.png' },
   { key: 'report-gl-accounts', label: 'GL Accounts', icon: 'ShowDetailsPage.png' },
@@ -12,6 +13,9 @@ const REPORT_ITEMS = [
   { key: 'report-open-checks', label: 'Open Checks', icon: 'SUMMARIZE.png' },
   { key: 'report-payment-summary', label: 'Payment Summary', icon: 'ShowDetailsPage.png' },
   { key: 'report-ar-summary', label: 'AR Summary', icon: 'AddressBook.png' },
+  { key: 'escrow-account-summary', label: 'Escrow Account Summary', icon: 'AddressBook.png', escrow: true },
+  { key: 'escrow-cf', label: 'Escrow Cash Flow', icon: 'ShowDetailsPage.png', escrow: true },
+  { key: 'historic-escrow', label: 'Historic Escrow', icon: 'ReviewAcceptChange.png', escrow: true },
 ];
 
 function openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout) {
@@ -46,16 +50,19 @@ function openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout) {
   });
 }
 
-function openReportsDialog(onSelectPage) {
+function openReportsDialog(onSelectPage, user) {
   const base = import.meta.env.BASE_URL || '/';
-  const buttonsHtml = REPORT_ITEMS.map(
+  // Filtra reportes Escrow si el usuario no tiene can_view_escrow_flag = 'Y'
+  const canEscrow = !user || user.can_view_escrow_flag !== 'N';
+  const items = REPORT_ITEMS.filter((r) => !r.escrow || canEscrow);
+  const buttonsHtml = items.map(
     (r) => `<button type="button" data-report="${r.key}" class="swal-reports-btn">` +
       `<img src="${base}icons/${r.icon}" alt="" class="swal-reports-icon" />` +
       `<span>${r.label}</span></button>`
   ).join('');
   Swal.fire({
     title: 'Reportes',
-    html: `<div class="swal-reports-grid">${buttonsHtml}</div>`,
+    html: `<div class="swal-reports-grid swal-reports-grid-3">${buttonsHtml}</div>`,
     showConfirmButton: false,
     showCloseButton: true,
     width: 420,
@@ -295,7 +302,7 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
 {/* Tier 1: grupo REPORTES comprimido a 1 icono (diálogo con los 6 reportes) */}
 <div className="ribbon-group" title="Reportes por HOA activa">
   <div className="ribbon-buttons">
-    <div className="ribbon-btn" onClick={() => openReportsDialog(onSelectPage)} style={{ cursor: 'pointer' }}>
+    <div className="ribbon-btn" onClick={() => openReportsDialog(onSelectPage, user)} style={{ cursor: 'pointer' }}>
       <div className="icon icon-report"></div>
       <div className="label">Reportes</div>
     </div>
