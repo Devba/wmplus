@@ -7,15 +7,11 @@
  .ribbon-inner{
     display:flex;
     align-items:stretch;
-    justify-content:center;
+    justify-content:flex-start;
     gap:6px;
     padding:6px 8px;
-    width:100%;
-    max-width:none;
-    margin:0;
-    overflow:visible;
-    flex-wrap:wrap;
-    row-gap:6px;
+    overflow:hidden;
+    flex-wrap:nowrap;
 }
 
 .ribbon-group{
@@ -180,59 +176,59 @@
 }
 
 /* ===========================================================
-   COMPACT RIBBON FOR LAPTOP WIDTHS (<=1600px)
-   Smaller buttons/icons/fonts so wrapped rows stay short
-   (2 rows instead of 3) on laptop screens.
+   COMPACT RIBBON - makes buttons small enough to fit all
+   groups in one horizontal row on laptop screens.
    =========================================================== */
 @media (max-width: 1600px) {
     .ribbon-inner {
-        gap: 4px;
-        padding: 4px 6px;
+        gap: 2px;
+        padding: 3px 4px;
     }
 
     .ribbon-group {
-        padding: 2px 4px 2px 4px;
+        padding: 1px 2px 1px 2px;
     }
 
     .ribbon-buttons {
-        gap: 4px;
+        gap: 2px;
     }
 
     .ribbon-btn {
-        width: 60px;
-        height: 58px;
-        padding: 4px 2px;
+        width: 46px;
+        height: 44px;
+        padding: 2px 1px;
     }
 
     .ribbon-btn-master {
-        width: 60px;
-        height: 58px;
+        width: 46px;
+        height: 44px;
     }
 
     .icon {
-        width: 26px;
-        height: 26px;
-        margin-bottom: 2px;
+        width: 18px;
+        height: 18px;
+        margin-bottom: 1px;
     }
 
     .icon.icon-accesslistcontacts {
-        width: 34px;
-        height: 34px;
+        width: 24px;
+        height: 24px;
     }
 
     .label {
-        font-size: 10px;
+        font-size: 8px;
+        line-height: 1.0;
     }
 
     .label-master {
-        width: 60px;
-        font-size: 11px;
+        width: 46px;
+        font-size: 9px;
     }
 
     .group-label {
-        font-size: 10px;
-        height: 24px;
-        padding: 2px 4px 4px;
+        font-size: 8px;
+        height: 16px;
+        padding: 1px 2px 2px;
     }
 }
 

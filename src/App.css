@@ -16,12 +16,11 @@ body,
 }
 
 .top-ribbon {
-  background: #e8e8e8;
-  border-bottom: 2px solid #b8c8e8;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
   display: flex;
-  align-items: center;
   justify-content: center;
-  font-weight: bold;
 }
 
 .middle-content {
