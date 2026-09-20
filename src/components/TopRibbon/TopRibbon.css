@@ -150,6 +150,10 @@
   height: 18px;
 }
 
+.icon.icon-report {
+  background-image: url("/icons/REPORT.png");
+}
+
 .ribbon-btn-master {
     width: 72px;
     height: 66px;
@@ -173,6 +177,31 @@
 
 .ribbon-btn-daily-deposit {
     margin-left: 13px;
+}
+
+/* ===========================================================
+   REPORTES DIALOG (SweetAlert2) - grid 2x3
+   =========================================================== */
+.swal-reports-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 6px 2px;
+}
+
+.swal-reports-btn {
+  padding: 12px 8px;
+  background: #fffde7;
+  border: 1px solid #e0b030;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+}
+
+.swal-reports-btn:hover {
+  background: #fff176;
 }
 
 /* ===========================================================

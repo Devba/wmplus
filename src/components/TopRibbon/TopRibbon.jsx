@@ -1,7 +1,40 @@
 
 import { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import './TopRibbon.css';
 import { apiFetch } from '../../config/api';
+
+// Reportes disponibles en el diálogo (mismos destinos que los botones originales)
+const REPORT_ITEMS = [
+  { key: 'report-letter-codes', label: 'Letter Codes' },
+  { key: 'report-gl-accounts', label: 'GL Accounts' },
+  { key: 'report-dues-rates', label: 'Dues Rates' },
+  { key: 'report-open-checks', label: 'Open Checks' },
+  { key: 'report-payment-summary', label: 'Payment Summary' },
+  { key: 'report-ar-summary', label: 'AR Summary' },
+];
+
+function openReportsDialog(onSelectPage) {
+  const buttonsHtml = REPORT_ITEMS.map(
+    (r) => `<button type="button" data-report="${r.key}" class="swal-reports-btn">${r.label}</button>`
+  ).join('');
+  Swal.fire({
+    title: 'Reportes',
+    html: `<div class="swal-reports-grid">${buttonsHtml}</div>`,
+    showConfirmButton: false,
+    showCloseButton: true,
+    width: 420,
+    didOpen: () => {
+      const container = Swal.getHtmlContainer();
+      container.querySelectorAll('[data-report]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          Swal.close();
+          onSelectPage(btn.getAttribute('data-report'));
+        });
+      });
+    },
+  });
+}
 
 
 function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
@@ -224,32 +257,12 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
 
 
 
-{/* Tier 1: grupo REPORTES (solo lectura; visible también a view-only) */}
+{/* Tier 1: grupo REPORTES comprimido a 1 icono (diálogo con los 6 reportes) */}
 <div className="ribbon-group" title="Reportes por HOA activa">
   <div className="ribbon-buttons">
-    <div className="ribbon-btn" onClick={() => onSelectPage('report-letter-codes')} style={{ cursor: 'pointer' }}>
-      <div className="icon icon-summarize"></div>
-      <div className="label">Letter<br />Codes</div>
-    </div>
-    <div className="ribbon-btn" onClick={() => onSelectPage('report-gl-accounts')} style={{ cursor: 'pointer' }}>
-      <div className="icon icon-showdetailspage"></div>
-      <div className="label">GL<br />Accounts</div>
-    </div>
-    <div className="ribbon-btn" onClick={() => onSelectPage('report-dues-rates')} style={{ cursor: 'pointer' }}>
-      <div className="icon icon-reviewacceptchange"></div>
-      <div className="label">Dues<br />Rates</div>
-    </div>
-    <div className="ribbon-btn" onClick={() => onSelectPage('report-open-checks')} style={{ cursor: 'pointer' }}>
-      <div className="icon icon-summarize"></div>
-      <div className="label">Open<br />Checks</div>
-    </div>
-    <div className="ribbon-btn" onClick={() => onSelectPage('report-payment-summary')} style={{ cursor: 'pointer' }}>
-      <div className="icon icon-showdetailspage"></div>
-      <div className="label">Payment<br />Summary</div>
-    </div>
-    <div className="ribbon-btn" onClick={() => onSelectPage('report-ar-summary')} style={{ cursor: 'pointer' }}>
-      <div className="icon icon-addressbook"></div>
-      <div className="label">AR<br />Summary</div>
+    <div className="ribbon-btn" onClick={() => openReportsDialog(onSelectPage)} style={{ cursor: 'pointer' }}>
+      <div className="icon icon-report"></div>
+      <div className="label">Reportes</div>
     </div>
   </div>
   <div className="group-label">REPORTES</div>
