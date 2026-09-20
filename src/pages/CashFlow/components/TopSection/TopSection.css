@@ -1,0 +1,140 @@
+
+
+
+
+
+
+
+/* ===========================================================
+   CASH FLOW - TOP SECTION
+   =========================================================== */
+
+.cf-topsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: #ffffff;
+}
+
+.cf-title-row {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+
+  background: #ffffff;
+  color: #000000;
+}
+
+.cf-title-text {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cf-title-status {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cf-controls-row {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  padding: 6px 12px;
+
+  background: #ffffff;
+  border-top: 1px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
+}
+
+.cf-control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.cf-control-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #000000;
+}
+
+.cf-bank-select {
+  width: 320px;
+  height: 26px;
+  padding: 0 6px;
+
+  border: 1px solid #888888;
+  background: #ffffff;
+
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: #000000;
+}
+
+.cf-fiscal-year-select {
+  width: 90px;
+  height: 26px;
+  padding: 0 6px;
+
+  border: 1px solid #888888;
+  background: #ffffff;
+
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: #000000;
+}
+
+.cf-balance-display {
+  width: 120px;
+  height: 26px;
+  padding: 0 7px;
+
+  border: 1px solid #888888;
+  background: #f5f5f5;
+
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #000000;
+  text-align: right;
+}
+
+.cf-last-updated-display {
+  width: 145px;
+  height: 26px;
+  padding: 0 7px;
+
+  border: 1px solid #888888;
+  background: #f5f5f5;
+
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: #000000;
+  text-align: center;
+}
+
+
+.cf-refresh-button {
+  width: 80px;
+  height: 26px;
+
+  border: 1px solid #000000;
+  background: #e6e6e6;
+
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #000000;
+
+  cursor: pointer;
+}
+
+.cf-refresh-button:hover {
+  background: #d6d6d6;
+}

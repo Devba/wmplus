@@ -88,6 +88,43 @@ function findRowByTransaction(
   return null;
 }
 
+
+function getTransactionTotal(transactionNumber) {
+  const rowsHost =
+    document.getElementById('aprRows') ||
+    document.querySelector('.apr-table tbody');
+
+  if (!rowsHost) {
+    return 0;
+  }
+
+  const wanted = normalize(transactionNumber);
+
+  let total = 0;
+
+  for (const tr of rowsHost.querySelectorAll('tr')) {
+    const cells = tr.querySelectorAll('td');
+
+    const rowTransaction =
+      normalize(cells[10]?.innerText);
+
+    if (rowTransaction === wanted) {
+      const amount = Number(
+        String(cells[3]?.innerText || '')
+          .replace(/[$,]/g, '')
+      );
+
+      if (!Number.isNaN(amount)) {
+        total += amount;
+      }
+    }
+  }
+
+  return total;
+}
+
+
+
 function populateFromRow(tr, refs) {
   if (!tr) {
     return;
@@ -108,8 +145,14 @@ function populateFromRow(tr, refs) {
   refs.account.current.value =
     normalize(cells[0]?.innerText);
 
+  const transactionNumber =
+  normalize(cells[10]?.innerText);
+
+  const transactionTotal =
+    getTransactionTotal(transactionNumber);
+
   refs.amount.current.value =
-    normalize(cells[3]?.innerText);
+    transactionTotal.toFixed(2);
 }
 
 function VoidAssmtPaymentUF({

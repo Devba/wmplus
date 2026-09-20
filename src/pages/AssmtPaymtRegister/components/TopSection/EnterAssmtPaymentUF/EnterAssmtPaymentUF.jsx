@@ -112,17 +112,24 @@ function EnterAssmtPaymentUF({
   const [selectedResident, setSelectedResident] =
     useState(null);
 
+    const [assessmentSetupError, setAssessmentSetupError] = useState("");
+
   const [annualPayment, setAnnualPayment] =
     useState('');
 
   const [specialPayment, setSpecialPayment] =
     useState('');
 
+    
+
   const [dateDeposited, setDateDeposited] =
     useState(currentDateText());
 
   const [checkNumber, setCheckNumber] =
     useState('');
+
+  const [isSubmitting, setIsSubmitting] =
+  useState(false);  
 
     const [residentNameQuery, setResidentNameQuery] =
   useState('');
@@ -390,7 +397,8 @@ const selectResidentFromAddressSearch = (resident) => {
   ) => {
     const accountId =
       String(accountNumber || '').trim();
-
+  
+    setAssessmentSetupError("");
     setSelectedAccount(accountId);
     setSelectedResident(null);
 
@@ -402,12 +410,23 @@ const selectResidentFromAddressSearch = (resident) => {
       const response = await fetch(
         `${API_BASE_URL}/residents/${encodeURIComponent(
           accountId
-        )}/current`
+        )}/current?ensureAssessments=1`
       );
 
       const result = await response.json();
 
       if (!response.ok || !result?.ok || !result?.resident) {
+
+      if (result?.code === 'RESIDENT_ASSESSMENT_RATES_INVALID') {
+          setAssessmentSetupError(
+            result.message ||
+            'This resident does not have valid assessment Rate Codes assigned. Correct the resident in Main Directory before entering an assessment payment.'
+          );
+
+          return;
+        }
+
+
         if (result?.code === 'RESIDENT_NOT_FOUND') {
           window.alert(
             result.message ||
@@ -503,6 +522,10 @@ const selectResidentFromAddressSearch = (resident) => {
   keepOpen = false
     ) => {
 
+      if (isSubmitting) {
+        return;
+      }
+
     if (!selectedResident) {
       window.alert(
         'Please select a resident before entering payment.'
@@ -515,6 +538,16 @@ const selectResidentFromAddressSearch = (resident) => {
 
 const specialPaymentNumber =
   numberFromMoney(specialPayment);
+
+  if (
+  annualPaymentNumber > 0 &&
+  specialPaymentNumber > 0
+) {
+  window.alert(
+    'Enter the payment in either Annual Dues OR Special Assessment, not both.'
+  );
+  return;
+}
 
 if (
   annualPaymentNumber <= 0 &&
@@ -662,6 +695,8 @@ operatorId:
   'SYSTEM'
 };
 
+    setIsSubmitting(true);
+
     try {
       const response = await fetch(
         `${API_BASE_URL}/apr/enter-payment`,
@@ -710,15 +745,45 @@ operatorId:
 
 
     } catch (error) {
-      console.error(
-        'APR payment server error:',
-        error
-      );
-    }
+  console.error(
+    'APR payment server error:',
+    error
+  );
+} finally {
+  setIsSubmitting(false);
+}
   };
 
   return (
+
     <div className="apr-enter-react-uf">
+    {assessmentSetupError && (
+        <div className="apr-assessment-setup-error">
+          <div className="apr-assessment-setup-error-title">
+            ASSESSMENT SETUP ERROR
+          </div>
+
+          <div>
+            {assessmentSetupError}
+          </div>
+
+          <button
+          type="button"
+          className="apr-assessment-setup-error-button"
+          onClick={() => {
+            setAssessmentSetupError("");
+            setSelectedAccount("");
+            setSelectedResident(null);
+            setResidentNameQuery("");
+            setResidentAddressQuery("");
+          }}
+        >
+          OK — CORRECT RESIDENT
+        </button>
+
+
+        </div>
+      )}
       <div className="apr-enter-blue-title">
         CURRENT RESIDENT STATUS:
       </div>
@@ -1017,24 +1082,26 @@ operatorId:
         All excess money will be applied to Annual Dues / Credit.
       </div>
       <button
-          type="button"
-          className="apr-enter-submit"
-          onClick={() =>
-            handleEnterPayment(false)
-          }
-        >
-          ENTER
-        </button>
-
-      <button
         type="button"
-        className="apr-enter-multiple"
+        className="apr-enter-submit"
+        disabled={isSubmitting}
         onClick={() =>
-          handleEnterPayment(true)
+          handleEnterPayment(false)
         }
       >
-        ENTER MULTIPLE RESIDENT ASSM&apos;T DEPOSITS
+        ENTER
       </button>
+
+      <button
+          type="button"
+          className="apr-enter-multiple"
+          disabled={isSubmitting}
+          onClick={() =>
+            handleEnterPayment(true)
+          }
+        >
+          ENTER MULTIPLE RESIDENT ASSM&apos;T DEPOSITS
+        </button>
 
       <div className="apr-enter-search-title">
         Quick Resident Acct # Search - 2 Way

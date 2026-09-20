@@ -91,7 +91,11 @@ async function loadGLMappingFromServer() {
       10
     );
 
-    return Number.isFinite(glNumber) && glNumber < 40000;
+    return (
+  Number.isFinite(glNumber) &&
+  glNumber >= 20000 &&
+  glNumber < 40000
+);
   });
 
   const revenueRows = glAccounts.filter((row) => {
@@ -100,13 +104,32 @@ async function loadGLMappingFromServer() {
       10
     );
 
-    return Number.isFinite(glNumber) && glNumber >= 40000;
+    return (
+      Number.isFinite(glNumber) &&
+      glNumber >= 40000 &&
+      glNumber < 50000
+    );
   });
 
+  const assetLiabilityRows = glAccounts.filter((row) => {
+  const glNumber = parseInt(
+    String(row.glNumber || '').replace(/\D.*$/, ''),
+    10
+  );
+
+  return (
+      Number.isFinite(glNumber) &&
+      glNumber >= 50000 &&
+      glNumber <= 50999
+    );
+  });
+
+
   return {
-    expenseRows,
-    revenueRows,
-    activeSection: 'expense'
+  expenseRows,
+  revenueRows,
+  assetLiabilityRows,
+  activeSection: 'expense'
   };
 }
 async function saveGLMappingToServer(data) {
@@ -117,7 +140,11 @@ async function saveGLMappingToServer(data) {
 
     ...(Array.isArray(data.revenueRows)
       ? data.revenueRows
-      : [])
+      : []),
+
+    ...(Array.isArray(data.assetLiabilityRows)
+      ? data.assetLiabilityRows
+      : [])  
   ];
 
   const response = await fetch(SERVER_URL, {

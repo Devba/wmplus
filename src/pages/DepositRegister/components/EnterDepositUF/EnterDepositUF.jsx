@@ -626,6 +626,7 @@ function EnterDepositUF({ onAddDeposit }) {
       depositDate,
       dateCleared: '',
       monthCleared: '',
+      status: 'Pending',
       ownerAccount:
       entityType === 'resident'
         ? String(entityId).replace(/\D/g, '').padStart(6, '0')
@@ -698,6 +699,8 @@ try {
 
       newDeposit.transactionNumber =
         result.deposit_txn_num || newDeposit.transactionNumber;
+
+      newDeposit.transaction = newDeposit.transactionNumber;
 
       if (typeof onAddDeposit === 'function') {
         onAddDeposit(newDeposit);

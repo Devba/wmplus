@@ -1,10 +1,13 @@
 
 import DepositRegisterGrid from './DepositRegisterGrid';
 
-function BodyBox({ depositRows }) {
+function BodyBox({ depositRows, onSelectDepositRow }) {
   return (
     <div className="depreg-bodybox">
-      <DepositRegisterGrid depositRows={depositRows} />
+      <DepositRegisterGrid
+        depositRows={depositRows}
+        onSelectDepositRow={onSelectDepositRow}
+      />
     </div>
   );
 }

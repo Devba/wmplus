@@ -19,6 +19,7 @@ import DuesRates from './Reports/DuesRates';
 import OpenChecks from './Reports/OpenChecks';
 import PaymentSummary from './Reports/PaymentSummary';
 import ARSummary from './Reports/ARSummary';
+import CashFlow from './CashFlow';
 
 
 
@@ -41,5 +42,6 @@ export const pageMap = {
   'report-open-checks': OpenChecks,
   'report-payment-summary': PaymentSummary,
   'report-ar-summary': ARSummary,
+  'cash-flow': CashFlow,
   };
 
