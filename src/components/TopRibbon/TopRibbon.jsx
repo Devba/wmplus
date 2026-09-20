@@ -62,7 +62,7 @@ function openReportsDialog(onSelectPage, user) {
   ).join('');
   Swal.fire({
     title: 'Reportes',
-    html: `<div class="swal-reports-grid swal-reports-grid-3">${buttonsHtml}</div>`,
+    html: `<div class="swal-reports-grid">${buttonsHtml}</div>`,
     showConfirmButton: false,
     showCloseButton: true,
     width: 420,

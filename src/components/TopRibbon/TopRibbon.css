@@ -183,14 +183,11 @@
    REPORTES DIALOG (SweetAlert2) - grid 2x3
    =========================================================== */
 .swal-reports-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 6px 2px;
-}
-
-.swal-reports-grid-3 {
-  grid-template-columns: repeat(3, 1fr);
+  min-width: 340px;
 }
 
 .swal-reports-btn {
