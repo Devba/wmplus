@@ -928,8 +928,14 @@ app.get('/api/vendors', async (req, res) => {
   }
 });
 
-app.post('/api/vendors', async (req, res) => {
+app.post('/api/vendors', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
+    const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
+    const sesOperator = (req.authUser && req.authUser.login_name) || 'SYSTEM';
     const v = req.body;
     const [[settingsRow]] = await db.query(`
   SELECT VendorStartingAcct
@@ -978,7 +984,7 @@ const vendorId =
         PrimaryPhone, EmailAddress, ContactName, VendorType, TaxID,
         ElectronicCheckYN, ElectronicCheckAmount, ElectronicCheckStartMonth, ElectronicCheckStartDay, BankAccount,
         DefaultGLNumber, DefaultGLAccountName, CheckNotation, VendorNotes, ActiveFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `, [
       vendorId,
       v.vendor_name || '',
@@ -1002,7 +1008,10 @@ const vendorId =
       v.default_gl_name || 'General Expense',
       v.default_check_note || '',
       v.notes || '',
-      v.active_flag || 'Y'
+      v.active_flag || 'Y',
+      sesMgt,
+      sesLicense,
+      sesOperator
     ]);
     res.status(201).json({ success: true, vendor_id: vendorId });
   } catch (err) {
@@ -1011,11 +1020,14 @@ const vendorId =
   }
 });
 
-app.put('/api/vendors/:vendor_id', async (req, res) => {
+app.put('/api/vendors/:vendor_id', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
     const { vendor_id } = req.params;
     const v = req.body;
-    await db.query(`
+    const [updateRes] = await db.query(`
       UPDATE VendorMaster SET
         VendorName = ?,
         CareOfAddressLine = ?,
@@ -1040,7 +1052,7 @@ app.put('/api/vendors/:vendor_id', async (req, res) => {
         VendorNotes = ?,
         ActiveFlag = ?,
         TimeStampUpdated = NOW()
-      WHERE VendorID = ? AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+      WHERE VendorID = ? AND HOALicenseNumber = ? AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
     `, [
       v.vendor_name || '',
       v.co_address || '',
@@ -1064,8 +1076,12 @@ app.put('/api/vendors/:vendor_id', async (req, res) => {
       v.default_check_note || '',
       v.notes || '',
       v.active_flag || 'Y',
-      vendor_id
+      vendor_id,
+      req.hoa.license_number
     ]);
+    if (!updateRes.affectedRows) {
+      return res.status(404).json({ error: 'Vendor no encontrado en esta HOA.' });
+    }
     res.json({ success: true });
   } catch (err) {
     console.error('Error updating vendor:', err);
@@ -2065,9 +2081,15 @@ async function ensureAllCashFlowBankTables() {
   }
 }
 
-app.post('/api/check-register', async (req, res) => {
+app.post('/api/check-register', authMid.requireHoaScope, async (req, res) => {
   const connection = await db.getConnection();
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
+    const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
+    const sesOperator = (req.authUser && req.authUser.login_name) || 'SYSTEM';
     await connection.beginTransaction();
     const c = req.body;
     const txnNum = await generateCheckTransactionNumber(connection);
@@ -2081,7 +2103,7 @@ app.post('/api/check-register', async (req, res) => {
         DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
         VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, CheckAllowedYN, EscrowFlag, Status,
         DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, 'Issued', 'N', 'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, 'Issued', 'N', ?, ?, ?, ?)
     `, [
       txnNum,
       c.check_number || '',
@@ -2100,6 +2122,9 @@ app.post('/api/check-register', async (req, res) => {
       bankAccountId,
       c.check_allowed || 'Y',
       c.escrow_flag || 'N',
+      sesMgt,
+      sesLicense,
+      sesOperator,
       createdAt
     ]);
 
@@ -2120,10 +2145,13 @@ app.post('/api/check-register', async (req, res) => {
 });
 
 
-app.post('/api/check-register/clear', async (req, res) => {
+app.post('/api/check-register/clear', authMid.requireHoaScope, async (req, res) => {
   const connection = await db.getConnection();
 
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
     await connection.beginTransaction();
 
     const {
@@ -2187,6 +2215,14 @@ app.post('/api/check-register/clear', async (req, res) => {
     }
 
     const check = checkRows[0];
+
+    if ((check.HOALicenseNumber || '') !== req.hoa.license_number) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        error: 'Este cheque pertenece a otra HOA.'
+      });
+    }
 
     const [ledgerRows] = await connection.query(`
   SELECT *
@@ -2588,10 +2624,16 @@ async function generateDepositTransactionNumber(conn) {
 }
 
 
-app.post('/api/deposit-register', async (req, res) => {
+app.post('/api/deposit-register', authMid.requireHoaScope, async (req, res) => {
   const connection = await db.getConnection();
 
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const sesLicense = req.hoa.license_number;
+    const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
+    const sesOperator = (req.authUser && req.authUser.login_name) || 'SYSTEM';
     await connection.beginTransaction();
 
     const d = req.body;
@@ -2640,9 +2682,9 @@ app.post('/api/deposit-register', async (req, res) => {
         ?, ?, ?, ?, ?,
         'Pending',
         'N',
-        'MGTCO-001',
-        'HOA-FL-2024-001',
-        'SYSTEM',
+        ?,
+        ?,
+        ?,
         NOW()
       )
     `, [
@@ -2658,7 +2700,10 @@ app.post('/api/deposit-register', async (req, res) => {
       d.vendor_id || '',
       d.expense_refund_gl_category || '',
       d.expense_refund_gl_number || null,
-      d.note || ''
+      d.note || '',
+      sesMgt,
+      sesLicense,
+      sesOperator
     ]);
 
     await connection.commit();
@@ -3706,6 +3751,8 @@ app.put('/api/settings/banking', authMid.requireHoaScope, async (req, res) => {
       return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
     }
     const sesLicense = req.hoa.license_number;
+    const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
+    const sesOperator = (req.authUser && req.authUser.login_name) || 'SYSTEM';
     await connection.beginTransaction();
     const { banks, fiscalSetup } = req.body;
     const savedBanks = [];
@@ -3787,7 +3834,7 @@ app.put('/api/settings/banking', authMid.requireHoaScope, async (req, res) => {
               TimeStampCreated
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    'MGTCO-001', 'HOA-FL-2024-001', 'SYSTEM', NOW())
+                    ?, ?, ?, NOW())
           `, [
             b.bankType||'',
             b.bankName||'',
@@ -3805,7 +3852,10 @@ app.put('/api/settings/banking', authMid.requireHoaScope, async (req, res) => {
             b.contactEmail||'',
             b.coMingled||'N',
             b.coMingledWith||'',
-            b.notes||''
+            b.notes||'',
+            sesMgt,
+            sesLicense,
+            sesOperator
           ]);
 
           bankAccountId = insertResult.insertId;
@@ -4438,11 +4488,11 @@ async function activateDueBankChanges() {
         DuesType,
         DepositBankAccountID,
         PendingDepositBankAccountID,
-        BankChangeEffectiveDate
+        BankChangeEffectiveDate,
+        MgtCoClientID,
+        HOALicenseNumber
       FROM DuesProgramming
-      WHERE MgtCoClientID = 'MGTCO-001'
-        AND HOALicenseNumber = 'HOA-FL-2024-001'
-        AND ActiveFlag = 'Y'
+      WHERE ActiveFlag = 'Y'
         AND PendingDepositBankAccountID IS NOT NULL
         AND BankChangeEffectiveDate IS NOT NULL
         AND BankChangeEffectiveDate <= CURRENT_DATE()
@@ -4475,14 +4525,16 @@ async function activateDueBankChanges() {
           Status = 'ACTIVE',
           ActivatedDate = NOW(),
           TimeStampUpdated = NOW()
-        WHERE MgtCoClientID = 'MGTCO-001'
-          AND HOALicenseNumber = 'HOA-FL-2024-001'
+        WHERE MgtCoClientID = ?
+          AND HOALicenseNumber = ?
           AND DuesType = ?
           AND OldBankAccountID = ?
           AND NewBankAccountID = ?
           AND EffectiveDate = ?
           AND Status = 'PENDING'
       `, [
+        row.MgtCoClientID,
+        row.HOALicenseNumber,
         row.DuesType,
         oldBankId,
         newBankId,
