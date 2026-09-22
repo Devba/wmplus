@@ -5,6 +5,7 @@ import ButtonRow from './ButtonRow';
 function TopSection({
   onSelectPage,
   onAddCheck,
+  onPrintChecks,
   checkRows,
   selectedCheckRow,
   onCheckCleared,
@@ -35,6 +36,8 @@ function TopSection({
       <ButtonRow
         onSelectPage={onSelectPage}
         onAddCheck={onAddCheck}
+        onPrintChecks={onPrintChecks}
+        // onPrintChecks={() => window.alert('TOPSECTION RECEIVED PRINT')}
         checkRows={checkRows}
       />
     </div>

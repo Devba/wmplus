@@ -13,10 +13,14 @@ import { API_BASE_URL } from '../../config/api';
 import BodyBox from './components/BodyBox/BodyBox';
 import TopSection from './components/TopSection/TopSection';
 
+import PrintChecksUF from './components/PrintChecks/PrintChecksUF';
+
 import checkRegisterSampleData from './data/checkRegisterSampleData';
 
 function CheckRegister({ onSelectPage }) {
   const [checkRows, setCheckRows] = useState([]);
+
+  const [showPrintChecksUF, setShowPrintChecksUF] = useState(false);
 
   const [selectedCheckRow, setSelectedCheckRow] =
     useState(null);
@@ -27,8 +31,7 @@ function CheckRegister({ onSelectPage }) {
   const [balanceRefreshKey, setBalanceRefreshKey] =
     useState(0);
 
-  useEffect(() => {
-    async function loadCheckRegister() {
+  async function loadCheckRegister() {
       try {
         const response = await fetch(
           `${API_BASE_URL}/check-register`
@@ -101,8 +104,9 @@ function CheckRegister({ onSelectPage }) {
       }
     }
 
-    loadCheckRegister();
-  }, []);
+  useEffect(() => {
+  loadCheckRegister();
+}, []);
 
   const [
     vendorResidentAccountFilter,
@@ -218,6 +222,8 @@ function CheckRegister({ onSelectPage }) {
           <TopSection
             onSelectPage={onSelectPage}
             onAddCheck={handleAddCheck}
+            onPrintChecks={() => setShowPrintChecksUF(true)}
+            // onPrintChecks={() => window.alert('CHECKREGISTER RECEIVED PRINT')}
             checkRows={checkRows}
             selectedCheckRow={selectedCheckRow}
             onCheckCleared={handleCheckCleared}
@@ -236,6 +242,16 @@ function CheckRegister({ onSelectPage }) {
           checkRows={displayedCheckRows}
           onSelectCheckRow={setSelectedCheckRow}
         />
+
+        
+
+        {showPrintChecksUF && (
+            <PrintChecksUF
+              onClose={() => setShowPrintChecksUF(false)}
+              onChecksCreated={loadCheckRegister}
+            />
+          )}
+
       </div>
     </div>
   );
