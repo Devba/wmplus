@@ -61,9 +61,6 @@ async function requestLivePrinterStatus() {
 
     const result = await response.json();
     applyStatusResult(result);
-
-    console.log('PRINT ENGINE:', getPrinterState());
-    
   } catch (error) {
     printerState.initialized = true;
     printerState.status = 'UNAVAILABLE';
@@ -99,4 +96,45 @@ export async function initializePrintEngine() {
 export async function confirmPrinterReadyForPrint() {
   await requestLivePrinterStatus();
   return getPrinterState();
+}
+
+// Submit a completed PDF to the Local Print Bridge.
+// The bridge uses only the authorized Windows default printer.
+export async function submitPdfForPrint(pdfBlob) {
+  if (!(pdfBlob instanceof Blob) || pdfBlob.type !== 'application/pdf') {
+    throw new Error('A valid PDF is required for printing.');
+  }
+
+  const response = await fetch(`${PRINT_BRIDGE_URL}/print-pdf`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/pdf'
+    },
+    body: pdfBlob
+  });
+
+  let result = null;
+
+  try {
+    result = await response.json();
+  } catch {
+    // Preserve the HTTP failure below if the bridge
+    // did not return a JSON response.
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      result?.error ||
+      `PDF print submission failed: ${response.status}`
+    );
+  }
+
+  if (result?.status !== 'submitted') {
+    throw new Error(
+      result?.error ||
+      'The Local Print Bridge did not confirm PDF submission.'
+    );
+  }
+
+  return result;
 }

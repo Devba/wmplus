@@ -3,7 +3,10 @@
  
 import React, { useEffect, useState } from 'react';
 import './PrintChecksUF.css';
-import { confirmPrinterReadyForPrint } from '../../../../engines/PrintEngine.js';
+import {
+  confirmPrinterReadyForPrint,
+  submitPdfForPrint
+} from '../../../../engines/PrintEngine.js';
 
 export default function PrintChecksUF({
   onClose,
@@ -15,6 +18,9 @@ export default function PrintChecksUF({
   const [isCreatingChecks, setIsCreatingChecks] = useState(false);
   const [createChecksError, setCreateChecksError] = useState('');
   const [createChecksSuccess, setCreateChecksSuccess] = useState('');
+  const [printCompleteMessage, setPrintCompleteMessage] = useState('');
+  const [printingStatusMessage, setPrintingStatusMessage] = useState('');
+  const [showPrinterUnavailable, setShowPrinterUnavailable] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [showPrintingInfo, setShowPrintingInfo] =
     useState(false);
@@ -56,58 +62,115 @@ export default function PrintChecksUF({
   loadEligibleChecks();
 }, []);
 
-        const createSelectedChecks = async () => {
-      if (checksToPrint.length === 0) return;
+      const createSelectedChecks = async () => {
+  if (checksToPrint.length === 0) return;
 
-      setIsCreatingChecks(true);
-      setCreateChecksError('');
-      setCreateChecksSuccess('');
+  setIsCreatingChecks(true);
+  setCreateChecksError('');
+  setCreateChecksSuccess('');
 
-      try {
-        const printer = await confirmPrinterReadyForPrint();
+  setPrintingStatusMessage('WAITING FOR PRINTER CONNECTION...');
+  
 
-        if (printer.status !== 'READY') {
-          throw new Error(
-            'PRINTER NOT READY. Turn on the authorized printer and try again.'
-          );
+  try {
+    const printer = await confirmPrinterReadyForPrint();
+    setPrintingStatusMessage('');
+
+    if (printer.status !== 'READY') {
+  setShowPrinterUnavailable(true);
+  return;
+}
+
+    for (const check of checksToPrint) {
+      // -------------------------------------------------------
+      // 1. Generate PDF only.
+      //    This endpoint performs ZERO Check Register writes.
+      // -------------------------------------------------------
+      const pdfResponse = await fetch(
+        'http://localhost:3011/api/print-checks/pdf',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            transactionNumber: check.check_txn_num
+          })
         }
+      );
 
-      for (const check of checksToPrint) {
-        const response = await fetch(
-          'http://localhost:3011/api/print-checks/pdf',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              transactionNumber: check.check_txn_num
-            })
-          }
+      if (!pdfResponse.ok) {
+        const message = await pdfResponse.text();
+
+        throw new Error(
+          message ||
+          `Unable to create check ${check.check_number}.`
         );
+      }
 
-        if (!response.ok) {
-          const message = await response.text();
-          throw new Error(
-            message || `Unable to create check ${check.check_number}.`
-          );
+      const pdfBlob = await pdfResponse.blob();
+
+      // -------------------------------------------------------
+      // 2. Submit PDF to the authorized Windows printer.
+      //    If this fails, execution stops here and the
+      //    Check Register remains unissued.
+      // -------------------------------------------------------
+      await submitPdfForPrint(pdfBlob);
+
+      // -------------------------------------------------------
+      // 3. Physical submission succeeded.
+      //    NOW issue the check in the Check Register.
+      // -------------------------------------------------------
+      const issueResponse = await fetch(
+        'http://localhost:3011/api/print-checks/issue',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            transactionNumber: check.check_txn_num
+          })
         }
-        const pdfBlob = await response.blob();
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-        window.open(pdfUrl, '_blank');
-      }
-        setCreateChecksSuccess('CHECKS HAVE BEEN ISSUED AND PRINTED');
-        setChecksToPrint([]);
-        setSelectedCheck(null);
-        if (onChecksCreated) {
-          await onChecksCreated();
+      );
+
+      if (!issueResponse.ok) {
+        let message = '';
+
+        try {
+          const result = await issueResponse.json();
+          message = result?.error || '';
+        } catch {
+          message = await issueResponse.text();
         }
-      } catch (err) {
-        setCreateChecksError(err.message);
-      } finally {
-        setIsCreatingChecks(false);
+
+        throw new Error(
+          message ||
+          `Check ${check.check_number} was submitted to the printer but could not be marked issued.`
+        );
       }
-    };
+    }
+
+    const printedCount = checksToPrint.length;
+
+setPrintCompleteMessage(
+  printedCount === 1
+    ? `Check ${checksToPrint[0].check_number} has been successfully submitted to the printer and recorded as Pending in the Check Register.`
+    : `${printedCount} checks have been successfully submitted to the printer and recorded as Pending in the Check Register.`
+);
+
+setChecksToPrint([]);
+setSelectedCheck(null);
+
+    if (onChecksCreated) {
+      await onChecksCreated();
+    }
+  } catch (err) {
+    setCreateChecksError(err.message);
+  } finally {
+    setIsCreatingChecks(false);
+  }
+};
 
   return (
     <div className="print-checks-overlay">
@@ -242,7 +305,7 @@ export default function PrintChecksUF({
             </div>
 
             <div className="print-checks-highlight-note">
-              Highlight Checks Then Select Create Checks
+              Highlight Check To See  Check Information Below
             </div>
           </div>
 
@@ -316,6 +379,12 @@ export default function PrintChecksUF({
             >
               CANCEL
             </button>
+
+            {printingStatusMessage && (
+              <div className="print-checks-create-success">
+                {printingStatusMessage}
+              </div>
+            )}
 
              {createChecksError && (
                 <div className="print-checks-create-error">
@@ -537,6 +606,93 @@ export default function PrintChecksUF({
             </div>
           </div>
         )}
+
+
+      {showPrinterUnavailable && (
+  <div className="print-checks-popup-overlay">
+    <div className="print-checks-popup">
+
+      <div className="print-checks-popup-title">
+        PRINTER NOT READY
+      </div>
+
+      <div className="print-checks-popup-note">
+        W M+ cannot communicate with the authorized printer.
+        Please make sure the printer is turned on and ready.
+      </div>
+
+      <div className="print-checks-popup-actions">
+
+        <button
+          type="button"
+          className="print-checks-popup-close-btn"
+          onClick={async () => {
+            setPrintingStatusMessage(
+              'WAITING FOR PRINTER CONNECTION...'
+            );
+
+            const printer =
+              await confirmPrinterReadyForPrint();
+
+            setPrintingStatusMessage('');
+
+            if (printer.status === 'READY') {
+              setShowPrinterUnavailable(false);
+              createSelectedChecks();
+            }
+          }}
+        >
+          PRINTER IS ON
+        </button>
+
+        <button
+          type="button"
+          className="print-checks-popup-close-btn"
+          onClick={() => {
+            setShowPrinterUnavailable(false);
+            setPrintingStatusMessage('');
+          }}
+        >
+          CANCEL PRINT
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
+
+
+      {printCompleteMessage && (
+  <div className="print-checks-popup-overlay">
+    <div className="print-checks-popup">
+
+      <div className="print-checks-popup-title">
+        CHECK PRINTING COMPLETE
+      </div>
+
+      <div className="print-checks-popup-note">
+        {printCompleteMessage}
+      </div>
+
+      <div className="print-checks-popup-actions">
+        <button
+          type="button"
+          className="print-checks-popup-close-btn"
+          onClick={() => {
+            setPrintCompleteMessage('');
+            onClose();
+          }}
+        >
+          OK
+        </button>
+      </div>
+
+    </div>
+  </div>
+)} 
+
+
 
       </div>
     </div>

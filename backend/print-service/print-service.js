@@ -3,16 +3,21 @@
 //
 // PURPOSE:
 // Provides the W M+ frontend Print Engine with access to
-// printer functions that a browser cannot perform.
+// local OS/printer functions that a browser cannot perform.
 //
 // IMPORTANT:
-// This bridge reports printer facts only. It does NOT own
-// W M+ printer state, timers, or print-sequence decisions.
-// PrintEngine.js owns those decisions.
+// This bridge performs printer primitive operations only.
+// It does NOT own W M+ printer state, timers, print-sequence
+// decisions, or Check Register / database updates.
+// PrintEngine.js owns the W M+ print sequence and state.
 // =====================================================
 
 const http = require('http');
 const os = require('os');
+
+const path = require('path');
+const fs = require('fs');
+const { print } = require('pdf-to-printer');
 
 const {
   IPP_STATUS_TIMEOUT_MS,
@@ -26,7 +31,7 @@ function writeJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type'
   });
 
@@ -73,6 +78,26 @@ async function readAuthorizedPrinterStatus() {
       ? null
       : (ipp.error || 'Authorized printer is not ready')
   };
+}
+
+function readRequestBody(req, maxBytes = 10 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalBytes = 0;
+
+    req.on('data', chunk => {
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) {
+        reject(new Error('PDF exceeds the 10 MB print limit'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
 }
 
 const server = http.createServer(async (req, res) => {
@@ -132,6 +157,72 @@ const server = http.createServer(async (req, res) => {
         error: error.message
       });
     }
+    return;
+  }
+
+  // Physical PDF submission primitive.
+  // This route does not make W M+ issuance decisions and does not touch the DB.
+  if (req.method === 'POST' && req.url === '/print-pdf') {
+    let tempPdfPath = null;
+
+    try {
+      const contentType = String(req.headers['content-type'] || '').toLowerCase();
+      if (!contentType.startsWith('application/pdf')) {
+        writeJson(res, 415, {
+          status: 'failed',
+          error: 'Content-Type must be application/pdf'
+        });
+        return;
+      }
+
+      const printerName = await getDefaultPrinter();
+      if (!printerName) {
+        writeJson(res, 503, {
+          status: 'failed',
+          printer: null,
+          error: 'No default printer found'
+        });
+        return;
+      }
+
+      const pdfBuffer = await readRequestBody(req);
+      if (!pdfBuffer.length || pdfBuffer.subarray(0, 5).toString('ascii') !== '%PDF-') {
+        writeJson(res, 400, {
+          status: 'failed',
+          printer: printerName,
+          error: 'Request body is not a valid PDF'
+        });
+        return;
+      }
+
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmplus-print-'));
+      tempPdfPath = path.join(tempDir, 'wmplus-print-job.pdf');
+      fs.writeFileSync(tempPdfPath, pdfBuffer);
+
+      await print(tempPdfPath, {
+        printer: printerName,
+        scale: 'noscale'
+      });
+
+      writeJson(res, 200, {
+        status: 'submitted',
+        printer: printerName
+      });
+    } catch (error) {
+      writeJson(res, 500, {
+        status: 'failed',
+        error: error.message
+      });
+    } finally {
+      if (tempPdfPath) {
+        try {
+          fs.rmSync(path.dirname(tempPdfPath), { recursive: true, force: true });
+        } catch (_) {
+          // Temporary-file cleanup must not change the print result.
+        }
+      }
+    }
+
     return;
   }
 

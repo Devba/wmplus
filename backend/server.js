@@ -1179,19 +1179,120 @@ app.get(
 
 
 // ===========================================================
-// PRODUCTION PRINT CHECK
+// PRODUCTION CHECK PDF
 //
-// THIS is what issues the check.
+// Generates the check PDF only.
+// ZERO Check Register writes occur here.
 //
-// DateCheckIssued = HOA local print date
-// Status = Pending
+// Physical submission is handled by the local print bridge.
+// The separate /issue endpoint is called ONLY after successful
+// bridge submission.
 // ===========================================================
 
 app.post(
   '/api/print-checks/pdf',
   async (req, res) => {
+    try {
+      const transactionNumber =
+        String(
+          req.body
+            ?.transactionNumber ||
+          ''
+        ).trim();
+
+
+      if (!transactionNumber) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'transactionNumber is required'
+          });
+      }
+
+
+      const check =
+        await loadCheckPrintData(
+          db,
+          transactionNumber
+        );
+
+
+      const hoaNowValue =
+        await hoaNow(db);
+
+
+      const checkIssuedDate =
+        formatCheckDate(
+          hoaNowValue
+            .hoaLocalDateTime
+            .slice(0, 10)
+        );
+
+
+      pipeCheckPdf(
+        res,
+        check,
+        checkIssuedDate
+      );
+    }
+
+
+    catch (err) {
+      console.error(
+        'Check PDF generation error:',
+        err
+      );
+
+
+      if (!res.headersSent) {
+        res
+          .status(
+            err.status || 500
+          )
+          .json({
+            error:
+              err.message ||
+              'Unable to generate check PDF.'
+          });
+      }
+    }
+  }
+);
+
+
+// ===========================================================
+// ISSUE PRINTED CHECK
+//
+// Called ONLY after the local print bridge successfully
+// submits the PDF to the authorized Windows printer.
+//
+// This is the ONLY step in the check-print sequence that
+// changes the Check Register.
+//
+// SCOPE:
+// Wired at integration with feature/auth-roles.
+// Today = legacy defaults.
+// ===========================================================
+
+app.post(
+  '/api/print-checks/issue',
+  async (req, res) => {
     const connection =
       await db.getConnection();
+
+
+    // TODO(scope-merge): req.hoa.license_number
+    const sesLicense =
+      'HOA-FL-2024-001';
+
+    // TODO(scope-merge): req.hoa.mgt_code
+    const sesMgt =
+      'MGTCO-001';
+
+    // TODO(scope-merge): req.authUser.login_name
+    const sesOperator =
+      'SYSTEM';
 
 
     try {
@@ -1231,6 +1332,10 @@ app.post(
           WHERE
             CheckTransactionNumber = ?
 
+            AND MgtCoClientID = ?
+
+            AND HOALicenseNumber = ?
+
             AND (
               DeletedFlag IS NULL
               OR DeletedFlag != 'Y'
@@ -1240,7 +1345,9 @@ app.post(
 
           FOR UPDATE
         `, [
-          transactionNumber
+          transactionNumber,
+          sesMgt,
+          sesLicense
         ]);
 
 
@@ -1271,31 +1378,18 @@ app.post(
       }
 
 
-      if (
-        lockRows[0].Status &&
-        String(
-          lockRows[0].Status
-        ).toLowerCase()
-          !== 'pending'
-      ) {
+      if (lockRows[0].Status) {
         await connection.rollback();
 
         return res
           .status(409)
           .json({
             error:
-              `This check cannot be printed ` +
+              `This check cannot be issued ` +
               `because its status is ` +
               `${lockRows[0].Status}.`
           });
       }
-
-
-      const check =
-        await loadCheckPrintData(
-          connection,
-          transactionNumber
-        );
 
 
       const hoaNowValue =
@@ -1310,37 +1404,64 @@ app.post(
           .slice(0, 10);
 
 
-      const checkIssuedDate =
-        formatCheckDate(
-          issuedDateDatabase
-        );
+      const [updateResult] =
+        await connection.query(`
+          UPDATE CheckRegister
+
+          SET
+            DateCheckIssued = ?,
+            Status = 'Pending',
+            OperatorID = ?,
+            TimeStampUpdated = ?
+
+          WHERE
+            CheckTransactionNumber = ?
+
+            AND MgtCoClientID = ?
+
+            AND HOALicenseNumber = ?
+
+            AND DateCheckIssued IS NULL
+
+            AND Status IS NULL
+
+            AND (
+              DeletedFlag IS NULL
+              OR DeletedFlag != 'Y'
+            )
+        `, [
+          issuedDateDatabase,
+          sesOperator,
+          hoaNowValue.utcDateTime,
+          transactionNumber,
+          sesMgt,
+          sesLicense
+        ]);
 
 
-      await connection.query(`
-        UPDATE CheckRegister
+      if (updateResult.affectedRows !== 1) {
+        await connection.rollback();
 
-        SET
-          DateCheckIssued = ?,
-          Status = 'Pending',
-          TimeStampUpdated = ?
-
-        WHERE
-          CheckTransactionNumber = ?
-      `, [
-        issuedDateDatabase,
-        hoaNowValue.utcDateTime,
-        transactionNumber
-      ]);
+        return res
+          .status(409)
+          .json({
+            error:
+              'Check was not issued because its register state changed.'
+          });
+      }
 
 
       await connection.commit();
 
 
-      pipeCheckPdf(
-        res,
-        check,
-        checkIssuedDate
-      );
+      return res.json({
+        success: true,
+        transactionNumber,
+        dateCheckIssued:
+          issuedDateDatabase,
+        status:
+          'Pending'
+      });
     }
 
 
@@ -1351,29 +1472,27 @@ app.post(
 
       catch (rollbackErr) {
         console.error(
-          'Print Check rollback error:',
+          'Issue Check rollback error:',
           rollbackErr
         );
       }
 
 
       console.error(
-        'Print Check error:',
+        'Issue Check error:',
         err
       );
 
 
-      if (!res.headersSent) {
-        res
-          .status(
-            err.status || 500
-          )
-          .json({
-            error:
-              err.message ||
-              'Unable to print check.'
-          });
-      }
+      return res
+        .status(
+          err.status || 500
+        )
+        .json({
+          error:
+            err.message ||
+            'Unable to issue check.'
+        });
     }
 
 
