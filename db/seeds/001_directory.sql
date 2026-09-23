@@ -20,29 +20,30 @@ ON DUPLICATE KEY UPDATE legal_name = VALUES(legal_name);
 
 -- HOAs (1-3: input de Rick; 4-6: Colorado pendientes, inventadas) --
 INSERT INTO hoa
-  (id, mgt_company_id, license_number, hoa_code, legal_name, billing_name,
+  (id, mgt_company_id, license_number, hoa_code, client_id, unit_count,
+   legal_name, billing_name,
    city, state_code, external_property_id, website_url,
    fiscal_year_start_month, fiscal_year_start_day,
-   license_status, license_type, self_managed, notes, active_flag)
+   license_status, license_type, notes, active_flag)
 VALUES
-  (1, 1, 'LIC-HOA1', 'RL', 'Remington Landing PLACEHOLDER', 'Remington Landing',
+  (1, 1, 'LIC-HOA1', 'RL', 'CLI-HOA1', 120, 'Remington Landing PLACEHOLDER', 'Remington Landing',
    'Miami', 'FL', 'PROP-HOA1', 'https://hoa1.example.com', 1, 1,
-   'active', 'full', 'N', 'Manager: Debbie (Rick)', 'Y'),
-  (2, 1, 'LIC-HOA2', 'GL', 'Governors Landing PLACEHOLDER', 'Governors Landing',
+   'active', 'full', 'Manager: Debbie (Rick)', 'Y'),
+  (2, 1, 'LIC-HOA2', 'GL', 'CLI-HOA2', 200, 'Governors Landing PLACEHOLDER', 'Governors Landing',
    'Miami', 'FL', 'PROP-HOA2', 'https://hoa2.example.com', 1, 1,
-   'active', 'full', 'N', 'Manager: Marsha (Rick). OJO: GL = HOA, no General Ledger', 'Y'),
-  (3, 1, 'LIC-HOA3', 'Ren', 'Renaissance PLACEHOLDER', 'Renaissance',
+   'active', 'full', 'Manager: Marsha (Rick). OJO: GL = HOA, no General Ledger', 'Y'),
+  (3, 1, 'LIC-HOA3', 'Ren', 'CLI-HOA3', 85, 'Renaissance PLACEHOLDER', 'Renaissance',
    'Miami', 'FL', 'PROP-HOA3', 'https://hoa3.example.com', 1, 1,
-   'active', 'full', 'N', 'Manager: Steve (Rick)', 'Y'),
-  (4, 1, 'LIC-HOA4', 'HOA4', 'HOA Demo Colorado 1 PLACEHOLDER', 'HOA Colorado 1',
+   'active', 'full', 'Manager: Steve (Rick)', 'Y'),
+  (4, 1, 'LIC-HOA4', 'HOA4', 'CLI-HOA4', 150, 'HOA Demo Colorado 1 PLACEHOLDER', 'HOA Colorado 1',
    'Denver', 'CO', 'PROP-HOA4', NULL, 1, 1,
-   'pending', 'full', 'N', 'Nueva Colorado (Rick): pronto Zego + website', 'Y'),
-  (5, 1, 'LIC-HOA5', 'HOA5', 'HOA Demo Colorado 2 PLACEHOLDER', 'HOA Colorado 2',
+   'pending', 'full', 'Nueva Colorado (Rick): pronto Zego + website', 'Y'),
+  (5, 1, 'LIC-HOA5', 'HOA5', 'CLI-HOA5', 150, 'HOA Demo Colorado 2 PLACEHOLDER', 'HOA Colorado 2',
    'Denver', 'CO', 'PROP-HOA5', NULL, 1, 1,
-   'pending', 'full', 'N', 'Nueva Colorado (Rick): pronto Zego + website', 'Y'),
-  (6, 1, 'LIC-HOA6', 'HOA6', 'HOA Demo Colorado 3 PLACEHOLDER', 'HOA Colorado 3',
+   'pending', 'full', 'Nueva Colorado (Rick): pronto Zego + website', 'Y'),
+  (6, 1, 'LIC-HOA6', 'HOA6', 'CLI-HOA6', 150, 'HOA Demo Colorado 3 PLACEHOLDER', 'HOA Colorado 3',
    'Denver', 'CO', 'PROP-HOA6', NULL, 1, 1,
-   'pending', 'full', 'N', 'Nueva Colorado (Rick): pronto Zego + website', 'Y')
+   'pending', 'full', 'Nueva Colorado (Rick): pronto Zego + website', 'Y')
 ON DUPLICATE KEY UPDATE legal_name = VALUES(legal_name);
 
 -- Usuarios ------------------------------------------------------
@@ -68,14 +69,15 @@ VALUES
 ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash);
 
 -- Asignaciones (Rick admin global: sin filas, ve todo) ----------
-INSERT INTO hoa_assignment (user_id, hoa_id, role, active_flag)
+-- V4: nivel operativo por asignación (= global actual; matriz pendiente Rick)
+INSERT INTO hoa_assignment (user_id, hoa_id, role, authorization_level, read_only_flag, active_flag)
 VALUES
-  (2, 1, 'manager', 'Y'),
-  (3, 2, 'manager', 'Y'),
-  (4, 3, 'manager', 'Y'),
-  (5, 4, 'manager', 'Y'),
-  (5, 5, 'manager', 'Y'),
-  (5, 6, 'manager', 'Y')
+  (2, 1, 'manager', 1, 'N', 'Y'),
+  (3, 2, 'manager', 1, 'N', 'Y'),
+  (4, 3, 'manager', 1, 'N', 'Y'),
+  (5, 4, 'manager', 1, 'N', 'Y'),
+  (5, 5, 'manager', 1, 'N', 'Y'),
+  (5, 6, 'manager', 1, 'N', 'Y')
 ON DUPLICATE KEY UPDATE active_flag = VALUES(active_flag);
 
 -- Integraciones por HOA -----------------------------------------

@@ -3015,11 +3015,13 @@ app.get('/api/settings/hoa-profile', authMid.requireHoaScope, async (req, res) =
     // se completa con la fila para billing/letter/status.
     const [full] = await adb.query(
       `SELECT billing_name, letter_name, address_line1, license_status,
-              license_type, subscription_renewal_date, self_managed, notes
+              license_type, subscription_renewal_date, client_id, unit_count, notes
          FROM hoa WHERE id = ? LIMIT 1`,
       [h.id]
     );
     const f = full[0] || {};
+    // V4: self-managed deriva de mgt_company_id IS NULL (sin columna propia).
+    const derivedSelfManaged = h.mgt_company_id ? 'N' : 'Y';
     res.json({
       hoaProfile: {
         hoaCorporateName: h.legal_name || '',
@@ -3033,15 +3035,16 @@ app.get('/api/settings/hoa-profile', authMid.requireHoaScope, async (req, res) =
       },
       clientInfo: {
         clientId: m.mgt_code || '',
+        hoaClientId: f.client_id || '',
         licenseNumber: h.license_number || '',
         licenseStatus: f.license_status || 'Active',
         subscriptionRenewalDate: f.subscription_renewal_date || '2026-12-31',
         licenseType: f.license_type || 'Standard',
-        licenseSize: '100',
+        licenseSize: f.unit_count != null ? String(f.unit_count) : '100',
         clientNotes: ''
       },
       management: {
-        selfManaged: f.self_managed || 'N',
+        selfManaged: derivedSelfManaged,
         mgtCoName: m.mgt_name || '',
         mgtCoAddress: '',
         mgtCoContactName: '',
@@ -3071,6 +3074,7 @@ app.put('/api/settings/hoa-profile', authMid.requireHoaScope, async (req, res) =
     const ci = data.clientInfo || {};
 
     // Solo columnas existentes en el directorio; license_number es identidad (no editable aquí).
+    // V4: self-managed deriva de mgt_company_id (no editable); client_id/unit_count los fija el Excel de Rick.
     await adb.query(`
       UPDATE hoa SET
         legal_name = ?,
@@ -3080,7 +3084,6 @@ app.put('/api/settings/hoa-profile', authMid.requireHoaScope, async (req, res) =
         license_status = ?,
         license_type = ?,
         subscription_renewal_date = ?,
-        self_managed = ?,
         notes = ?
       WHERE id = ?
     `, [
@@ -3091,7 +3094,6 @@ app.put('/api/settings/hoa-profile', authMid.requireHoaScope, async (req, res) =
       ci.licenseStatus || 'Active',
       ci.licenseType || 'Standard',
       ci.subscriptionRenewalDate || null,
-      (data.management || {}).selfManaged || 'N',
       hp.hoaNotes || '',
       req.hoa.id
     ]);
@@ -5687,8 +5689,11 @@ app.put('/api/settings/gl-mapping', authMid.requireHoaScope, async (req, res) =>
    GL OPTIONS FOR TRANSACTION ENTRY
 =========================================================== */
 
-app.get('/api/gl-options', async (req, res) => {
+app.get('/api/gl-options', authMid.requireHoaScope, async (req, res) => {
   try {
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
     // 'screen' is the standard param. 'page' is accepted temporarily
     // for backward compatibility with older frontend calls.
     const screen = String(
@@ -5725,8 +5730,9 @@ app.get('/api/gl-options', async (req, res) => {
   FROM GLAccounts
   WHERE ActiveFlag = 'Y'
     AND ${useField} = 'Y'
+    AND HOALicenseNumber = ?
   ORDER BY SortOrder ASC, GLAccountID ASC
-`);
+`, [req.hoa.license_number]);
 
 const glAccounts = rows.map((row) => ({
   id: row.GLAccountID,

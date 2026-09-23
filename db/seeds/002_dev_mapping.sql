@@ -8,14 +8,15 @@
 USE hoam26_auth;
 
 INSERT INTO hoa
-  (id, mgt_company_id, license_number, hoa_code, legal_name, billing_name,
+  (id, mgt_company_id, license_number, hoa_code, client_id, unit_count,
+   legal_name, billing_name,
    city, state_code, external_property_id, website_url,
    fiscal_year_start_month, fiscal_year_start_day,
-   license_status, license_type, self_managed, notes, active_flag)
+   license_status, license_type, notes, active_flag)
 VALUES
-  (7, 1, 'HOA-FL-2024-001', 'DEV', 'HOA Demo FL (dev-data) PLACEHOLDER', 'HOA Demo FL',
+  (7, 1, 'HOA-FL-2024-001', 'DEV', 'CLI-DEV', 100, 'HOA Demo FL (dev-data) PLACEHOLDER', 'HOA Demo FL',
    'Miami', 'FL', 'PROP-HOA7', NULL, 1, 1,
-   'active', 'dev', 'N', 'Mapeo dev: datos reales en hoamanager26_dev', 'Y')
+   'active', 'dev', 'Mapeo dev: datos reales en hoamanager26_dev', 'Y')
 ON DUPLICATE KEY UPDATE legal_name = VALUES(legal_name);
 
 INSERT INTO hoa_payment_settings (hoa_id, zego_active, resident_pays_fee, ach_active, fines_paid_first)
@@ -29,6 +30,6 @@ VALUES
 ON DUPLICATE KEY UPDATE active_flag = VALUES(active_flag);
 
 -- Debbie (user 2) como viewer de DEV para probar multi-HOA
-INSERT INTO hoa_assignment (user_id, hoa_id, role, active_flag)
-VALUES (2, 7, 'viewer', 'Y')
+INSERT INTO hoa_assignment (user_id, hoa_id, role, authorization_level, read_only_flag, active_flag)
+VALUES (2, 7, 'viewer', 1, 'N', 'Y')
 ON DUPLICATE KEY UPDATE active_flag = VALUES(active_flag);

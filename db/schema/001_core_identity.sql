@@ -3,6 +3,9 @@
 -- Núcleo: gestora, HOAs, usuarios, credenciales, sesiones,
 -- asignaciones + integraciones/pagos por HOA (input de Rick).
 -- Aplicado 2026-09-10. Seeds: db/seeds/001_directory.sql.
+-- FASE 1 V4 (2026-09-23, decisiones Rick): hoa.client_id + hoa.unit_count,
+-- fuera hoa.self_managed (autoridad = mgt_company_id IS NULL), niveles por
+-- asignación, user_session.hoa_id. Rama feature/auth-roles.
 -- =============================================================
 
 CREATE TABLE IF NOT EXISTS mgt_company (
@@ -24,9 +27,11 @@ CREATE TABLE IF NOT EXISTS mgt_company (
 
 CREATE TABLE IF NOT EXISTS hoa (
   id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  mgt_company_id INT NULL COMMENT 'NULL = self-managed',
+  mgt_company_id INT NULL COMMENT 'NULL = self-managed (autoridad única, decisión Rick V4)',
   license_number VARCHAR(32) NOT NULL UNIQUE COMMENT 'Legacy License_Number del VBA',
   hoa_code VARCHAR(8) NOT NULL UNIQUE COMMENT 'Código corto explícito: RL, GL, Ren (desambigua vs General Ledger)',
+  client_id VARCHAR(32) NULL UNIQUE COMMENT 'Business HOA Client ID (V4 §2); NULL hasta Excel Rick',
+  unit_count INT UNSIGNED NULL COMMENT 'Nº unidades/homes, autoritativo para pricing E M+ (V4 §3)',
   legal_name VARCHAR(120) NOT NULL COMMENT 'Ej: Governors Landing',
   billing_name VARCHAR(120) NULL,
   letter_name VARCHAR(120) NULL,
@@ -42,7 +47,6 @@ CREATE TABLE IF NOT EXISTS hoa (
   license_status VARCHAR(20) NULL,
   license_type VARCHAR(20) NULL,
   subscription_renewal_date DATE NULL,
-  self_managed CHAR(1) NOT NULL DEFAULT 'N',
   notes TEXT NULL,
   active_flag CHAR(1) NOT NULL DEFAULT 'Y',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -57,8 +61,8 @@ CREATE TABLE IF NOT EXISTS app_user (
   login_name VARCHAR(64) NOT NULL UNIQUE,
   display_name VARCHAR(80) NULL,
   email VARCHAR(120) NULL,
-  authorization_level TINYINT NOT NULL DEFAULT 1,
-  read_only_flag CHAR(1) NOT NULL DEFAULT 'N' COMMENT 'Y = view-only (I1=1 del VBA)',
+  authorization_level TINYINT NOT NULL DEFAULT 1 COMMENT 'Nivel global/admin (V4: operativo vive en hoa_assignment)',
+  read_only_flag CHAR(1) NOT NULL DEFAULT 'N' COMMENT 'Y = view-only global (I1=1 del VBA)',
   can_view_escrow_flag CHAR(1) NOT NULL DEFAULT 'Y',
   can_view_cc_flag CHAR(1) NOT NULL DEFAULT 'Y',
   active_flag CHAR(1) NOT NULL DEFAULT 'Y',
@@ -81,6 +85,7 @@ CREATE TABLE IF NOT EXISTS user_credential (
 CREATE TABLE IF NOT EXISTS user_session (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
+  hoa_id INT NULL COMMENT 'HOA activa del browser (V4 §9-10); NULL = pre-selección',
   token_hash CHAR(64) NOT NULL COMMENT 'SHA-256 del token opaco',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -88,15 +93,21 @@ CREATE TABLE IF NOT EXISTS user_session (
   revoked_flag CHAR(1) NOT NULL DEFAULT 'N',
   user_agent VARCHAR(255) NULL,
   CONSTRAINT fk_sess_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+  CONSTRAINT fk_sess_hoa FOREIGN KEY (hoa_id) REFERENCES hoa (id),
   INDEX idx_sess_token (token_hash),
-  INDEX idx_sess_user (user_id)
+  INDEX idx_sess_user (user_id),
+  INDEX idx_sess_user_hoa (user_id, hoa_id, revoked_flag)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- NOTA V4 §10: unicidad de sesión ACTIVA por (user, HOA) se impone en
+-- código (Fase 3), NO con UNIQUE literal, para conservar historial de revocadas.
 
 CREATE TABLE IF NOT EXISTS hoa_assignment (
   id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL COMMENT 'Ej: Debbie, Marsha, Steve',
   hoa_id INT NOT NULL COMMENT 'Ej: RL, GL, Ren',
-  role ENUM('manager','accountant','viewer') NOT NULL,
+  role ENUM('manager','accountant','viewer') NOT NULL COMMENT 'Descriptivo (V4): NO determina permisos',
+  authorization_level TINYINT NOT NULL DEFAULT 1 COMMENT 'Nivel 1-12 operativo de ESTA asignación (V4 §5)',
+  read_only_flag CHAR(1) NOT NULL DEFAULT 'N' COMMENT 'Y = view-only en ESTA HOA',
   active_flag CHAR(1) NOT NULL DEFAULT 'Y',
   valid_from DATE NULL,
   valid_to DATE NULL,
@@ -104,7 +115,7 @@ CREATE TABLE IF NOT EXISTS hoa_assignment (
   updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_asg_user FOREIGN KEY (user_id) REFERENCES app_user (id),
   CONSTRAINT fk_asg_hoa FOREIGN KEY (hoa_id) REFERENCES hoa (id),
-  UNIQUE KEY uq_assignment (user_id, hoa_id, role)
+  UNIQUE KEY uq_assignment (user_id, hoa_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS hoa_integration (
