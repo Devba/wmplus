@@ -8188,6 +8188,21 @@ app.post('/api/auth/logout', async (req, res) => {
   }
 });
 
+// POST /api/auth/active-hoa { hoa_id, force? } -> liga la sesión a una HOA (V4 §10).
+// 409 si el mismo usuario ya tiene esa HOA abierta en otra sesión (salvo force).
+app.post('/api/auth/active-hoa', async (req, res) => {
+  try {
+    const user = await authMid.getSessionUser(req);
+    if (!user) return res.status(401).json({ error: 'Sin sesión' });
+    const cookies = authMid.parseCookies(req);
+    const out = await authMid.bindActiveHoa(
+      user, cookies[authMid.COOKIE_NAME], req.body.hoa_id, req.body.force === true);
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 // GET /api/auth/me -> 200 {user} | 401
 app.get('/api/auth/me', async (req, res) => {
   try {

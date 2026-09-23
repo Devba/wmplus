@@ -67,14 +67,47 @@ function clearSessionCookieHeader() {
   return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
-async function createSession(userId, userAgent) {
+async function createSession(userId, userAgent, hoaId = null) {
   const token = newSessionToken();
   await db.query(
-    `INSERT INTO user_session (user_id, token_hash, expires_at, user_agent)
-     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), ?)`,
-    [userId, sha256(token), SESSION_TTL_MIN, String(userAgent || '').slice(0, 255)]
+    `INSERT INTO user_session (user_id, hoa_id, token_hash, expires_at, user_agent)
+     VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), ?)`,
+    [userId, hoaId || null, sha256(token), SESSION_TTL_MIN, String(userAgent || '').slice(0, 255)]
   );
   return token;
+}
+
+// V4 §10: liga la sesión actual a una HOA activa.
+// - Verifica asignación vigente (fuera de alcance -> 403).
+// - Otra sesión ACTIVA del mismo (user, HOA) -> 409 (denegar, la HOA ya está abierta).
+// - force=true -> revoca las otras (takeover explícito) y liga.
+// - Historial de revocadas/expiradas se conserva (sin UNIQUE literal).
+async function bindActiveHoa(user, token, hoaId, force = false) {
+  const id = parseInt(hoaId, 10);
+  if (!id) throw Object.assign(new Error('hoa_id requerido'), { status: 400 });
+  const access = user.is_admin ? { level: 9, readOnly: false, role: 'admin' }
+    : await effectiveAccess(user, id);
+  if (!access) throw Object.assign(new Error('HOA fuera de tu alcance'), { status: 403 });
+  const [dups] = await db.query(
+    `SELECT id FROM user_session
+      WHERE user_id = ? AND hoa_id = ? AND revoked_flag = 'N'
+        AND expires_at > NOW() AND token_hash != ?
+      LIMIT 1`,
+    [user.user_id, id, sha256(token)]
+  );
+  if (dups.length && !force) {
+    throw Object.assign(
+      new Error('Esa HOA ya está abierta en otra sesión de este usuario'), { status: 409 });
+  }
+  if (dups.length && force) {
+    await db.query(
+      `UPDATE user_session SET revoked_flag = 'Y'
+        WHERE user_id = ? AND hoa_id = ? AND revoked_flag = 'N' AND token_hash != ?`,
+      [user.user_id, id, sha256(token)]
+    );
+  }
+  await db.query(`UPDATE user_session SET hoa_id = ? WHERE token_hash = ?`, [id, sha256(token)]);
+  return { hoa_id: id, tookOver: dups.length > 0 && !!force };
 }
 
 async function revokeSession(token) {
@@ -131,7 +164,8 @@ async function getSessionUser(req) {
   const [rows] = await db.query(
     `SELECT u.id AS user_id, u.mgt_company_id, u.login_name, u.display_name,
             u.email, u.authorization_level, u.read_only_flag,
-            u.can_view_escrow_flag, u.can_view_cc_flag, u.active_flag
+            u.can_view_escrow_flag, u.can_view_cc_flag, u.active_flag,
+            s.hoa_id AS active_hoa_id
        FROM user_session s
        JOIN app_user u ON u.id = s.user_id
       WHERE s.token_hash = ? AND s.revoked_flag = 'N'
@@ -264,6 +298,14 @@ async function requireHoaScope(req, res, next) {
     if (!req.authUser.is_admin) {
       req.access = await effectiveAccess(req.authUser, hoaId);
     }
+    // V4 §9: la sesión ligada a una HOA no opera en otra.
+    // Sesiones sin ligar (NULL, p.ej. pre-selección) no restringen.
+    if (!req.authUser.is_admin && req.authUser.active_hoa_id != null &&
+        Number(req.authUser.active_hoa_id) !== Number(hoaId)) {
+      return res.status(403).json({
+        error: 'Sesión ligada a otra HOA; cambia la HOA activa para operar aquí'
+      });
+    }
     next();
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -291,6 +333,7 @@ module.exports = {
   getSessionUser,
   isReadOnly,
   effectiveAccess,
+  bindActiveHoa,
   requireAuth,
   requireReadWrite,
   requireAdmin,
