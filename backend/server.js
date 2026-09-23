@@ -866,9 +866,8 @@ if (duplicateAddressRows.length > 0) {
         
         
         if (regs.length) {
-          const [hoaRows2] = await db.query("SELECT MgtCoClientID, HOALicenseNumber FROM HOAProfile LIMIT 1");
-          const hoa2 = hoaRows2[0] || { MgtCoClientID: 'MGTCO-001', HOALicenseNumber: 'HOA-FL-2024-001' };
-          await refreshAssessmentPaymentSummary(db, { residentAccountId: account_id, mgt: hoa2.MgtCoClientID, hoa: hoa2.HOALicenseNumber, paymentDate: null });
+          // V4 §6: resumen bajo la HOA de sesión, nunca el singleton HOAProfile.
+          await refreshAssessmentPaymentSummary(db, { residentAccountId: account_id, mgt: req.hoa.mgt_code, hoa: sesLicense, paymentDate: null });
         }
       }
     } catch (e) { console.warn('[B4] register sync failed (non-fatal):', e.message); }
@@ -6275,7 +6274,7 @@ async function refreshAssessmentPaymentSummary(conn, ctx) {
 //   3) SA row + its AD-overflow row share one APR transaction number.
 //   4) A separately entered Annual Dues amount gets a new APR transaction number.
 //   5) AssessmentRegisterPeriod is obligation/schedule data and is NOT changed by payments.
-app.post('/api/apr/enter-payment', async (req, res) => {
+app.post('/api/apr/enter-payment', authMid.requireHoaScope, async (req, res) => {
   try {
     const {
       residentAccountId,
@@ -6338,9 +6337,16 @@ app.post('/api/apr/enter-payment', async (req, res) => {
       }
 
       const resident = resRows[0];
-      const hoaIdentity = await getHoaIdentity(conn);
-      const effMgtCo = mgtCoClientId || hoaIdentity.MgtCoClientID;
-      const effHoa = hoaLicenseNumber || hoaIdentity.HOALicenseNumber;
+      // V4 §6: la HOA operativa la fija la sesión (req.hoa), nunca el body
+      // ni el singleton HOAProfile. 'all' no emite pagos.
+      if (req.hoaId === 'all' || !req.hoa) {
+        throw Object.assign(
+          new Error('Selecciona una HOA concreta (no "Todas") para emitir pagos'),
+          { status: 400 }
+        );
+      }
+      const effMgtCo = req.hoa.mgt_code;
+      const effHoa = req.hoa.license_number;
       const fyBegins = deriveFiscalYearBegins(paymentDate, fiscalYearBegins);
       const payDate = paymentDate
         ? new Date(paymentDate).toISOString().slice(0, 10)
@@ -6349,7 +6355,7 @@ app.post('/api/apr/enter-payment', async (req, res) => {
       const specialFrequency = await getFrequency(conn, 'SpecialAssessment');
       const annualPeriodNumber = derivePeriodNumber(payDate, annualFrequency);
       const specialPeriodNumber = derivePeriodNumber(payDate, specialFrequency);
-      const opId = operatorId || 'SYSTEM';
+      const opId = (req.authUser && req.authUser.login_name) || operatorId || 'SYSTEM';
 
       // APR receiving banks are controlled by Dues Programming, not by the
       // bank value submitted by the frontend. Final allocation controls routing:
@@ -7705,12 +7711,15 @@ app.get('/api/apr/list', authMid.requireHoaScope, async (req, res) => {
 });
 
 // GET /api/apr/register/:residentAccountId — estado agregado por residente/año
-app.get('/api/apr/register/:residentAccountId', async (req, res) => {
+app.get('/api/apr/register/:residentAccountId', authMid.requireHoaScope, async (req, res) => {
   try {
     const { residentAccountId } = req.params;
     const fy = req.query.fiscalYearBegins || null;
-    const where = fy ? "AND CurrentFiscalYearBegins=?" : "";
-    const params = fy ? [residentAccountId, fy] : [residentAccountId];
+    // V4 §6: lectura restringida a la HOA activa.
+    const sesLicense = req.hoaId === 'all' ? null : req.hoa.license_number;
+    if (!sesLicense) return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    const where = fy ? "AND CurrentFiscalYearBegins=? AND HOALicenseNumber=?" : "AND HOALicenseNumber=?";
+    const params = fy ? [residentAccountId, fy, sesLicense] : [residentAccountId, sesLicense];
     const [regs] = await db.query(`SELECT * FROM AssessmentRegister WHERE ResidentAccountID=? ${where} ORDER BY CurrentFiscalYearBegins DESC`, params);
     const [periods] = await db.query(`SELECT * FROM AssessmentRegisterPeriod WHERE ResidentAccountID=? ${where} ORDER BY PeriodNumber`, params);
     res.json({ registers: regs, periods });
@@ -7754,17 +7763,25 @@ async function resolveEffectiveAssessmentBank(conn, sectionType, payDate, effMgt
 }
 
 // POST /api/apr/void — void server-side with full shared-transaction reversal + historical full-year replay (V6 RECONCILED)
-app.post('/api/apr/void', async (req, res) => {
+app.post('/api/apr/void', authMid.requireHoaScope, async (req, res) => {
   try {
     const transactionNumber = String(
       req.body?.transactionNumber || ''
     ).trim();
-    const operatorId = String(req.body?.operatorId || 'SYSTEM').trim();
+    // V4 §6: operador de la sesión, nunca del body.
+    const operatorId = String(
+      (req.authUser && req.authUser.login_name) || req.body?.operatorId || 'SYSTEM'
+    ).trim();
 
     if (!transactionNumber) {
       return res.status(400).json({
         error: 'transactionNumber is required'
       });
+    }
+    // V4 §6: 'all' no anula; la fila debe pertenecer a la HOA activa.
+    const sesLicense = req.hoaId === 'all' ? null : req.hoa.license_number;
+    if (!sesLicense) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
     }
 
     const result = await db.withTransaction(async (conn) => {
@@ -7797,6 +7814,13 @@ app.post('/api/apr/void', async (req, res) => {
       const residentAccountId = firstRow.ResidentAccountID;
       const mgtCoClientId = firstRow.MgtCoClientID;
       const hoaLicenseNumber = firstRow.HOALicenseNumber;
+      // V4 §6: la transacción debe pertenecer a la HOA activa.
+      if (hoaLicenseNumber !== sesLicense) {
+        throw Object.assign(
+          new Error('Transacción fuera de tu HOA activa'),
+          { status: 403 }
+        );
+      }
       const fiscalYearBegins = firstRow.CurrentFiscalYearBegins;
       const paymentDateForVoid = firstRow.PaymentDate ? String(firstRow.PaymentDate).slice(0,10) : null;
 
