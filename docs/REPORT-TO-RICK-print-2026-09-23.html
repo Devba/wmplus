@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+body{font-family:DejaVu Sans,Arial,sans-serif;font-size:11px;color:#111;max-width:720px;margin:24px auto;line-height:1.45}
+h1{font-size:20px;border-bottom:2px solid #111;padding-bottom:6px}
+h2{font-size:14px;margin-top:22px;color:#0b3d91}
+.meta{color:#444}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:10.5px}
+th,td{border:1px solid #999;padding:5px 7px;text-align:left;vertical-align:top}
+th{background:#eef3fb}
+code{background:#f2f2f2;padding:0 3px;font-size:10px}
+figure{margin:14px 0;text-align:center}img{max-width:100%}
+hr{border:none;border-top:1px solid #ccc;margin:16px 0}
+</style></head><body><h1>W M+ Check Creator — End-to-End Physical Printing — Review Report</h1>
+<p><strong>Branch:</strong> <code>feature/windows-print-status-checkpoint</code> · <strong>Tip:</strong> <code>783775c</code> (2026-09-22, Rick) <strong>Reviewer:</strong> Jose (code-only review, no live test — physical printing runs on Windows) <strong>Date:</strong> 2026-09-23</p>
+<p>Rick&#x27;s test statement: fresh IPP readiness check → PDF with zero DB writes → physical submission through the Local Print Bridge → issuance only after successful submission → printer OFF blocks issuance → PRINTER NOT READY popup with retry/cancel → OFF→ON recovery → single + three-check sequential printing → checks 1026, 1027, 1028 verified Pending.</p>
+<h2>Commits under review</h2>
+<table>
+<tr><th>Commit</th><th>Title</th><th>Scope</th></tr>
+<tr><td><code>ec2591b</code></td><td>WIP: Check Creator, PDFKit, MICR, and Check Register work</td><td>+2498/−44 — PDF engine, Check Creator UI, test-hack removal, Banking modes</td></tr>
+<tr><td><code>f2be392</code></td><td>Windows IPP printer-status milestone</td><td>+350 — print bridge, printer discovery, PrintEngine</td></tr>
+<tr><td><code>783775c</code></td><td>Complete end-to-end Check Creator physical printing</td><td>+511/−107 — pdf/issue split, <code>/print-pdf</code>, popups</td></tr>
+</table>
+<h2>Verification (code review vs. claimed behavior)</h2>
+<table>
+<tr><th>#</th><th>Claimed behavior</th><th>Code evidence</th><th>Result</th></tr>
+<tr><td>1</td><td>PDF generation performs zero DB writes</td><td>New <code>POST /api/print-checks/pdf</code> uses pool <code>db</code> directly, no <code>getConnection</code>/<code>beginTransaction</code>; <code>loadCheckPrintData</code> = SELECT + joins; <code>getHoaTimeZone</code> = SELECT SystemSettings + in-memory tz</td><td>✅ Confirmed structurally</td></tr>
+<tr><td>2</td><td>Issuance only after successful bridge submission</td><td>Frontend loop per check: pdf → <code>submitPdfForPrint</code> → <code>POST /api/print-checks/issue</code>; any throw skips <code>issue</code></td><td>✅ Confirmed</td></tr>
+<tr><td>3</td><td>Printer OFF prevents issuance</td><td><code>confirmPrinterReadyForPrint</code> gate before loop; non-READY opens popup instead of throwing</td><td>✅ Confirmed</td></tr>
+<tr><td>4</td><td>PRINTER NOT READY popup with retry/cancel</td><td><code>showPrinterUnavailable</code> overlay: PRINTER IS ON re-checks + resumes, CANCEL PRINT closes</td><td>✅ Confirmed</td></tr>
+<tr><td>5</td><td>Each printed check independently Pending</td><td><code>issue</code> is per-transaction (<code>FOR UPDATE</code> + single-row UPDATE + commit per check)</td><td>✅ Confirmed</td></tr>
+<tr><td>6</td><td>Completion confirmation + return to register</td><td><code>CHECK PRINTING COMPLETE</code> popup with per-count message; OK calls <code>onClose</code></td><td>✅ Confirmed</td></tr>
+<tr><td>7</td><td>Race-safe issuance</td><td><code>SELECT … FOR UPDATE</code> with MgtCo+HOA scope; UPDATE requires <code>DateCheckIssued IS NULL AND Status IS NULL</code>; <code>affectedRows===1</code> else 409; button disabled via <code>isCreatingChecks</code></td><td>✅ Confirmed</td></tr>
+<tr><td>8</td><td>Test scaffolding removed</td><td><code>ec2591b</code> deletes the TEMPORARY ALEX TESTING hack — new checks enter NULL/NULL (precondition for the guards)</td><td>✅ Confirmed</td></tr>
+<tr><td>9</td><td>Bridge loopback-only</td><td><code>print-service.js</code> listens on <code>127.0.0.1:3012</code> (before and after); <code>PRINT_BRIDGE_URL</code> is loopback; CORS <code>*</code> contained to the machine</td><td>✅ Confirmed</td></tr>
+</table>
+<figure><img src="workflows/print-seq_20260923.png" alt="Check printing sequence"></figure>
+<figure><img src="workflows/print-guards_20260923.png" alt="Issue guards"></figure>
+<figure><img src="workflows/print-recovery_20260923.png" alt="Printer recovery"></figure>
+<figure><img src="workflows/print-bridge_20260923.png" alt="Print bridge architecture"></figure>
+<h2>Observations (non-blocking)</h2>
+<p><strong>O1 — Partial-batch resume reprints.</strong> If <code>issue</code> fails on check 2 of 3, retry calls <code>createSelectedChecks()</code> from check 1: the pdf endpoint has no Status guard, the bridge reprints physically, and only <code>issue</code> returns 409. Suggest a resume index (continue from the failed check) or a Status pre-check before bridge submission.</p>
+<p><strong>O2 — No reprint path after a paper jam.</strong> Any existing <code>Status</code> now returns 409 and the UPDATE requires NULL/NULL (previously <code>Pending</code> could re-issue). Correct as &quot;issue once&quot;, but post-issue jam recovery has no defined operator procedure.</p>
+<p><strong>O3 — Bridge has no own package.json.</strong> <code>require(&#x27;pdf-to-printer&#x27;)</code> resolves via <code>backend/node_modules</code> (works only if backend deps are installed). Suggest an explicit <code>backend/print-service/package.json</code> or a startup check.</p>
+<p><strong>O4 — Dead weight.</strong> Three empty placeholder components (<code>PrintChecksActions/Details/Lists.jsx</code>, 0 bytes) and binary blobs with no source in repo (<code>IppStatusHelper.exe</code>, 3 MICR <code>.ttf</code>, 3 <code>.dotx</code> templates) — accepted as-is, noted for provenance (native helper source requested).</p>
+<p><strong>O5 — Pre-existing.</strong> Frontend <code>localhost:3011</code> URLs now in two endpoints; <code>pdf-preview</code> route untouched while the UI no longer opens PDFs (physical-only by design).</p>
+<h2>Auth integration</h2>
+<p><code>POST /api/print-checks/issue</code> carries hardcoded scope with <code>TODO(scope-merge)</code> markers (<code>HOA-FL-2024-001</code> / <code>MGTCO-001</code> / <code>SYSTEM</code>) — consistent with keeping <code>feature/auth-roles</code> separate until the integration design (security levels, active-HOA switching, session rules, frontend/cache clearing) is jointly agreed. The future merge will conflict exactly on these hunks; that is the right time to wire <code>req.hoa</code>.</p>
+<h2>Verdict</h2>
+<p><strong>Approve with minor observations.</strong> Architecture is sound, race guards are correct, and the test-hack removal restores the production invariant the issuance flow depends on.</p>
+<h2>Open questions for Rick</h2>
+<p>1. Operator procedure for O1 (printed-but-not-issued) and O2 (post-issue jam)? 2. Confirm checks 1026–1028 started from NULL/NULL state? 3. <code>IppStatusHelper.exe</code> source or acceptance of the blob? 4. Do you want this branch merged to BravoFrontend, and with what strategy for the two local-only docs commits (<code>e0f7b3e</code>, <code>3ab74bf</code>)?</p></body></html>
