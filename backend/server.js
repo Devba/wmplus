@@ -8262,7 +8262,8 @@ app.get('/api/admin/users', authMid.requireAdmin, async (req, res) => {
          FROM app_user u LEFT JOIN user_credential c ON c.user_id = u.id
         ORDER BY u.login_name`);
     const [asg] = await adb.query(
-      `SELECT a.id, a.user_id, a.hoa_id, h.hoa_code, h.legal_name, a.role, a.active_flag
+      `SELECT a.id, a.user_id, a.hoa_id, h.hoa_code, h.legal_name, a.role,
+              a.authorization_level, a.read_only_flag, a.active_flag
          FROM hoa_assignment a JOIN hoa h ON h.id = a.hoa_id ORDER BY a.user_id, h.hoa_code`);
     res.json({ users, assignments: asg });
   } catch (err) {
@@ -8333,17 +8334,22 @@ app.post('/api/admin/users/:id/reset-password', authMid.requireAdmin, async (req
   }
 });
 
-// POST /api/admin/users/:id/assignments { hoa_id, role } (upsert por unique)
+// POST /api/admin/users/:id/assignments { hoa_id, role, authorization_level?, read_only_flag? }
+// (upsert por unique user+HOA; V4 §5: nivel operativo por asignación)
 app.post('/api/admin/users/:id/assignments', authMid.requireAdmin, async (req, res) => {
   try {
     const { hoa_id, role } = req.body;
     if (!hoa_id || !['manager', 'accountant', 'viewer'].includes(role)) {
       return res.status(400).json({ error: 'hoa_id y role válido requeridos' });
     }
+    const level = Math.min(12, Math.max(1, parseInt(req.body.authorization_level ?? '1', 10) || 1));
+    const ro = String(req.body.read_only_flag || 'N').toUpperCase() === 'Y' ? 'Y' : 'N';
     await adb.query(
-      `INSERT INTO hoa_assignment (user_id, hoa_id, role, active_flag)
-       VALUES (?,?,?,'Y') ON DUPLICATE KEY UPDATE role=VALUES(role), active_flag='Y'`,
-      [req.params.id, hoa_id, role]);
+      `INSERT INTO hoa_assignment (user_id, hoa_id, role, authorization_level, read_only_flag, active_flag)
+       VALUES (?,?,?,?,?,'Y')
+       ON DUPLICATE KEY UPDATE role=VALUES(role), authorization_level=VALUES(authorization_level),
+         read_only_flag=VALUES(read_only_flag), active_flag='Y'`,
+      [req.params.id, hoa_id, role, level, ro]);
     res.status(201).json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });

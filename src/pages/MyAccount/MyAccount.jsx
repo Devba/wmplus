@@ -57,7 +57,7 @@ export default function MyAccount() {
             <tr><th>Rol</th><td>{me.is_admin ? 'admin global' : 'estándar'}</td></tr>
             <tr><th>Lectura</th><td>{me.read_only_flag === 'Y' ? 'solo lectura' : 'lectura y escritura'}</td></tr>
             <tr><th>HOAs</th><td>{me.is_admin ? 'todas' :
-              (me.hoas || []).map((h) => `${h.hoa_code} (${h.role})`).join(', ') || '—'}</td></tr>
+              (me.hoas || []).map((h) => `${h.hoa_code} (${h.role}, niv ${h.level ?? '?'}${h.assignment_read_only === 'Y' ? ', RO' : ''})`).join(', ') || '—'}</td></tr>
           </tbody>
         </table>
       )}

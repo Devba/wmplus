@@ -83,9 +83,11 @@ async function revokeSession(token) {
 }
 
 // HOAs asignadas al usuario (scope de sesión; admin global no necesita filas)
+// V4 §5: incluye nivel operativo y readonly POR ASIGNACIÓN (role = descriptivo).
 async function loadUserHoas(userId) {
   const [rows] = await db.query(
-    `SELECT h.id AS hoa_id, h.hoa_code, h.legal_name, h.state_code, a.role
+    `SELECT h.id AS hoa_id, h.hoa_code, h.legal_name, h.state_code, a.role,
+            a.authorization_level AS level, a.read_only_flag AS assignment_read_only
        FROM hoa_assignment a
        JOIN hoa h ON h.id = a.hoa_id
       WHERE a.user_id = ? AND a.active_flag = 'Y' AND h.active_flag = 'Y'
@@ -95,6 +97,31 @@ async function loadUserHoas(userId) {
     [userId]
   );
   return rows;
+}
+
+// V4 §5: acceso efectivo de un usuario en una HOA concreta.
+// Admin global -> nivel global (bypass operativo va por requireAdmin / 'all').
+// Retorna null si el usuario no tiene asignación vigente (fuera de alcance).
+async function effectiveAccess(user, hoaId) {
+  const id = parseInt(hoaId, 10);
+  if (!id) return null;
+  const [rows] = await db.query(
+    `SELECT a.role, a.authorization_level, a.read_only_flag
+       FROM hoa_assignment a JOIN hoa h ON h.id = a.hoa_id
+      WHERE a.user_id = ? AND a.hoa_id = ?
+        AND a.active_flag = 'Y' AND h.active_flag = 'Y'
+        AND (a.valid_from IS NULL OR a.valid_from <= CURDATE())
+        AND (a.valid_to IS NULL OR a.valid_to >= CURDATE())
+      LIMIT 1`,
+    [user.user_id, id]
+  );
+  if (!rows.length) return null;
+  const a = rows[0];
+  return {
+    level: a.authorization_level || 0,
+    readOnly: String(a.read_only_flag).toUpperCase() === 'Y',
+    role: a.role
+  };
 }
 
 // Devuelve fila de app_user (+ hoas, + is_admin) o null. Desliza expiración.
@@ -159,12 +186,38 @@ async function requireAuth(req, res, next) {
   }
 }
 
-// 403 si el usuario es solo-lectura (análogo a I1=1 del VBA).
-function requireReadWrite(req, res, next) {
-  if (isReadOnly(req.authUser)) {
-    return res.status(403).json({ error: 'Usuario de solo lectura' });
+// 403 si el usuario es solo-lectura.
+// V4 §5: con contexto HOA rige el readonly DE LA ASIGNACIÓN (req.access,
+// fijado por requireHoaScope, o resuelto aquí vía X-HOA-ID); sin contexto,
+// rige el flag global (comportamiento anterior).
+async function requireReadWrite(req, res, next) {
+  try {
+    const user = req.authUser;
+    if (!user) return res.status(401).json({ error: 'Sesión requerida' });
+    if (user.is_admin) {
+      if (isReadOnly(user)) return res.status(403).json({ error: 'Usuario de solo lectura' });
+      return next();
+    }
+    let access = req.access || null;
+    if (!access) {
+      const raw = (req.headers['x-hoa-id'] || req.query.hoa_id || '').toString().trim();
+      const id = parseInt(raw, 10);
+      if (id) {
+        access = await effectiveAccess(user, id);
+        if (!access) return res.status(403).json({ error: 'HOA fuera de tu alcance' });
+      }
+    }
+    if (access) {
+      if (access.readOnly) return res.status(403).json({ error: 'Solo lectura en esta HOA' });
+      return next();
+    }
+    if (isReadOnly(user)) {
+      return res.status(403).json({ error: 'Usuario de solo lectura' });
+    }
+    next();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  next();
 }
 
 // 403 si no es admin global (authorization_level >= 9).
@@ -207,6 +260,10 @@ async function requireHoaScope(req, res, next) {
     }
     req.hoaId = hoaId;
     req.hoa = rows[0];
+    // V4 §5: acceso efectivo de ESTA HOA para guards posteriores.
+    if (!req.authUser.is_admin) {
+      req.access = await effectiveAccess(req.authUser, hoaId);
+    }
     next();
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -233,6 +290,7 @@ module.exports = {
   revokeSession,
   getSessionUser,
   isReadOnly,
+  effectiveAccess,
   requireAuth,
   requireReadWrite,
   requireAdmin,

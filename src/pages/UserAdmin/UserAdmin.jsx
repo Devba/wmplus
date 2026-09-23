@@ -15,6 +15,8 @@ export default function UserAdmin() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [form, setForm] = useState({ login_name: '', display_name: '', email: '', authorization_level: 1, read_only_flag: 'N' });
+  // V4 §5: nivel/RO por asignación (matriz pendiente Rick; default = 1/lectura-escritura).
+  const [asg, setAsg] = useState({ level: 1, ro: 'N' });
 
   async function reload() {
     setError('');
@@ -87,7 +89,7 @@ export default function UserAdmin() {
               <td>{u.read_only_flag}</td>
               <td>{u.active_flag}</td>
               <td>{assignments.filter((a) => a.user_id === u.user_id)
-                .map((a) => `${a.hoa_code}:${a.role}${a.active_flag === 'Y' ? '' : '(off)'}`).join(', ') || '—'}</td>
+                .map((a) => `${a.hoa_code}:${a.role} L${a.authorization_level ?? '?'}${a.read_only_flag === 'Y' ? '(RO)' : ''}${a.active_flag === 'Y' ? '' : '(off)'}`).join(', ') || '—'}</td>
               <td className="ua-actions">
                 <button onClick={() => call('PUT', `/admin/users/${u.user_id}`,
                   { active_flag: u.active_flag === 'Y' ? 'N' : 'Y' })}>
@@ -96,10 +98,17 @@ export default function UserAdmin() {
                 <button onClick={() => call('POST', `/admin/users/${u.user_id}/reset-password`)}>
                   Reset clave
                 </button>
+                <label title="Nivel operativo en la HOA (V4)">Niv
+                  <input type="number" min="1" max="12" value={asg.level} style={{ width: '3em' }}
+                    onChange={(e) => setAsg({ ...asg, level: e.target.value })} />
+                </label>
+                <label title="Solo lectura en la HOA"><input type="checkbox" checked={asg.ro === 'Y'}
+                  onChange={(e) => setAsg({ ...asg, ro: e.target.checked ? 'Y' : 'N' })} />RO</label>
                 <select defaultValue="" onChange={(e) => {
                   if (!e.target.value) return;
                   const [hoa_id, role] = e.target.value.split(':');
-                  call('POST', `/admin/users/${u.user_id}/assignments`, { hoa_id, role });
+                  call('POST', `/admin/users/${u.user_id}/assignments`,
+                    { hoa_id, role, authorization_level: asg.level, read_only_flag: asg.ro });
                   e.target.value = '';
                 }}>
                   <option value="">+ Asignar HOA…</option>
