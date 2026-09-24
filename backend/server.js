@@ -2080,7 +2080,7 @@ async function ensureAllCashFlowBankTables() {
   }
 }
 
-app.post('/api/check-register', authMid.requireHoaScope, async (req, res) => {
+app.post('/api/check-register', authMid.requireHoaScope, authMid.trackBlocking('check-printing'), async (req, res) => {
   const connection = await db.getConnection();
   try {
     if (req.hoaId === 'all' || !req.hoa) {
@@ -6274,7 +6274,7 @@ async function refreshAssessmentPaymentSummary(conn, ctx) {
 //   3) SA row + its AD-overflow row share one APR transaction number.
 //   4) A separately entered Annual Dues amount gets a new APR transaction number.
 //   5) AssessmentRegisterPeriod is obligation/schedule data and is NOT changed by payments.
-app.post('/api/apr/enter-payment', authMid.requireHoaScope, async (req, res) => {
+app.post('/api/apr/enter-payment', authMid.requireHoaScope, authMid.trackBlocking('apr-mutation'), async (req, res) => {
   try {
     const {
       residentAccountId,
@@ -7763,7 +7763,7 @@ async function resolveEffectiveAssessmentBank(conn, sectionType, payDate, effMgt
 }
 
 // POST /api/apr/void — void server-side with full shared-transaction reversal + historical full-year replay (V6 RECONCILED)
-app.post('/api/apr/void', authMid.requireHoaScope, async (req, res) => {
+app.post('/api/apr/void', authMid.requireHoaScope, authMid.trackBlocking('apr-mutation'), async (req, res) => {
   try {
     const transactionNumber = String(
       req.body?.transactionNumber || ''
@@ -8224,6 +8224,34 @@ app.post('/api/auth/active-hoa', async (req, res) => {
     res.json({ ok: true, ...out });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// PILOTO-bloqueantes: estado de operaciones de servidor en curso (V4 §11.2).
+// GET -> { blocking: [...] }; si no está vacía, el frontend bloquea el cambio de HOA.
+app.get('/api/auth/blocking-state', async (req, res) => {
+  try {
+    const user = await authMid.getSessionUser(req);
+    if (!user) return res.status(401).json({ error: 'Sin sesión' });
+    res.json({ blocking: authMid.getBlocking(user.user_id) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PILOTO-bloqueantes: fija/libera un flag manualmente para probar el diálogo
+// de cambio de HOA. Sustituir por la lista de Rick al llegar.
+app.post('/api/auth/blocking-simulate', async (req, res) => {
+  try {
+    const user = await authMid.getSessionUser(req);
+    if (!user) return res.status(401).json({ error: 'Sin sesión' });
+    const op = String(req.body?.op || '').trim();
+    if (!op) return res.status(400).json({ error: 'op requerida' });
+    if (req.body?.on === false) authMid.clearBlocking(user.user_id, op);
+    else authMid.markBlocking(user.user_id, op);
+    res.json({ blocking: authMid.getBlocking(user.user_id) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

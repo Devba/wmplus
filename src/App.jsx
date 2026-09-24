@@ -46,8 +46,23 @@ function App() {
     () => localStorage.getItem('wm_active_hoa') || ''
   );
 
-  function handleSelectHoa(id) {
+  // PILOTO-bloqueantes (V4 §11.2): antes de cambiar de HOA se consulta el
+  // estado de operaciones de servidor en curso; si hay bloqueo, se deniega
+  // el cambio con mensaje (duplicado lo deniega el bind en Fase 3).
+  async function handleSelectHoa(id) {
     const v = String(id || '');
+    if (v && v !== activeHoa) {
+      try {
+        const r = await fetch(`${API_BASE_URL}/auth/blocking-state`, { credentials: 'include' });
+        if (r.ok) {
+          const st = await r.json();
+          if (st.blocking && st.blocking.length) {
+            alert(`No se puede cambiar de HOA ahora.\nOperación en curso: ${st.blocking.join(', ')}.\nComplétala o cancélala antes de cambiar.`);
+            return;
+          }
+        }
+      } catch { /* sin estado: se permite el cambio (fail-open piloto) */ }
+    }
     setActiveHoa(v);
     if (v) localStorage.setItem('wm_active_hoa', v);
     else localStorage.removeItem('wm_active_hoa');

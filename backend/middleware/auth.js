@@ -186,6 +186,38 @@ async function getSessionUser(req) {
   return user;
 }
 
+// PILOTO-bloqueantes (provisional hasta lista Rick): operaciones de servidor
+// en curso por usuario. Map en memoria (se pierde al reiniciar; vale p/ prueba).
+// Producción: sustituir por la clasificación de Rick + persistencia si se pide.
+const blockingOps = new Map(); // userId -> Set(op)
+function markBlocking(userId, op) {
+  if (!userId || !op) return;
+  let s = blockingOps.get(userId);
+  if (!s) { s = new Set(); blockingOps.set(userId, s); }
+  s.add(op);
+}
+function clearBlocking(userId, op) {
+  const s = blockingOps.get(userId);
+  if (!s) return;
+  if (op) s.delete(op); else s.clear();
+  if (!s.size) blockingOps.delete(userId);
+}
+function getBlocking(userId) {
+  return [...(blockingOps.get(userId) || [])];
+}
+
+// Middleware PILOTO: marca op en curso y la libera al terminar la respuesta.
+function trackBlocking(op) {
+  return (req, res, next) => {
+    const uid = req.authUser && req.authUser.user_id;
+    if (uid) {
+      markBlocking(uid, op);
+      res.on('finish', () => clearBlocking(uid, op));
+    }
+    next();
+  };
+}
+
 function isReadOnly(user) {
   return !user || String(user.read_only_flag).toUpperCase() === 'Y';
 }
@@ -334,6 +366,10 @@ module.exports = {
   isReadOnly,
   effectiveAccess,
   bindActiveHoa,
+  markBlocking,
+  clearBlocking,
+  getBlocking,
+  trackBlocking,
   requireAuth,
   requireReadWrite,
   requireAdmin,
