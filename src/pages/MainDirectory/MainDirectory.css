@@ -445,7 +445,7 @@
        4. Store the recommended column width (or longest formatted string)
           in the database.
 
-     APR, Resident Assessment Summary, Monthly/Qtrly/Yrly Assessment
+     APR, Resident Assessment Summary, Monthly/Qtrly/Annual Assessment
      Registers, Reports, and any page displaying dues should obtain this
      value from the server so all pages use identical column widths.
 

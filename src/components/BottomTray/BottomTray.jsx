@@ -23,7 +23,7 @@ const trayItems = [
   { key: 'xfer-intra-acct-deposits', label: '$$ XFER & Intra Acct Deposits' },
   { key: 'assmt-paymt-register', label: 'Assmt Paymt Register' },
   { key: 'resident-assmt-paymt-summary', label: 'Resident Assmt Paymt Summary' },
-  { key: 'yrly-assmt-register', label: 'YRLY Assmt Register' },
+  { key: 'annual-assmt-register', label: 'Annual Assmt Register' },
   { key: 'qtrly-assmt-register', label: 'QTRLY Assmt Register' },
   { key: 'monthly-assmt-register', label: 'Monthly Assmt Register' },
   { key: 'startup-resident-paymt-register', label: 'Startup Resident Paymt Register' },
