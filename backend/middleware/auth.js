@@ -266,11 +266,17 @@ async function requireReadWrite(req, res, next) {
     }
     let access = req.access || null;
     if (!access) {
-      const raw = (req.headers['x-hoa-id'] || req.query.hoa_id || '').toString().trim();
-      const id = parseInt(raw, 10);
-      if (id) {
-        access = await effectiveAccess(user, id);
-        if (!access) return res.status(403).json({ error: 'HOA fuera de tu alcance' });
+      // Endpoints de gestión de sesión: no dependen de X-HOA-ID (un contexto
+      // rancio no debe impedir ligar la HOA correcta ni consultar bloqueos).
+      const sessionLevel = req.path === '/auth/active-hoa' ||
+        req.path.indexOf('/auth/blocking-') === 0;
+      if (!sessionLevel) {
+        const raw = (req.headers['x-hoa-id'] || req.query.hoa_id || '').toString().trim();
+        const id = parseInt(raw, 10);
+        if (id) {
+          access = await effectiveAccess(user, id);
+          if (!access) return res.status(403).json({ error: 'HOA fuera de tu alcance' });
+        }
       }
     }
     if (access) {
