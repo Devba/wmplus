@@ -2091,12 +2091,19 @@ app.post('/api/check-register', authMid.requireHoaScope, authMid.trackBlocking('
     const sesOperator = (req.authUser && req.authUser.login_name) || 'SYSTEM';
     await connection.beginTransaction();
     const c = req.body;
-    const txnNum = await generateCheckTransactionNumber(connection);
     const bankAccountId = c.bank_account_id || 1;
     const amount = parseFloat(c.amount) || 0.00;
-    const createdAt = (await hoaNow(connection)).utcDateTime;
+    // Reintento ante DUP-en-INSERT bajo ráfaga: el generador verifica existencia
+    // pero dos txns en el mismo tick pueden colisionar al insertar (PK).
+    // Se revierte y reintenta con nuevo número (máx 5); otros errores propagan.
+    let txnNum = null;
+    let createdAt = null;
+    for (let dupTry = 0; ; dupTry++) {
+      try {
+        txnNum = await generateCheckTransactionNumber(connection);
+        createdAt = (await hoaNow(connection)).utcDateTime;
 
-    await connection.query(`
+        await connection.query(`
       INSERT INTO CheckRegister (
         CheckTransactionNumber, CheckNumber, GLAccountName, Amount, DateCheckIssued,
         DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
@@ -2126,6 +2133,17 @@ app.post('/api/check-register', authMid.requireHoaScope, authMid.trackBlocking('
       sesOperator,
       createdAt
     ]);
+        break; // insert OK
+      } catch (insErr) {
+        if (insErr.code === 'ER_DUP_ENTRY' && dupTry < 4) {
+          try { await connection.rollback(); } catch (_) { /* noop */ }
+          await connection.beginTransaction();
+          await new Promise((r) => setTimeout(r, 25 * (dupTry + 1)));
+          continue;
+        }
+        throw insErr;
+      }
+    }
 
     await connection.commit();
     res.status(201).json({
