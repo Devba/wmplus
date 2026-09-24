@@ -88,26 +88,40 @@ async function bindActiveHoa(user, token, hoaId, force = false) {
   const access = user.is_admin ? { level: 9, readOnly: false, role: 'admin' }
     : await effectiveAccess(user, id);
   if (!access) throw Object.assign(new Error('HOA fuera de tu alcance'), { status: 403 });
-  const [dups] = await db.query(
-    `SELECT id FROM user_session
-      WHERE user_id = ? AND hoa_id = ? AND revoked_flag = 'N'
-        AND expires_at > NOW() AND token_hash != ?
-      LIMIT 1`,
-    [user.user_id, id, sha256(token)]
-  );
-  if (dups.length && !force) {
-    throw Object.assign(
-      new Error('Esa HOA ya está abierta en otra sesión de este usuario'), { status: 409 });
-  }
-  if (dups.length && force) {
-    await db.query(
-      `UPDATE user_session SET revoked_flag = 'Y'
-        WHERE user_id = ? AND hoa_id = ? AND revoked_flag = 'N' AND token_hash != ?`,
+  // Serializa binds del mismo usuario (lock de su fila): el check de
+  // duplicados + revoke + bind son atómicos; sin esto, N binds paralelos
+  // se ven entre sí como "sin duplicado" y ganan varios (hallado en stress).
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query(`SELECT id FROM app_user WHERE id = ? FOR UPDATE`, [user.user_id]);
+    const [dups] = await conn.query(
+      `SELECT id FROM user_session
+        WHERE user_id = ? AND hoa_id = ? AND revoked_flag = 'N'
+          AND expires_at > NOW() AND token_hash != ?
+        LIMIT 1`,
       [user.user_id, id, sha256(token)]
     );
+    if (dups.length && !force) {
+      throw Object.assign(
+        new Error('Esa HOA ya está abierta en otra sesión de este usuario'), { status: 409 });
+    }
+    if (dups.length && force) {
+      await conn.query(
+        `UPDATE user_session SET revoked_flag = 'Y'
+          WHERE user_id = ? AND hoa_id = ? AND revoked_flag = 'N' AND token_hash != ?`,
+        [user.user_id, id, sha256(token)]
+      );
+    }
+    await conn.query(`UPDATE user_session SET hoa_id = ? WHERE token_hash = ?`, [id, sha256(token)]);
+    await conn.commit();
+    return { hoa_id: id, tookOver: dups.length > 0 && !!force };
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
+    throw err;
+  } finally {
+    conn.release();
   }
-  await db.query(`UPDATE user_session SET hoa_id = ? WHERE token_hash = ?`, [id, sha256(token)]);
-  return { hoa_id: id, tookOver: dups.length > 0 && !!force };
 }
 
 async function revokeSession(token) {
