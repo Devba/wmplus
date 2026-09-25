@@ -7,6 +7,7 @@ import './Login.css';
 export default function Login({ onLogin, expiredNotice }) {
   const [loginName, setLoginName] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -51,7 +52,15 @@ export default function Login({ onLogin, expiredNotice }) {
         </label>
         <label>
           Clave
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          <span style={{ display: 'flex', gap: 6 }}>
+            <input type={showPassword ? 'text' : 'password'} value={password}
+              onChange={(e) => setPassword(e.target.value)} autoComplete="current-password"
+              style={{ flex: 1 }} />
+            <button type="button" title={showPassword ? 'Ocultar' : 'Mostrar'}
+              onClick={() => setShowPassword((v) => !v)} style={{ padding: '0 10px' }}>
+              {showPassword ? '🙈' : '👁'}
+            </button>
+          </span>
         </label>
         {error && <div className="login-error">{error}</div>}
         <button type="submit" disabled={busy || !loginName || !password}>
