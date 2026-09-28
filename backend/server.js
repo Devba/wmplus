@@ -3844,12 +3844,34 @@ app.post('/api/webhook/github', (req, res) => {
    8. OPENROUTER AI FILTER API
    =========================================================== */
 
-app.post('/api/ai-filter', async (req, res) => {
+app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
   try {
     const { prompt } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt string is required' });
     }
+
+    // FASE 0 (service-layer): tenant efectivo de la sesion. Admin con
+    // X-HOA-ID=all ve global (igual que el resto de endpoints); el resto
+    // queda filtrado a su HOA. Sin esto el AI respondia cross-HOA.
+    const allowAll = req.hoaId === 'all';
+    const sesLicense = (!allowAll && req.hoa && req.hoa.license_number)
+      ? String(req.hoa.license_number) : null;
+    if (!allowAll && !sesLicense) {
+      return res.status(403).json({ error: 'HOA fuera de tu alcance' });
+    }
+    const sesClientId = (req.hoa && req.hoa.client_id) || null;
+    // Licencias con formato [A-Za-z0-9-]; cualquier otra cosa no se interpola.
+    const licOk = sesLicense && /^[A-Za-z0-9-]+$/.test(sesLicense);
+    const tenantCond = licOk ? `HOALicenseNumber = '${sesLicense}'` : null;
+    // FASE 0: inyecta tenant en el SQL enlatado del fallback (formas con WHERE conocido).
+    const scopeAnswerSql = (sql) => {
+      if (allowAll || !tenantCond) return sql;
+      return String(sql).replace(
+        /FROM\s+(ResidentMaster|ViolationRegister|AssessmentRegister)\s+WHERE/i,
+        (m) => `${m} ${tenantCond} AND `
+      );
+    };
 
     const opencodeCliPath = process.env.OPENCODE_CLI_PATH || 'opencode';
     const opencodeModel = process.env.OPENCODE_AI_MODEL || 'opencode-go/deepseek-v4-flash';
@@ -4084,7 +4106,14 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"ResidentAcco
 
     function runOpencodeTranslate(promptText) {
       return new Promise((resolve, reject) => {
-        const fullPrompt = `${systemMessage}\n\nUser query: ${promptText}\n\nOutput ONLY the raw JSON described above. No markdown, no extra text.`;
+        const tenantRule = (allowAll || !tenantCond)
+          ? `\n10. TENANT: no tenant filter required (admin global view).`
+          : `\n10. TENANT RULE (mandatory): scope every query to the caller's HOA. ` +
+            `Filter queries: include HOALicenseNumber='${sesLicense}' in the whereClause. ` +
+            `Aggregate queries: the answerSql MUST contain HOALicenseNumber='${sesLicense}' ` +
+            `(including inside any subquery on AssessmentRegister or ViolationRegister). ` +
+            `The server rejects unscoped SQL. Session license: ${sesLicense}.`;
+        const fullPrompt = `${systemMessage}${tenantRule}\n\nUser query: ${promptText}\n\nOutput ONLY the raw JSON described above. No markdown, no extra text.`;
         const args = ['run', '--title', 'wmplus-ai-query', '-m', opencodeModel, fullPrompt];
         const proc = spawn(opencodeCliPath, args, {
           cwd: __dirname,
@@ -4144,6 +4173,10 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"ResidentAcco
       result = buildFallbackResult(prompt);
       source = 'fallback';
     }
+    // FASE 0: el fallback enlatado tambien sale con tenant (si no, lo rechaza la guarda).
+    if (!allowAll && result && result.mode === 'answer' && result.answerSql) {
+      result.answerSql = scopeAnswerSql(result.answerSql);
+    }
 
     // Safety check: prevent destructive keywords
     const unsafeSqlPattern = /\b(drop|delete|update|insert|alter|replace|truncate|grant|revoke|union|create|exec)\b|;/i;
@@ -4157,6 +4190,15 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"ResidentAcco
         console.error('[AI Filter Security] Unsafe aggregate SQL detected:', result.answerSql);
         return res.status(400).json({ error: 'Unsafe aggregate SQL query detected by security layer' });
       }
+      // FASE 0: fail closed sin filtro tenant (el registry Fase 1 lo estructura; ver plan).
+      if (!allowAll) {
+        const hasTenant = /HOALicenseNumber/i.test(trimmed) && trimmed.includes(sesLicense);
+        if (!hasTenant) {
+          console.error('[AI Filter Security] Unscoped answer SQL rejected.');
+          return res.status(400).json({ error: 'AI answer must be scoped to your HOA (HOALicenseNumber). Rephrase or contact support.' });
+        }
+      }
+      console.log(`[AI Filter] prompt=${JSON.stringify(String(prompt).slice(0, 120))} license=${allowAll ? 'all' : sesLicense} source=${source}`);
       console.log(`[AI Filter SQL] Executing ${source} answer: ${trimmed}`);
       const [rows] = await db.readOnlyPool.query(trimmed);
       const row = rows && rows[0] ? rows[0] : {};
@@ -4169,7 +4211,9 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"ResidentAcco
         answerLabel: result.answerLabel,
         answerValue: value,
         answerSql: trimmed,
-        source
+        source,
+        tenant: { client_id: sesClientId, license_number: allowAll ? 'all' : sesLicense },
+        scoped: !allowAll
       });
     }
 
@@ -4181,10 +4225,16 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"ResidentAcco
 
     const orderByClause = result.orderBy ? ` ORDER BY ${String(result.orderBy).replace(/^order\s+by\s+/i, '').trim()}` : '';
     const limitClause = result.limit ? ` LIMIT ${parseInt(result.limit, 10)}` : '';
-    const fullQuery = `SELECT * FROM ResidentMaster WHERE ${whereClause}${orderByClause}${limitClause}`;
+    // FASE 0: el servidor impone el tenant con parametro (el modelo no puede quitarlo).
+    const tenantParams = [];
+    const scopedWhere = allowAll
+      ? whereClause
+      : (tenantParams.push(sesLicense), `HOALicenseNumber = ? AND (${whereClause})`);
+    const fullQuery = `SELECT * FROM ResidentMaster WHERE ${scopedWhere}${orderByClause}${limitClause}`;
 
+    console.log(`[AI Filter] prompt=${JSON.stringify(String(prompt).slice(0, 120))} license=${allowAll ? 'all' : sesLicense} source=${source}`);
     console.log(`[AI Filter SQL] Executing query via ${source}: ${fullQuery}`);
-    const [rows] = await db.readOnlyPool.query(fullQuery);
+    const [rows] = await db.readOnlyPool.query(fullQuery, tenantParams);
 
     // Map database keys to frontend schema format
     const mappedResidents = rows.map(r => ({
@@ -4232,7 +4282,9 @@ Input: "los 10 mayores deudores" -> {"mode":"filter","whereClause":"ResidentAcco
       mode: 'filter',
       residents: mappedResidents,
       whereClause,
-      source
+      source,
+      tenant: { client_id: sesClientId, license_number: allowAll ? 'all' : sesLicense },
+      scoped: !allowAll
     });
 
   } catch (err) {
