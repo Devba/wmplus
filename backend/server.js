@@ -4020,6 +4020,55 @@ app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
       );
     };
 
+    /* ROUTER IA (service-layer, nivel 1-2): pregunta -> {funcion, params}
+       del registry. Con HOA concreta va al registry; admin global (all)
+       y lo no-clasificado caen al legacy SQL (nivel 3, DEPRECATED). */
+    if (!allowAll) {
+      try {
+        const translator = require('./services/translator');
+        const svcRegistry = require('./services/registry');
+        const routed = await translator.translate(prompt, sesLicense);
+        if (routed && routed.key && svcRegistry.FUNCTIONS[routed.key]) {
+          const def = svcRegistry.FUNCTIONS[routed.key];
+          console.log(`[AI Router] prompt=${JSON.stringify(String(prompt).slice(0, 100))} -> ${routed.key} via ${routed.source}`);
+          if (def.status === 'disabled') {
+            return res.status(403).json({
+              error: 'FL-dependiente: espera definiciones de Manage Violations (Rick/Hal).',
+              tenant: { client_id: sesClientId, license_number: sesLicense },
+              source: `router-${routed.source}`
+            });
+          }
+          const now = await hoaNow(db);
+          const ctx = {
+            licenseNumber: sesLicense,
+            clientId: sesClientId,
+            asOf: now.hoaLocalDateTime.slice(0, 10),
+            ...(routed.params || {})
+          };
+          const out = await def.run(ctx, { resolveFiscalWindow });
+          return res.json({
+            success: true,
+            mode: 'answer',
+            answer: translator.summarize(routed.key, out),
+            answerLabel: def.fn,
+            answerValue: (out.summary && (out.summary.balance_due ?? out.summary.total ?? out.summary.count)) ?? null,
+            function: routed.key,
+            params: routed.params || {},
+            result: out.result || null,
+            summary: out.summary || null,
+            tenant: out.tenant,
+            scoped: true,
+            source: `router-${routed.source}`
+          });
+        }
+      } catch (e) {
+        console.warn('[AI Router] fallo, cae a legacy:', e.message);
+      }
+    }
+
+    /* NIVEL 3 LEGACY — DEPRECATED. Generacion libre de SQL (opencode CLI +
+       fallback enlatado). Se elimina cuando el golden set confirme cobertura
+       del router. No ampliar: todo lo nuevo va al registry. */
     const opencodeCliPath = process.env.OPENCODE_CLI_PATH || 'opencode';
     const opencodeModel = process.env.OPENCODE_AI_MODEL || 'opencode-go/deepseek-v4-flash';
 
