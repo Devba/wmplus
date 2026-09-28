@@ -28,9 +28,10 @@ Cada pregunta: ruta esperada + expectativa verificable a mano en QA.
 ## Q8 — anomalies (stub honesto)
 - `algo inusual o atrasado` → `not_yet_implemented` + nota overdue→FL.
 
-## Legacy preservado (nivel 3)
-- `cuantos residentes hay` (sin residente) → `fallback` con tenant (11 en HOA5).
-- `residentes de florida` → `fallback`/`opencode` con tenant.
+## Sin clasificar (corte legacy aplicado)
+- `cuantos residentes hay` (sin residente) → **422** honesto con ejemplos.
+  El conteo global legacy se elimino: sin SQL libre en el servidor.
+- `residentes de florida` → **422** (filtro ad-hoc, fuera del catalogo v1).
 
 ## Reglas del router
 - Local no clasifica → OpenRouter (solo prompt+catalogo) → null → legacy.
