@@ -10603,6 +10603,65 @@ app.get('/api/reports/ar-summary', authMid.requireHoaScope, async (req, res) => 
   }
 });
 
+/* ===========================================================
+   SERVICE LAYER v1 HTTP (/api/svc/*): funciones autoritativas
+   consumibles por paginas, reportes, Ask M+, Watch, voz y
+   automatizacion. Contrato congelado (registry.js).
+   =========================================================== */
+const svcRegistry = require('./services/registry');
+
+async function svcCtx(req, extra = {}) {
+  if (req.hoaId === 'all' || !req.hoa) {
+    throw Object.assign(new Error('Selecciona una HOA concreta (no "Todas")'), { status: 400 });
+  }
+  let asOf = req.query.as_of || null;
+  if (asOf && !isValidDateStr(asOf)) {
+    throw Object.assign(new Error('as_of invalido (YYYY-MM-DD)'), { status: 400 });
+  }
+  if (!asOf) {
+    const now = await hoaNow(db);
+    asOf = now.hoaLocalDateTime.slice(0, 10);
+  }
+  return {
+    licenseNumber: req.hoa.license_number,
+    clientId: req.hoa.client_id || null,
+    asOf,
+    ...extra
+  };
+}
+
+function svcRoute(path, key, pick) {
+  app.get(path, authMid.requireHoaScope, async (req, res) => {
+    try {
+      const ctx = await svcCtx(req, pick(req));
+      const out = await svcRegistry.FUNCTIONS[key].run(ctx, { resolveFiscalWindow });
+      res.status(out.status === 'blocked' ? 403 : 200).json(out);
+    } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+  });
+}
+
+app.get('/api/svc', authMid.requireHoaScope, async (req, res) => {
+  res.json({
+    functions: Object.values(svcRegistry.FUNCTIONS)
+      .map((f) => ({ key: f.key, fn: f.fn, questions: f.questions, status: f.status }))
+  });
+});
+
+svcRoute('/api/svc/account-history', 'account-history', (req) => ({ resident: req.query.resident || '' }));
+svcRoute('/api/svc/outstanding-checks', 'outstanding-checks', () => ({}));
+svcRoute('/api/svc/period-diff', 'period-diff', (req) => ({
+  fy: req.query.fy || null, from: req.query.from || null, to: req.query.to || null,
+  compare_fy: req.query.compare_fy || null, compare_from: req.query.compare_from || null,
+  compare_to: req.query.compare_to || null
+}));
+svcRoute('/api/svc/gl-transactions', 'gl-transactions', (req) => ({
+  gl: req.query.gl || '', fy: req.query.fy || null,
+  from: req.query.from || null, to: req.query.to || null
+}));
+svcRoute('/api/svc/vendor-invoices', 'vendor-invoices', (req) => ({ vendor: req.query.vendor || '' }));
+svcRoute('/api/svc/violations', 'violations', () => ({}));
+svcRoute('/api/svc/anomalies', 'anomalies', () => ({}));
+
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 W M+ Express Backend API running on port ${PORT}`);
