@@ -1,23 +1,23 @@
-
-
 import { useEffect, useRef, useState } from 'react';
 import HeaderRow from './HeaderRow';
 
-function CheckRegisterGrid({ checkRows }) {
+function CheckRegisterGrid({
+  checkRows,
+  onSelectCheckRow
+}) {
   const [selectedTransactionNo, setSelectedTransactionNo] =
-      useState(null);
-    
-      const lastRowRef = useRef(null);
+    useState(null);
+
+  const lastRowRef = useRef(null);
 
   useEffect(() => {
-  if (checkRows.length > 0) {
-    lastRowRef.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'end'
-    });
-  }
-}, [checkRows.length]);  
-
+    if (checkRows.length > 0) {
+      lastRowRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'end'
+      });
+    }
+  }, [checkRows.length]);
 
   return (
     <div className="checkreg-grid-band">
@@ -53,47 +53,92 @@ function CheckRegisterGrid({ checkRows }) {
             {checkRows.map((row, index) => (
               <tr
                 key={row.transactionNo}
-                ref={index === checkRows.length - 1 ? lastRowRef : null}
+                ref={
+                  index === checkRows.length - 1
+                    ? lastRowRef
+                    : null
+                }
                 className={
                   selectedTransactionNo === row.transactionNo
                     ? 'is-selected'
                     : ''
                 }
-                onClick={() =>
-                  setSelectedTransactionNo(row.transactionNo)
-                }
+                onClick={() => {
+                  setSelectedTransactionNo(
+                    row.transactionNo
+                  );
+
+                  onSelectCheckRow?.(row);
+                }}
               >
-                <td className="col-check">{row.checkNo}</td>
-                <td className="col-name">{row.payeeName}</td>
-                <td className="col-amt">{row.amount}</td>
-                <td className="col-date">{row.dateIssued}</td>
-                <td className="col-date2">{row.dateCleared}</td>
-                <td className="col-month">{row.monthCleared}</td>
-                <td className="col-gl">{row.glAccount}</td>
+                <td className="col-check">
+                  {row.checkNo}
+                </td>
+
+                <td className="col-name">
+                  {row.payeeName}
+                </td>
+
+                <td className="col-amt">
+                  {row.amount}
+                </td>
+
+                <td className="col-date">
+                  {row.status === 'Pending' ? 'PENDING' : row.dateIssued}
+                </td>
+
+                <td className="col-date2">
+                  {row.dateCleared}
+                </td>
+
+                <td className="col-month">
+                  {row.monthCleared}
+                </td>
+
+                <td className="col-gl">
+                  {row.glAccount}
+                </td>
+
                 <td className="col-acct">
                   {row.vendorOrResidentAcct}
                 </td>
+
                 <td className="col-inv">
                   {row.vendorInvoiceNo}
                 </td>
+
                 <td className="col-invdt">
                   {row.vendorInvoiceDate}
                 </td>
+
                 <td className="col-invamt">
                   {row.vendorInvoiceAmount}
                 </td>
+
                 <td className="col-note">
                   {row.checkNotation}
                 </td>
-                <td className="col-bank">{row.bankAcct}</td>
+
+                <td className="col-bank">
+                  {row.bankAcct}
+                </td>
+
                 <td className="col-allowed">
                   {row.checkAllowed}
                 </td>
-                <td className="col-gl2">{row.glNo}</td>
+
+                <td className="col-gl2">
+                  {row.glNo}
+                </td>
+
                 <td className="col-txn">
                   {row.transactionNo}
                 </td>
-                <td className="col-esc">{row.escrowFlag}</td>
+
+                <td className="col-esc">
+                  {row.escrowFlag}
+                </td>
+
                 <td className="col-banknm">
                   {row.bankAccount}
                 </td>

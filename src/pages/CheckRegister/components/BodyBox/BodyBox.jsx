@@ -1,9 +1,15 @@
 import CheckRegisterGrid from './CheckRegisterGrid';
 
-function BodyBox({ checkRows }) {
+function BodyBox({
+  checkRows,
+  onSelectCheckRow
+}) {
   return (
     <div className="checkreg-bodybox">
-      <CheckRegisterGrid checkRows={checkRows} />
+      <CheckRegisterGrid
+        checkRows={checkRows}
+        onSelectCheckRow={onSelectCheckRow}
+      />
     </div>
   );
 }

@@ -1,6 +1,3 @@
-
-
-
 import BankRow from './BankRow';
 import FilterRow from './FilterRow';
 import ButtonRow from './ButtonRow';
@@ -9,12 +6,21 @@ function TopSection({
   onSelectPage,
   onAddCheck,
   checkRows,
+  selectedCheckRow,
+  onCheckCleared,
+  onBankChange,
+  balanceRefreshKey,
   onApplyVendorResidentFilter,
   onResetVendorResidentFilter
 }) {
   return (
     <div className="checkreg-topsection">
-      <BankRow />
+      <BankRow
+        onBankChange={onBankChange}
+        balanceRefreshKey={balanceRefreshKey}
+        selectedCheckRow={selectedCheckRow}
+        onCheckCleared={onCheckCleared}
+      />
 
       <FilterRow
         checkRows={checkRows}
@@ -27,10 +33,10 @@ function TopSection({
       />
 
       <ButtonRow
-          onSelectPage={onSelectPage}
-          onAddCheck={onAddCheck}
-          checkRows={checkRows}
-        />
+        onSelectPage={onSelectPage}
+        onAddCheck={onAddCheck}
+        checkRows={checkRows}
+      />
     </div>
   );
 }

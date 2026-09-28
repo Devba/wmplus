@@ -896,6 +896,7 @@ const handleEnterCheck = async () => {
     checkNotation,
 
     bankAcct: selectedBank?.name || '',
+    bankId: Number(selectedBank?.bankId || bankId),
     checkAllowed: 'Y',
     glNo: glNumber,
 

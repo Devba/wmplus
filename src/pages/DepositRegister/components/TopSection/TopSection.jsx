@@ -11,10 +11,15 @@ function TopSection({
   onApplyVendorResidentFilter,
   onResetVendorResidentFilter,
   onDepositCleared,
+  onBankChange,
+  balanceRefreshKey,
 }) {
   return (
     <div className="depreg-topsection">
-      <BankRow />
+      <BankRow
+        onBankChange={onBankChange}
+        balanceRefreshKey={balanceRefreshKey}
+      />
 
       <FilterRow
         depositRows={depositRows}

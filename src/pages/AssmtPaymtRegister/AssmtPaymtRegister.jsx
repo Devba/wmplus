@@ -17,6 +17,8 @@ function AssmtPaymtRegister({ onSelectPage }) {
 
 const [selectedPaymentRow, setSelectedPaymentRow] = useState(null);
 
+const [selectedPaymentRows, setSelectedPaymentRows] = useState([]);
+
 const [aprReloadKey, setAprReloadKey] = useState(0);
 
 const [pendingTransactionNumber, setPendingTransactionNumber] = useState('');
@@ -82,10 +84,12 @@ const mappedPaymentRows =
               : '',
 
           dateCleared:
-            '',
+            row.DateCleared
+              ? String(row.DateCleared).slice(0, 10)
+              : '',
 
           monthCleared:
-            '',
+            row.MonthCleared ?? '',
 
           annualPayment:
             Number(
@@ -117,9 +121,11 @@ const mappedPaymentRows =
           transaction:
             row.TransactionNumber || '',
 
-          yeCreditUsed:
-            '',
+          status:
+            row.Status || '',
 
+          yeCreditUsed:
+  '',
           yeAnnual:
             '',
 
@@ -307,6 +313,23 @@ const residentLookupRows = useMemo(
   setAprReloadKey((key) => key + 1);
     };
 
+    const handlePaymentCleared = (result) => {
+  setSelectedPaymentRow((currentRow) => {
+    if (!currentRow) return currentRow;
+
+    return {
+      ...currentRow,
+      dateCleared:
+        result?.clearedDate || currentRow.dateCleared,
+      monthCleared:
+        result?.monthCleared ?? currentRow.monthCleared,
+      status: 'POSTED'
+    };
+  });
+
+  setAprReloadKey((key) => key + 1);
+};
+
    const allResidentTotals = paymentRows.reduce(
   (totals, row) => {
     totals.annual += Number(row.annualPayment || 0);
@@ -341,7 +364,12 @@ const residentLookupRows = useMemo(
             handleVoidSuccess
           }
 
+          onPaymentCleared={
+            handlePaymentCleared
+          }
+
           selectedPaymentRow={selectedPaymentRow}
+          selectedPaymentRows={selectedPaymentRows}
           allResidentTotals={allResidentTotals}
         />
         </div>
@@ -351,6 +379,7 @@ const residentLookupRows = useMemo(
             displayedPaymentRows
           }
           onSelectPaymentRow={setSelectedPaymentRow}
+          onSelectPaymentRows={setSelectedPaymentRows}
           selectedPaymentRow={selectedPaymentRow}
         />
       </div>

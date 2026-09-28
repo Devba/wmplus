@@ -48,9 +48,12 @@ const isValidDate = (value) => {
 };
 
 const handleStatusSave = async () => {
-  if (selectedDepositRow?.status !== 'Pending') {
-    return;
-  }
+  if (
+        selectedDepositRow?.status !== 'Pending' &&
+        selectedDepositRow?.status !== 'Cleared'
+      ) {
+        return;
+      }
 
   if (!isValidDate(statusValue)) {
     await Swal.fire({
@@ -135,9 +138,14 @@ if (depositDateValue) {
   }
 }
 
+    const saveEndpoint =
+  selectedDepositRow?.status === 'Cleared'
+    ? '/deposit-register/adjust-cleared-date'
+    : '/deposit-register/clear';
+
 
     const response = await fetch(
-  `${API_BASE_URL}/deposit-register/clear`,
+  `${API_BASE_URL}${saveEndpoint}`,
   {
     method: 'POST',
     headers: {
@@ -162,6 +170,24 @@ if (!response.ok) {
     text: saveResult?.error || 'Unable to clear this deposit.'
   });
 
+  if (selectedDepositRow?.status === 'Pending') {
+    setStatusValue('PENDING');
+  } else if (selectedDepositRow?.status === 'Cleared') {
+    const actualClearedDate =
+      selectedDepositRow?.dateCleared || '';
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(actualClearedDate)) {
+      const [year, month, day] = actualClearedDate.split('-');
+
+      setStatusValue(
+        `${Number(month)}/${Number(day)}/${year.slice(-2)}`
+      );
+    } else {
+      setStatusValue('CLEARED');
+    }
+  }
+
+  setStatusDirty(false);
   return;
 }
 
@@ -327,21 +353,30 @@ const handleEnterDeposits = () => {
             }`}
             type="text"
             value={statusValue}
-            readOnly={selectedDepositRow?.status !== 'Pending'}
+            readOnly={
+              selectedDepositRow?.status !== 'Pending' &&
+              selectedDepositRow?.status !== 'Cleared'
+            }
             onFocus={() => {
-              if (
-                selectedDepositRow?.status === 'Pending' &&
-                statusValue === 'PENDING'
-              ) {
-                setStatusValue('');
-                setStatusDirty(true);
-              }
-            }}
+          if (
+              (selectedDepositRow?.status === 'Pending' &&
+                statusValue === 'PENDING') ||
+              (selectedDepositRow?.status === 'Cleared' &&
+                statusValue === 'CLEARED')
+            ) {
+              setStatusValue('');
+              setStatusDirty(true);
+            }
+          }}
             onChange={(event) => {
-              if (selectedDepositRow?.status === 'Pending') {
-                setStatusValue(event.target.value);
-              }
-            }}
+          if (
+              selectedDepositRow?.status === 'Pending' ||
+              selectedDepositRow?.status === 'Cleared'
+            ) {
+              setStatusValue(event.target.value);
+              setStatusDirty(true);
+            }
+          }}
           />
 
               <button
@@ -349,7 +384,10 @@ const handleEnterDeposits = () => {
           className={`depreg-status-save-btn ${
             statusDirty ? 'dirty' : ''
           }`}
-          disabled={selectedDepositRow?.status !== 'Pending'}
+          disabled={
+            selectedDepositRow?.status !== 'Pending' &&
+            selectedDepositRow?.status !== 'Cleared'
+          }
           onClick={handleStatusSave}
         >
           SAVE
