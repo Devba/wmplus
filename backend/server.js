@@ -10717,7 +10717,11 @@ svcRoute('/api/svc/gl-transactions', 'gl-transactions', (req) => ({
 }));
 svcRoute('/api/svc/vendor-invoices', 'vendor-invoices', (req) => ({ vendor: req.query.vendor || '' }));
 svcRoute('/api/svc/violations', 'violations', () => ({}));
-svcRoute('/api/svc/anomalies', 'anomalies', () => ({}));
+svcRoute('/api/svc/anomalies', 'anomalies', (req) => ({
+  min_balance: req.query.min_balance || null, max_days: req.query.max_days || null,
+  min_net: req.query.min_net || null, fy: req.query.fy || null,
+  from: req.query.from || null, to: req.query.to || null
+}));
 
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {

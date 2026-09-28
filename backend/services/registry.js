@@ -271,19 +271,107 @@ async function outstandingViolations(ctx) {
   };
 }
 
-/* Q8 — STUB honesto: marco de anomalias pendiente; overdue sigue a FL. */
-async function anomalies(ctx) {
+/* Q8 — marco de anomalias: reglas genericas sobre primitivas/datos,
+   umbrales por parametro (nada hardcodeado en logica). La regla
+   overdue-assessments queda ENCHUFABLE APAGADA hasta definiciones FL. */
+async function anomalies(ctx, deps) {
+  const { resolveFiscalWindow } = deps;
+  const { licenseNumber, asOf } = ctx;
+  const minBalance = ctx.min_balance != null ? Number(ctx.min_balance) : 500;
+  const maxDays = ctx.max_days != null ? Number(ctx.max_days) : 30;
+  const minNet = ctx.min_net != null ? Number(ctx.min_net) : 1000;
+  const win = await resolveFiscalWindow(ro(), licenseNumber, {
+    fy: ctx.fy || null, from: ctx.from || null, to: ctx.to || null
+  });
+  const findings = [];
+
+  // Regla 1: saldos altos (snapshot corriente).
+  const [debtors] = await ro().query(
+    `SELECT ResidentAccountID AS account, TotalCurrentAR AS total_ar
+       FROM AssessmentRegister
+      WHERE HOALicenseNumber = ?
+        AND TotalCurrentAR >= ?
+        AND (ActiveFlag IS NULL OR ActiveFlag != 'N')
+      ORDER BY TotalCurrentAR DESC
+      LIMIT 50`,
+    [licenseNumber, minBalance]
+  );
+  for (const d of debtors) {
+    findings.push({
+      rule: 'high-balance', severity: Number(d.total_ar) >= minBalance * 2 ? 'high' : 'medium',
+      detail: `Residente ${d.account}: AR ${d.total_ar} >= ${minBalance}`,
+      ref: { account: d.account, total_ar: Number(d.total_ar) }
+    });
+  }
+
+  // Regla 2: cheques pendientes viejos (reusa Q3).
+  const oc = await FUNCTIONS['outstanding-checks'].run({ ...ctx, asOf }, deps);
+  const asOfDate = new Date(asOf + 'T00:00:00Z').getTime();
+  for (const c of oc.result) {
+    const issued = c.issued ? new Date(String(c.issued).slice(0, 10) + 'T00:00:00Z').getTime() : null;
+    const age = issued != null && !isNaN(issued) ? Math.floor((asOfDate - issued) / 86400000) : null;
+    if (age != null && age > maxDays) {
+      findings.push({
+        rule: 'stale-check', severity: 'medium',
+        detail: `Cheque ${c.txn} pendiente hace ${age} dias (> ${maxDays})`,
+        ref: { txn: c.txn, issued: c.issued, age_days: age }
+      });
+    }
+  }
+
+  // Regla 3: GLs con neto atipico en ventana (reusa patron Q5 agrupado).
+  const [banks] = await ro().query(
+    `SELECT BankID FROM BankAccount WHERE ActiveFlag = 'Y' ORDER BY BankID`
+  );
+  const glNets = new Map();
+  for (const b of banks) {
+    const table = `CashFlow_BankID_${b.BankID}`;
+    try {
+      const [r] = await ro().query(
+        `SELECT GLNumber AS gl,
+                COALESCE(SUM(CashInAmount),0) - COALESCE(SUM(CashOutAmount),0) AS net
+           FROM ${table}
+          WHERE GLNumber IS NOT NULL
+            AND TransactionDate >= ? AND TransactionDate <= ?
+            AND HOALicenseNumber = ?
+            AND (VoidFlag IS NULL OR VoidFlag != 'Y')
+            AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
+          GROUP BY GLNumber`,
+        [win.startDate, win.endDate, licenseNumber]
+      );
+      for (const x of r) {
+        glNets.set(x.gl, (glNets.get(x.gl) || 0) + Number(x.net || 0));
+      }
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
+    }
+  }
+  for (const [gl, net] of glNets) {
+    if (Math.abs(net) >= minNet) {
+      findings.push({
+        rule: 'unusual-gl', severity: 'low',
+        detail: `GL ${gl}: neto ${net} en ventana (|net| >= ${minNet})`,
+        ref: { gl, net }
+      });
+    }
+  }
+
+  // Regla 4: overdue assessments — APAGADA hasta FL (enchufable).
+  const overdueNote = 'Regla overdue-assessments apagada: espera umbrales FL (Late Assessments/Arrears).';
+
   return {
     success: true,
     function: 'getAnomalies',
-    status: 'not_yet_implemented',
-    message: 'Marco de anomalias en construccion (Track A). Overdue de assessments seguira reglas FL al definirse.',
     tenant: tenantOf(ctx),
-    params_resolved: { as_of: ctx.asOf },
-    summary: null,
-    result: null,
-    lineage: [],
-    filters_applied: { as_of: ctx.asOf, license_number: ctx.licenseNumber }
+    params_resolved: { as_of: asOf, window: win, min_balance: minBalance, max_days: maxDays, min_net: minNet },
+    summary: { findings_count: findings.length, overdue_rule: 'off-pending-FL' },
+    result: { findings, overdue_note: overdueNote },
+    lineage: [
+      ...lineage('AssessmentRegister', `total_ar>=${minBalance}`, debtors.length),
+      ...lineage('CheckRegister', `outstanding age>${maxDays}d`, findings.filter((f) => f.rule === 'stale-check').length),
+      ...lineage('CashFlow_BankID_*', `|net|>=${minNet} ${win.startDate}..${win.endDate}`, findings.filter((f) => f.rule === 'unusual-gl').length)
+    ],
+    filters_applied: { as_of: asOf, license_number: licenseNumber }
   };
 }
 
@@ -294,7 +382,7 @@ const FUNCTIONS = {
   'gl-transactions': { key: 'gl-transactions', fn: 'getGLTransactions', questions: ['Q5'], status: 'ready', run: glTransactions },
   'vendor-invoices': { key: 'vendor-invoices', fn: 'getVendorInvoices', questions: ['Q7'], status: 'ready', run: vendorInvoices },
   'violations': { key: 'violations', fn: 'getOutstandingViolations', questions: ['Q6'], status: 'disabled', run: outstandingViolations },
-  'anomalies': { key: 'anomalies', fn: 'getAnomalies', questions: ['Q8'], status: 'stub', run: anomalies }
+  'anomalies': { key: 'anomalies', fn: 'getAnomalies', questions: ['Q8'], status: 'ready', run: anomalies }
 };
 
 module.exports = { FUNCTIONS };

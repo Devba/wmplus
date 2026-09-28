@@ -210,10 +210,16 @@ function summarize(key, out) {
       return `GL ${out.params_resolved && out.params_resolved.gl}: ${s.count || 0} movs, neto ${s.net || 0}`;
     case 'vendor-invoices':
       return `Facturas vendor: ${s.count || 0} (total ${s.invoices_total || 0})`;
-    case 'period-diff':
-      return out.message || 'Period-diff en construccion';
-    case 'anomalies':
-      return out.message || 'Anomalias en construccion';
+    case 'period-diff': {
+      const d = out.summary || {};
+      return d.metric != null
+        ? `Diff ${d.subject}: ${d.period_value} vs ${d.compare_value} (delta ${d.delta})`
+        : (out.message || 'Period-diff en construccion');
+    }
+    case 'anomalies': {
+      const n = out.summary ? out.summary.findings_count : null;
+      return n != null ? `Anomalias: ${n} hallazgos` : (out.message || 'Anomalias en construccion');
+    }
     case 'violations':
       return out.message || 'FL-dependiente';
     default:
