@@ -27,18 +27,12 @@ app.use(cors({ origin: true, credentials: true }));
 
 const HOA_TIMEZONE_CACHE_MS = 5 * 60 * 1000;
 
-let hoaTimeZoneCache = {
-  zip: null,
-  timeZone: null,
-  expiresAt: 0
-};
+// DATE STANDARD fix: cache por ZIP (una entrada por HOA/entorno). El cache
+// global anterior fijaba la zona de la primera HOA para todas las demas.
+const hoaTimeZoneCache = new Map(); // zip -> { timeZone, expiresAt }
 
 async function getHoaTimeZone(conn) {
   const now = Date.now();
-
-  if (hoaTimeZoneCache.timeZone && now < hoaTimeZoneCache.expiresAt) {
-    return hoaTimeZoneCache.timeZone;
-  }
 
   let zip = '';
 
@@ -55,6 +49,11 @@ async function getHoaTimeZone(conn) {
     zip = String(zipRows?.[0]?.DefaultZip || '').trim();
   } catch (err) {
     console.error('Unable to read SystemSettings.DefaultZip:', err.message);
+  }
+
+  const hit = hoaTimeZoneCache.get(zip);
+  if (hit && hit.timeZone && now < hit.expiresAt) {
+    return hit.timeZone;
   }
 
   let timeZone = null;
@@ -74,11 +73,10 @@ async function getHoaTimeZone(conn) {
     timeZone = 'UTC';
   }
 
-  hoaTimeZoneCache = {
-    zip,
+  hoaTimeZoneCache.set(zip, {
     timeZone,
     expiresAt: now + HOA_TIMEZONE_CACHE_MS
-  };
+  });
 
   return timeZone;
 }
@@ -126,6 +124,137 @@ async function hoaNow(conn) {
       `${clock.year}-${clock.month}-${clock.day} ` +
       `${clock.hour}:${clock.minute}:${clock.second}`
   };
+}
+
+/* ===========================================================
+   SERVICE-LAYER DATE STANDARD (locked): resolutor unico de ventana
+   fiscal. Reglas Rick 1-6:
+   - from/to explicitos (YYYY-MM-DD) mandan, ambos inclusivos.
+   - fy explicito (label o año) -> FiscalYearSetup de ESA HOA.
+   - sin fy -> fila CurrentFiscalYearFlag='Y' de esa HOA.
+   - sin fila -> hoa.fiscal_year_start_month/day (auth DB).
+   - ultimo recurso -> año calendario (source 'calendar-fallback').
+   Devuelve { startDate, endDate, label, source }. Toda comparacion
+   posterior es startDate <= business_date <= endDate (DATE, tz-naive).
+   =========================================================== */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function isValidDateStr(s) {
+  if (!DATE_RE.test(String(s || ''))) return false;
+  const d = new Date(String(s) + 'T00:00:00Z');
+  return !isNaN(d) && d.toISOString().slice(0, 10) === String(s);
+}
+
+async function resolveFiscalWindow(conn, licenseNumber, opts = {}) {
+  const { fy = null, from = null, to = null, containing = null } = opts;
+  const lic = String(licenseNumber || '').trim();
+
+  // Regla 2: rango explicito manda.
+  if (from || to) {
+    if (!isValidDateStr(from) || !isValidDateStr(to) || from > to) {
+      throw Object.assign(new Error('Rango invalido: usa YYYY-MM-DD con from <= to'), { status: 400 });
+    }
+    return { startDate: from, endDate: to, label: null, source: 'explicit' };
+  }
+
+  const runner = conn && typeof conn.query === 'function' ? conn : db;
+
+  // Regla 3x: FY programado que CONTIENE una fecha (clear/pay flows).
+  if (isValidDateStr(containing)) {
+    try {
+      const [rows] = await runner.query(
+        `SELECT FiscalYearLabel, FiscalYearStartDate, FiscalYearEndDate
+           FROM FiscalYearSetup
+          WHERE HOALicenseNumber = ?
+            AND FiscalYearStartDate <= ?
+            AND FiscalYearEndDate >= ?
+          LIMIT 1`,
+        [lic, containing, containing]
+      );
+      const r = rows && rows[0];
+      if (r && r.FiscalYearStartDate && r.FiscalYearEndDate) {
+        return {
+          startDate: String(r.FiscalYearStartDate).slice(0, 10),
+          endDate: String(r.FiscalYearEndDate).slice(0, 10),
+          label: r.FiscalYearLabel,
+          source: 'fiscal-setup-containing'
+        };
+      }
+    } catch (e) { /* cae al año de la fecha */ }
+    const y = String(containing).slice(0, 4);
+    return { startDate: `${y}-01-01`, endDate: `${y}-12-31`, label: y, source: 'calendar-fallback' };
+  }
+  const fyStr = fy != null ? String(fy).trim() : '';
+
+  // Regla 3a: fy explicito -> FiscalYearSetup de esa HOA (por label o por año).
+  if (fyStr) {
+    try {
+      const [rows] = await runner.query(
+        `SELECT FiscalYearLabel, FiscalYearStartDate, FiscalYearEndDate
+           FROM FiscalYearSetup
+          WHERE HOALicenseNumber = ?
+            AND (FiscalYearLabel = ? OR YEAR(FiscalYearStartDate) = ?)
+          LIMIT 1`,
+        [lic, fyStr, /^\d{4}$/.test(fyStr) ? parseInt(fyStr, 10) : -1]
+      );
+      const r = rows && rows[0];
+      if (r && r.FiscalYearStartDate && r.FiscalYearEndDate) {
+        return {
+          startDate: String(r.FiscalYearStartDate).slice(0, 10),
+          endDate: String(r.FiscalYearEndDate).slice(0, 10),
+          label: r.FiscalYearLabel,
+          source: 'fiscal-setup'
+        };
+      }
+    } catch (e) { /* cae al siguiente nivel */ }
+  }
+
+  // Regla 3b: FY corriente programada de esa HOA.
+  try {
+    const [rows] = await runner.query(
+      `SELECT FiscalYearLabel, FiscalYearStartDate, FiscalYearEndDate
+         FROM FiscalYearSetup
+        WHERE HOALicenseNumber = ? AND CurrentFiscalYearFlag = 'Y'
+        LIMIT 1`,
+      [lic]
+    );
+    const r = rows && rows[0];
+    if (r && r.FiscalYearStartDate && r.FiscalYearEndDate) {
+      return {
+        startDate: String(r.FiscalYearStartDate).slice(0, 10),
+        endDate: String(r.FiscalYearEndDate).slice(0, 10),
+        label: r.FiscalYearLabel,
+        source: 'fiscal-setup-current'
+      };
+    }
+  } catch (e) { /* cae al siguiente nivel */ }
+
+  // Regla 3c: mes/dia de inicio fiscal de la HOA (auth DB).
+  try {
+    const [rows] = await adb.query(
+      `SELECT fiscal_year_start_month, fiscal_year_start_day FROM hoa WHERE license_number = ? LIMIT 1`,
+      [lic]
+    );
+    const m = rows && rows[0] ? parseInt(rows[0].fiscal_year_start_month, 10) : NaN;
+    if (m >= 1 && m <= 12) {
+      const d = Math.min(28, Math.max(1, parseInt(rows[0].fiscal_year_start_day, 10) || 1));
+      const today = new Date();
+      const y = today.getFullYear();
+      // El FY vigente es el que empezo mas recientemente sin pasar hoy.
+      const mm = String(m).padStart(2, '0'), dd = String(d).padStart(2, '0');
+      const startYear = (`${y}-${mm}-${dd}` <= today.toISOString().slice(0, 10)) ? y : y - 1;
+      const end = new Date(Date.UTC(startYear + 1, m - 1, d) - 86400000).toISOString().slice(0, 10);
+      return {
+        startDate: `${startYear}-${mm}-${dd}`,
+        endDate: end,
+        label: `FY${startYear}`,
+        source: 'hoa-fiscal-start'
+      };
+    }
+  } catch (e) { /* cae al fallback */ }
+
+  // Ultimo recurso: año calendario (marcado como fallback en la respuesta).
+  const y = new Date().getFullYear();
+  return { startDate: `${y}-01-01`, endDate: `${y}-12-31`, label: String(y), source: 'calendar-fallback' };
 }
 app.use(express.json({ limit: '10mb' }));
 
@@ -1351,7 +1480,8 @@ async function establishCashFlowLedgerMaster(
   conn,
   bankAccountId,
   startingBalance,
-  startingMonth
+  startingMonth,
+  licenseNumber = null
 ) {
   const [bankRows] = await conn.query(`
     SELECT
@@ -1372,16 +1502,20 @@ async function establishCashFlowLedgerMaster(
 
   const bank = bankRows[0];
 
-  const currentYear = new Date().getFullYear();
-
-const fiscalYearStartDate =
-  `${currentYear}-01-01`;
-
-const fiscalYearEndDate =
-  `${currentYear}-12-31`;
-
-  const fiscalYearLabel =
-  String(currentYear);
+  // DATE STANDARD: ventana del FY programado de la HOA (no asumir calendario).
+  // Sin licencia (llamadas legacy) se conserva el comportamiento anterior.
+  let fiscalYearStartDate, fiscalYearEndDate, fiscalYearLabel;
+  if (licenseNumber) {
+    const win = await resolveFiscalWindow(conn, licenseNumber, {});
+    fiscalYearStartDate = win.startDate;
+    fiscalYearEndDate = win.endDate;
+    fiscalYearLabel = win.label;
+  } else {
+    const currentYear = new Date().getFullYear();
+    fiscalYearStartDate = `${currentYear}-01-01`;
+    fiscalYearEndDate = `${currentYear}-12-31`;
+    fiscalYearLabel = String(currentYear);
+  }
 
   const [existingRows] = await conn.query(`
     SELECT *
@@ -1646,11 +1780,21 @@ app.get('/api/cash-flow', async (req, res) => {
 const outstandingChecks =
   Number(outstandingCheckRows?.[0]?.OutstandingChecks) || 0;
 
-    const fiscalYearStart =
-      `${fiscalYear}-01-01`;
+    // DATE STANDARD: ventana del FY programado que nombra el label de la
+    // llamada (no asumir calendario). Licencia desde la primera fila del
+    // banco; sin tabla/filas, fallback calendario (comportamiento anterior).
+    const [cfTenant] = await db.query(
+      `SELECT HOALicenseNumber FROM ${cashFlowTable} WHERE BankAccountID = ? LIMIT 1`,
+      [bankAccountId]
+    ).catch(() => [[]]);
+    const cfWin = await resolveFiscalWindow(
+      db,
+      (cfTenant && cfTenant[0] && cfTenant[0].HOALicenseNumber) || null,
+      { fy: String(fiscalYear) }
+    );
+    const fiscalYearStart = cfWin.startDate;
 
-    const fiscalYearEnd =
-      `${fiscalYear}-12-31`;
+    const fiscalYearEnd = cfWin.endDate;
 
     const [monthlyRows] = await db.query(`
       SELECT
@@ -2685,10 +2829,11 @@ if (!ledgerRows[0]) {
   });
 }
 
-
-
-const fiscalYearStart = `${year}-01-01`;
-const fiscalYearEnd = `${year}-12-31`;
+// DATE STANDARD: ventana del FY programado que contiene clearedDate
+// (licencia de la fila, no de la sesion). En FY calendario = identico.
+const clrWin = await resolveFiscalWindow(connection, check.HOALicenseNumber, { containing: clearedDate });
+const fiscalYearStart = clrWin.startDate;
+const fiscalYearEnd = clrWin.endDate;
 
 const [lastPostedRows] = await connection.query(`
   SELECT
@@ -3625,6 +3770,8 @@ app.post('/api/deposit-register/adjust-cleared-date', async (req, res) => {
       });
     }
 
+         // DATE STANDARD: ventana del FY programado que contiene clearedDate.
+         const depWin = await resolveFiscalWindow(connection, req.hoa.license_number, { containing: clearedDate });
          const [lastPostedRows] = await connection.query(`
       SELECT
         MAX(TransactionDate) AS LastPostedTransactionDate
@@ -3635,8 +3782,8 @@ app.post('/api/deposit-register/adjust-cleared-date', async (req, res) => {
         AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
     `, [
       deposit.BankAccountID,
-      `${year}-01-01`,
-      `${year}-12-31`
+      depWin.startDate,
+      depWin.endDate
     ]);
 
     const lastPostedTransactionDate =
@@ -4617,7 +4764,8 @@ app.put('/api/settings/banking', authMid.requireHoaScope, async (req, res) => {
         connection,
         bankAccountId,
         b.startingBalance || 0.00,
-        b.startingMonth || 'January'
+        b.startingMonth || 'January',
+        sesLicense
       );
 
 
@@ -8750,6 +8898,8 @@ app.post('/api/apr/adjust-cleared-date', async (req, res) => {
         });
       }
 
+      // DATE STANDARD: ventana del FY programado que contiene clearedDate.
+      const aprWin1 = await resolveFiscalWindow(connection, effHoa, { containing: clearedDate });
       const [lastPostedRows] =
         await connection.query(`
           SELECT
@@ -8762,8 +8912,8 @@ app.post('/api/apr/adjust-cleared-date', async (req, res) => {
             AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')
         `, [
           bankAccountId,
-          `${year}-01-01`,
-          `${year}-12-31`
+          aprWin1.startDate,
+          aprWin1.endDate
         ]);
 
       const lastPostedTransactionDate =
@@ -9186,6 +9336,8 @@ app.post(
             bankRows[0].BankID
           );
 
+        // DATE STANDARD: ventana del FY programado que contiene clearedDate.
+        const aprWin2 = await resolveFiscalWindow(connection, effHoa, { containing: clearedDate });
         const [lastPostedRows] =
           await connection.query(`
             SELECT
@@ -9205,8 +9357,8 @@ app.post(
               )
           `, [
             bankAccountId,
-            `${year}-01-01`,
-            `${year}-12-31`
+            aprWin2.startDate,
+            aprWin2.endDate
           ]);
 
         const lastPostedTransactionDate =
@@ -9533,6 +9685,8 @@ for (
       bankRows[0].BankID
     );
 
+  // DATE STANDARD: ventana del FY programado del label del void.
+  const voidWin = await resolveFiscalWindow(conn, hoaLicenseNumber, { fy: fiscalYearLabel });
   const [lastPostedRows] = await conn.query(`
     SELECT
       MAX(TransactionDate)
@@ -9550,8 +9704,8 @@ for (
       )
   `, [
     bankAccountId,
-    `${fiscalYearLabel}-01-01`,
-    `${fiscalYearLabel}-12-31`
+    voidWin.startDate,
+    voidWin.endDate
   ]);
 
   const lastPostedTransactionDate =
@@ -10120,9 +10274,14 @@ app.get('/api/reports/escrow-summary', authMid.requireHoaScope, async (req, res)
     // 3. GL breakdown for current FY (filtra por TransactionDate, igual que /api/cash-flow)
     //    Subquery DISTINCT en GLAccounts porque la tabla tiene 7 filas duplicadas
     //    por cada GLNumber (bug que multiplicaba SUM por 7).
-    const fy = ledgerRows[0]?.FiscalYearLabel || new Date().getFullYear();
-    const fiscalYearStart = `${fy}-01-01`;
-    const fiscalYearEnd = `${fy}-12-31`;
+    //    DATE STANDARD: el label del ledger se resuelve a ventana programada.
+    const fy = ledgerRows[0]?.FiscalYearLabel || String(new Date().getFullYear());
+    const escLic = (req.hoa && req.hoa.license_number) || null;
+    const escWin = escLic
+      ? await resolveFiscalWindow(db, escLic, { fy })
+      : { startDate: `${fy}-01-01`, endDate: `${fy}-12-31`, label: fy, source: 'global-calendar' };
+    const fiscalYearStart = escWin.startDate;
+    const fiscalYearEnd = escWin.endDate;
     const [glRows] = await db.query(`
       SELECT cf.GLNumber AS gl_number,
              COALESCE(gla.GLName, '') AS gl_name,
@@ -10154,11 +10313,12 @@ app.get('/api/reports/escrow-summary', authMid.requireHoaScope, async (req, res)
       },
       ledger: ledgerRows[0] || null,
       fiscalYear: fy,
+      fiscalWindow: escWin,
       glBreakdown: glRows,
       totals: { cash_in: totalIn, cash_out: totalOut, net: totalIn - totalOut },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -10222,21 +10382,17 @@ app.get('/api/reports/receivables-summary', authMid.requireHoaScope, async (req,
 // YTD Cash Flow Analysis: totales YTD por banco y GL
 app.get('/api/reports/ytd-cash-flow', authMid.requireHoaScope, async (req, res) => {
   try {
-    const fiscalYear = parseInt(req.query.fiscalYear, 10) || new Date().getFullYear();
+    const fyRaw = parseInt(req.query.fiscalYear, 10);
+    const fyParam = Number.isInteger(fyRaw) ? String(fyRaw) : null;
     const bankId = req.query.bankId ? parseInt(req.query.bankId, 10) : null;
 
     const [banks] = await db.query(`
       SELECT BankAccountID, BankID, BankType, BankName
         FROM BankAccount
        WHERE ActiveFlag = 'Y'
-         ${bankId ? 'AND BankID = ?' : ''}
-       ORDER BY BankID
-    `, bankId ? [bankId] : []);
-
-    const fyStart = `${fiscalYear}-01-01`;
-    const fyEnd = `${fiscalYear}-12-31`;
-    const rows = [];
-    const totalsByGL = {};
+          ${bankId ? 'AND BankID = ?' : ''}
+        ORDER BY BankID
+     `, bankId ? [bankId] : []);
 
     // Filtro por HOA: si hay scope especifico, solo transacciones de esa HOA.
     // CashFlow_BankID_* tiene columna HOALicenseNumber (verificada en dev y prod),
@@ -10244,6 +10400,23 @@ app.get('/api/reports/ytd-cash-flow', authMid.requireHoaScope, async (req, res) 
     const allHoas = (req.hoaId === 'all' || !req.hoa);
     const licenseFilter = allHoas ? '' : 'AND cf.HOALicenseNumber = ?';
     const licenseParams = allHoas ? [] : [req.hoa.license_number];
+
+    // DATE STANDARD: ventana fiscal desde lo programado (no asumir calendario).
+    // Vista global (admin): año explicito o calendario corriente.
+    let fyWin;
+    if (allHoas) {
+      const y = fyParam || String(new Date().getFullYear());
+      fyWin = { startDate: `${y}-01-01`, endDate: `${y}-12-31`, label: y, source: 'global-calendar' };
+    } else {
+      fyWin = await resolveFiscalWindow(db, req.hoa.license_number, {
+        fy: fyParam, from: req.query.date_from || null, to: req.query.date_to || null
+      });
+    }
+    const fiscalYear = fyWin.label;
+    const fyStart = fyWin.startDate;
+    const fyEnd = fyWin.endDate;
+    const rows = [];
+    const totalsByGL = {};
 
     for (const b of banks) {
       const tableName = `CashFlow_BankID_${b.BankID}`;
@@ -10291,21 +10464,40 @@ app.get('/api/reports/ytd-cash-flow', authMid.requireHoaScope, async (req, res) 
 
     res.json({
       fiscalYear,
+      fiscalWindow: fyWin,
       rows,
       totalsByGL: Object.values(totalsByGL),
       grand: { cash_in: grandTotalIn, cash_out: grandTotalOut, net: grandTotalIn - grandTotalOut },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 // Monthly GL Report: GL con columnas Ene-Dic para un FY (todos los bancos)
 app.get('/api/reports/monthly-gl', authMid.requireHoaScope, async (req, res) => {
   try {
-    const fiscalYear = parseInt(req.query.fiscalYear, 10) || new Date().getFullYear();
-    const fyStart = `${fiscalYear}-01-01`;
-    const fyEnd = `${fiscalYear}-12-31`;
+    const fyRaw = parseInt(req.query.fiscalYear, 10);
+    const fyParam = Number.isInteger(fyRaw) ? String(fyRaw) : null;
+
+    // Filtro por HOA: filtra en CashFlow_BankID_* (tiene HOALicenseNumber).
+    const allHoas = (req.hoaId === 'all' || !req.hoa);
+    const licenseFilter = allHoas ? '' : 'AND cf.HOALicenseNumber = ?';
+    const licenseParams = allHoas ? [] : [req.hoa.license_number];
+
+    // DATE STANDARD: ventana fiscal programada (no asumir calendario).
+    let fyWin;
+    if (allHoas) {
+      const y = fyParam || String(new Date().getFullYear());
+      fyWin = { startDate: `${y}-01-01`, endDate: `${y}-12-31`, label: y, source: 'global-calendar' };
+    } else {
+      fyWin = await resolveFiscalWindow(db, req.hoa.license_number, {
+        fy: fyParam, from: req.query.date_from || null, to: req.query.date_to || null
+      });
+    }
+    const fiscalYear = fyWin.label;
+    const fyStart = fyWin.startDate;
+    const fyEnd = fyWin.endDate;
 
     const [banks] = await db.query(`
       SELECT BankAccountID, BankID, BankType, BankName
@@ -10313,11 +10505,6 @@ app.get('/api/reports/monthly-gl', authMid.requireHoaScope, async (req, res) => 
        WHERE ActiveFlag = 'Y'
        ORDER BY BankID
     `);
-
-    // Filtro por HOA: filtra en CashFlow_BankID_* (tiene HOALicenseNumber).
-    const allHoas = (req.hoaId === 'all' || !req.hoa);
-    const licenseFilter = allHoas ? '' : 'AND cf.HOALicenseNumber = ?';
-    const licenseParams = allHoas ? [] : [req.hoa.license_number];
 
     const monthMap = {};
 
@@ -10363,9 +10550,9 @@ app.get('/api/reports/monthly-gl', authMid.requireHoaScope, async (req, res) => 
       grandTotal += r.total;
     }
 
-    res.json({ fiscalYear, rows, monthTotals, grandTotal });
+    res.json({ fiscalYear, fiscalWindow: fyWin, rows, monthTotals, grandTotal });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
