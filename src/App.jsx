@@ -14,6 +14,7 @@ import {
 
 import { pageMap } from './pages/pageMap';
 import Login from './pages/Login/Login';
+import WelcomeModal from './pages/Login/WelcomeModal';
 import { API_BASE_URL, subscribeToConnectionStatus, setConnectionStatus } from './config/api.js';
 
 import UnsavedChangesPrompt
@@ -46,6 +47,30 @@ function App() {
     () => localStorage.getItem('wm_active_hoa') || ''
   );
 
+  // Welcome dialog (Easypay style): once per session + HOA, after login
+  // with an active HOA bound.
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  useEffect(() => {
+    if (!authUser || !activeHoa) return;
+    let key = '';
+    try {
+      key = `wm_welcomed::${activeHoa}`;
+      if (!sessionStorage.getItem(key)) setShowWelcome(true);
+    } catch {
+      setShowWelcome(true);
+    }
+  }, [authUser, activeHoa]);
+
+  function dismissWelcome() {
+    try {
+      if (activeHoa) sessionStorage.setItem(`wm_welcomed::${activeHoa}`, '1');
+    } catch {
+      // sessionStorage unavailable: just hide for this render cycle
+    }
+    setShowWelcome(false);
+  }
+
   // PILOTO-bloqueantes (V4 §11.2): antes de cambiar de HOA se consulta el
   // estado de operaciones de servidor en curso; si hay bloqueo, se deniega
   // el cambio con mensaje (duplicado lo deniega el bind en Fase 3).
@@ -57,7 +82,7 @@ function App() {
         if (r.ok) {
           const st = await r.json();
           if (st.blocking && st.blocking.length) {
-            alert(`No se puede cambiar de HOA ahora.\nOperación en curso: ${st.blocking.join(', ')}.\nComplétala o cancélala antes de cambiar.`);
+            alert(`Cannot switch HOA right now.\nOperation in progress: ${st.blocking.join(', ')}.\nFinish or cancel it before switching.`);
             return;
           }
         }
@@ -215,6 +240,18 @@ function handleNavigationDiscard() {
       // igual se limpia el estado local
     }
     setAuthUser(null);
+    setShowWelcome(false);
+    try {
+      // Fresh login shows the welcome dialog again: drop per-HOA flags.
+      const drop = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (k && k.indexOf('wm_welcomed::') === 0) drop.push(k);
+      }
+      drop.forEach((k) => sessionStorage.removeItem(k));
+    } catch {
+      // sessionStorage unavailable: nothing to clear
+    }
     setCurrentPage('master-navigation-panel');
   }
 
@@ -261,10 +298,14 @@ function handleNavigationDiscard() {
               background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)',
               color: '#fcd34d', fontSize: '0.8rem', padding: '0.4rem 0.9rem',
             }}>
-              Selecciona la HOA activa arriba (grupo HOA) para operar con scope de datos.
+              Select the active HOA above (HOA group) to work with a data scope.
             </div>
           )}
           {renderPage()}
+
+          {showWelcome && activeHoa && (
+            <WelcomeModal key={activeHoa} user={authUser} hoaId={activeHoa} onClose={dismissWelcome} />
+          )}
 
           {activeOverlay && (
             <Overlay
