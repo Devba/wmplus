@@ -3,6 +3,7 @@
 
 import { useEffect } from 'react';
 import Swal from 'sweetalert2';
+import { API_BASE_URL } from '../../../../config/api.js';
 import { openOverlay } from '../../../../engines';
 import { exportCsv, printView } from '../../../../utils/exportCsv';
 
@@ -174,11 +175,16 @@ function ButtonRow({
       });
 
       try {
-        const response = await fetch('/api/ai-filter', {
+        const response = await fetch(`${API_BASE_URL}/ai-filter`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt })
         });
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          const text = await response.text();
+          throw new Error(`HTTP ${response.status}: respuesta no-JSON (${text.slice(0, 120)})`);
+        }
         const data = await response.json();
         Swal.close();
 
