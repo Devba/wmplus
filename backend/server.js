@@ -4031,7 +4031,9 @@ app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
         if (routed && routed.key && svcRegistry.FUNCTIONS[routed.key]) {
           const def = svcRegistry.FUNCTIONS[routed.key];
           console.log(`[AI Router] prompt=${JSON.stringify(String(prompt).slice(0, 100))} -> ${routed.key} via ${routed.source}`);
+          translator.bump(routed.source === 'openrouter' ? 'routed_llm' : 'routed_local');
           if (def.status === 'disabled') {
+            translator.bump('blocked');
             return res.status(403).json({
               error: 'FL-dependiente: espera definiciones de Manage Violations (Rick/Hal).',
               tenant: { client_id: sesClientId, license_number: sesLicense },
@@ -4069,6 +4071,7 @@ app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
     /* NIVEL 3 LEGACY — DEPRECATED. Generacion libre de SQL (opencode CLI +
        fallback enlatado). Se elimina cuando el golden set confirme cobertura
        del router. No ampliar: todo lo nuevo va al registry. */
+    require('./services/translator').bump('legacy');
     const opencodeCliPath = process.env.OPENCODE_CLI_PATH || 'opencode';
     const opencodeModel = process.env.OPENCODE_AI_MODEL || 'opencode-go/deepseek-v4-flash';
 
@@ -10694,6 +10697,10 @@ app.get('/api/svc', authMid.requireHoaScope, async (req, res) => {
     functions: Object.values(svcRegistry.FUNCTIONS)
       .map((f) => ({ key: f.key, fn: f.fn, questions: f.questions, status: f.status }))
   });
+});
+
+app.get('/api/svc/stats', authMid.requireHoaScope, async (req, res) => {
+  res.json(require('./services/translator').getStats());
 });
 
 svcRoute('/api/svc/account-history', 'account-history', (req) => ({ resident: req.query.resident || '' }));

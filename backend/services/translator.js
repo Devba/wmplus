@@ -22,6 +22,16 @@ const VALID_KEYS = new Set([
   'gl-transactions', 'vendor-invoices', 'violations', 'anomalies'
 ]);
 
+/* Cobertura del router (memoria; se pierde al reiniciar). */
+const stats = { routed_local: 0, routed_llm: 0, legacy: 0, blocked: 0 };
+function bump(kind) {
+  if (stats[kind] !== undefined) stats[kind] += 1;
+}
+function getStats() {
+  const total = stats.routed_local + stats.routed_llm + stats.legacy + stats.blocked;
+  return { ...stats, total, router_share: total ? (stats.routed_local + stats.routed_llm) / total : null };
+}
+
 let keyCache;
 function getKey() {
   if (keyCache !== undefined) return keyCache;
@@ -205,4 +215,4 @@ function summarize(key, out) {
   }
 }
 
-module.exports = { translate, classifyLocal, summarize, VALID_KEYS };
+module.exports = { translate, classifyLocal, summarize, VALID_KEYS, bump, getStats };
