@@ -124,7 +124,10 @@ async function outstandingChecks(ctx) {
   };
 }
 
-/* Q4 — STUB honesto: valida y resuelve ambas ventanas, sin diff aun. */
+/* Q4 — diff real entre dos periodos, componiendo primitivas cerradas.
+   subject gl: compara count/net de gl-transactions en ambas ventanas.
+   subject checks|vendor: compara snapshots a fin de cada ventana.
+   Sin SQL nuevo: reutiliza run() de las hermanas. */
 async function periodDiff(ctx, deps) {
   const { resolveFiscalWindow } = deps;
   const { licenseNumber } = ctx;
@@ -134,17 +137,35 @@ async function periodDiff(ctx, deps) {
   const w2 = await resolveFiscalWindow(ro(), licenseNumber, {
     fy: ctx.compare_fy || null, from: ctx.compare_from || null, to: ctx.compare_to || null
   });
+  const subject = ctx.subject || (ctx.gl ? 'gl' : ctx.vendor ? 'vendor' : 'checks');
+  const sub = { ...ctx };
+  let a, b, basis;
+  if (subject === 'gl') {
+    if (!ctx.gl) throw Object.assign(new Error('period-diff gl requiere parametro gl'), { status: 400 });
+    a = await FUNCTIONS['gl-transactions'].run({ ...sub, from: w1.startDate, to: w1.endDate, fy: null }, deps);
+    b = await FUNCTIONS['gl-transactions'].run({ ...sub, from: w2.startDate, to: w2.endDate, fy: null }, deps);
+    basis = { metric: 'net', a: a.summary.net, b: b.summary.net };
+  } else if (subject === 'vendor') {
+    if (!ctx.vendor) throw Object.assign(new Error('period-diff vendor requiere parametro vendor'), { status: 400 });
+    a = await FUNCTIONS['vendor-invoices'].run({ ...sub, asOf: w1.endDate }, deps);
+    b = await FUNCTIONS['vendor-invoices'].run({ ...sub, asOf: w2.endDate }, deps);
+    basis = { metric: 'invoices_total', a: a.summary.invoices_total, b: b.summary.invoices_total };
+  } else {
+    a = await FUNCTIONS['outstanding-checks'].run({ ...sub, asOf: w1.endDate }, deps);
+    b = await FUNCTIONS['outstanding-checks'].run({ ...sub, asOf: w2.endDate }, deps);
+    basis = { metric: 'total', a: a.summary.total, b: b.summary.total };
+  }
+  const delta = Number(basis.a || 0) - Number(basis.b || 0);
+  const pct = Number(basis.b || 0) !== 0 ? (delta / Number(basis.b)) * 100 : null;
   return {
     success: true,
     function: 'getPeriodDiff',
-    status: 'not_yet_implemented',
-    message: 'Period-diff en construccion (Track A). Ventanas resueltas debajo; el diff numerico llega en la siguiente entrega.',
     tenant: tenantOf(ctx),
-    params_resolved: { period: w1, compare_period: w2 },
-    summary: null,
-    result: null,
-    lineage: [{ table: 'FiscalYearSetup', filter: `license=${licenseNumber}`, rows: 0 }],
-    filters_applied: { license_number: licenseNumber }
+    params_resolved: { subject, period: w1, compare_period: w2 },
+    summary: { subject, metric: basis.metric, period_value: basis.a, compare_value: basis.b, delta, pct },
+    result: { period: { window: w1, summary: a.summary }, compare_period: { window: w2, summary: b.summary } },
+    lineage: [...a.lineage, ...b.lineage],
+    filters_applied: { subject, license_number: licenseNumber }
   };
 }
 
@@ -269,7 +290,7 @@ async function anomalies(ctx) {
 const FUNCTIONS = {
   'account-history': { key: 'account-history', fn: 'getResidentAccountHistory', questions: ['Q1', 'Q2'], status: 'ready', run: accountHistory },
   'outstanding-checks': { key: 'outstanding-checks', fn: 'getOutstandingChecks', questions: ['Q3'], status: 'ready', run: outstandingChecks },
-  'period-diff': { key: 'period-diff', fn: 'getPeriodDiff', questions: ['Q4'], status: 'stub', run: periodDiff },
+  'period-diff': { key: 'period-diff', fn: 'getPeriodDiff', questions: ['Q4'], status: 'ready', run: periodDiff },
   'gl-transactions': { key: 'gl-transactions', fn: 'getGLTransactions', questions: ['Q5'], status: 'ready', run: glTransactions },
   'vendor-invoices': { key: 'vendor-invoices', fn: 'getVendorInvoices', questions: ['Q7'], status: 'ready', run: vendorInvoices },
   'violations': { key: 'violations', fn: 'getOutstandingViolations', questions: ['Q6'], status: 'disabled', run: outstandingViolations },

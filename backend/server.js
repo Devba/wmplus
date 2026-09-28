@@ -10708,7 +10708,8 @@ svcRoute('/api/svc/outstanding-checks', 'outstanding-checks', () => ({}));
 svcRoute('/api/svc/period-diff', 'period-diff', (req) => ({
   fy: req.query.fy || null, from: req.query.from || null, to: req.query.to || null,
   compare_fy: req.query.compare_fy || null, compare_from: req.query.compare_from || null,
-  compare_to: req.query.compare_to || null
+  compare_to: req.query.compare_to || null, subject: req.query.subject || null,
+  gl: req.query.gl || null, vendor: req.query.vendor || null
 }));
 svcRoute('/api/svc/gl-transactions', 'gl-transactions', (req) => ({
   gl: req.query.gl || '', fy: req.query.fy || null,

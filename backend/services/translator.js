@@ -105,9 +105,15 @@ function classifyLocal(prompt) {
   // Q4 comparativa con 2 fechas.
   const dates = extractDates(prompt);
   if (dates.length >= 2 && /cambi|diferencia|compar| vs |periodo|trimestre/.test(lower)) {
+    const gl4 = extractGL(prompt);
+    const vendor4 = /vendor|proveedor|factura|invoice/.test(lower) ? extractVendorToken(prompt) : null;
     return {
       key: 'period-diff',
-      params: { from: dates[0], to: dates[1], compare_from: dates[2] || null, compare_to: dates[3] || null },
+      params: {
+        from: dates[0], to: dates[1], compare_from: dates[2] || null, compare_to: dates[3] || null,
+        ...(gl4 ? { subject: 'gl', gl: gl4 } : {}),
+        ...(vendor4 ? { subject: 'vendor', vendor: vendor4 } : {})
+      },
       source: 'local'
     };
   }
