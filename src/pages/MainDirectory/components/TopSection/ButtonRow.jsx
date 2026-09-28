@@ -2,9 +2,8 @@
 
 
 import { useEffect } from 'react';
-import Swal from 'sweetalert2';
-import { API_BASE_URL } from '../../../../config/api.js';
 import { openOverlay } from '../../../../engines';
+import AskPanel from '../AskPanel/AskPanel.jsx';
 import { exportCsv, printView } from '../../../../utils/exportCsv';
 
 import FilterUF from '../../../../components/FilterUF/FilterUF';
@@ -147,78 +146,22 @@ function ButtonRow({
     });
   };
 
-  const handleAiQuery = async () => {
-    const { value: prompt } = await Swal.fire({
-      title: '🤖 Consulta IA en Lenguaje Natural',
-      input: 'text',
-      inputLabel: 'Introduce tu consulta para filtrar la tabla:',
-      inputPlaceholder: 'Ej: filtra los registros en los que annual dues rate sea mayor que cero',
-      showCancelButton: true,
-      confirmButtonText: 'Consultar IA',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#2b579a',
-      inputValidator: (value) => {
-        if (!value) {
-          return '¡Por favor ingresa una consulta!';
-        }
-      }
+  // Ask (esqueleto service-layer): el boton AI QUERY abre el panel, que
+  // consume el registry (/api/ai-filter -> funciones) y muestra evidencia
+  // + linaje. Nombre intacto hasta visto bueno de Rick.
+  const handleAiQuery = () => {
+    openOverlay({
+      title: '',
+      component: (
+        <AskPanel
+          onApplyResidents={(residents, prompt) => {
+            if (onAiFilter) onAiFilter(residents, prompt);
+          }}
+        />
+      ),
+      width: '860px',
+      maxWidth: '94vw'
     });
-
-    if (prompt) {
-      Swal.fire({
-        title: 'Procesando consulta...',
-        text: 'Consultando con el modelo OpenRouter AI...',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/ai-filter`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
-        });
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          const text = await response.text();
-          throw new Error(`HTTP ${response.status}: respuesta no-JSON (${text.slice(0, 120)})`);
-        }
-        const data = await response.json();
-        Swal.close();
-
-        if (!response.ok || !data.success) {
-          Swal.fire('Error AI', data.error || 'Error al procesar la consulta', 'error');
-          return;
-        }
-
-        if (data.mode === 'answer') {
-          Swal.fire({
-            icon: 'info',
-            title: '🤖 Resultado IA',
-            html: `<div style="font-size:1.3rem;margin:8px 0;"><strong>${data.answer || 'Sin resultado'}</strong></div>`,
-            confirmButtonText: 'Cerrar',
-            confirmButtonColor: '#2b579a'
-          });
-          return;
-        }
-
-        if (onAiFilter) {
-          onAiFilter(data.residents || null, prompt);
-        }
-
-        Swal.fire({
-          icon: 'success',
-          title: 'Filtro IA Aplicado',
-          text: `Se encontraron y aplicaron ${data.residents?.length || 0} registro(s).`,
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (err) {
-        Swal.fire('Error de Red', err.message, 'error');
-      }
-    }
   };
 
   return (

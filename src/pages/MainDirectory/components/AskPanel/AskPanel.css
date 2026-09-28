@@ -1,0 +1,16 @@
+.ask-panel { min-width: 560px; max-width: 860px; font-size: 14px; }
+.ask-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 16px; }
+.ask-close { border: none; background: transparent; font-size: 18px; cursor: pointer; }
+.ask-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.ask-input-row input { flex: 1; padding: 8px; font-size: 14px; }
+.ask-input-row button { padding: 8px 16px; cursor: pointer; }
+.ask-history { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.ask-empty { color: #666; font-style: italic; }
+.ask-item { border-top: 1px solid #ddd; padding-top: 8px; }
+.ask-q { font-weight: bold; margin-bottom: 4px; }
+.ask-a { font-size: 1.1rem; margin: 4px 0; }
+.ask-error { color: #a00; margin: 4px 0; }
+.ask-evidence { border-collapse: collapse; margin: 6px 0; font-size: 12px; max-width: 100%; }
+.ask-evidence th, .ask-evidence td { border: 1px solid #ccc; padding: 3px 6px; text-align: left; }
+.ask-evidence th { background: #f0f4f8; }
+.ask-lineage { color: #666; font-size: 12px; margin-top: 4px; }
