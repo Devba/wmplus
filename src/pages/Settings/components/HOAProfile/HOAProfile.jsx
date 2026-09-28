@@ -396,8 +396,10 @@ async function handlePromptNo() {
     });
 
     setClientInfoData({
+      // Tenant canonico (Rick): Client ID# = hoa.client_id (hoaClientId del
+      // server); se conserva clientId (mgt_code) solo como fallback visual.
       clientId:
-        savedData?.clientInfo?.clientId || '',
+        savedData?.clientInfo?.hoaClientId || savedData?.clientInfo?.clientId || '',
       licenseNumber:
         savedData?.clientInfo?.licenseNumber || '',
       licenseStatus:
@@ -652,7 +654,8 @@ function handlePromptCancel() {
             type="text"
             inputMode="numeric"
             value={clientInfoData.clientId}
-            onChange={changeClientInfoField}
+            readOnly
+            title="Client ID asignado por HOA-e-Solutions (solo lectura)"
             style={{ width: '100px' }}
           />
 
@@ -666,7 +669,8 @@ function handlePromptCancel() {
             name="licenseNumber"
             type="text"
             value={clientInfoData.licenseNumber}
-            onChange={changeClientInfoField}
+            readOnly
+            title="HOA License Number asignado por HOA-e-Solutions (solo lectura)"
             style={{ width: '180px' }}
           />
 
