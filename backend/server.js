@@ -4021,6 +4021,14 @@ app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
           const def = svcRegistry.FUNCTIONS[routed.key];
           console.log(`[AI Router] prompt=${JSON.stringify(String(prompt).slice(0, 100))} -> ${routed.key} via ${routed.source}`);
           translator.bump(routed.source === 'openrouter' ? 'routed_llm' : 'routed_local');
+          const paramErr = translator.validateRouted(routed.key, routed.params || {});
+          if (paramErr) {
+            return res.status(422).json({
+              error: paramErr,
+              tenant: { client_id: sesClientId, license_number: sesLicense },
+              source: `router-${routed.source}`
+            });
+          }
           if (def.status === 'disabled') {
             translator.bump('blocked');
             return res.status(403).json({

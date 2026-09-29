@@ -184,7 +184,35 @@ async function translateOpenRouter(prompt, tenant) {
   }
 }
 
-/* ---------- cascada publica ---------- */
+/* Valida params del LLM antes de ejecutar: formato, no existencia.
+   Devuelve mensaje de error o null. Lo inexistente lo dice la funcion. */
+const ACCT_RE = /^(RES-?\d+|\d{5,6})$/i;
+const GL_RE = /^\d{4,5}$/;
+function validateRouted(key, params) {
+  const p = params || {};
+  if (key === 'account-history') {
+    const r = String(p.resident || '').trim();
+    if (!ACCT_RE.test(r)) {
+      return 'Falta el ID del residente (p. ej. 071010). Prueba: cuanto debe el residente 071010.';
+    }
+  }
+  if (key === 'gl-transactions') {
+    if (!GL_RE.test(String(p.gl || '').trim())) {
+      return 'Falta el numero de GL (4-5 digitos). Prueba: transacciones del GL 41700.';
+    }
+  }
+  if (key === 'vendor-invoices') {
+    if (!String(p.vendor || '').trim()) {
+      return 'Falta el vendor. Prueba: facturas del vendor VEND-001.';
+    }
+  }
+  if (key === 'period-diff') {
+    if (p.subject === 'gl' && !GL_RE.test(String(p.gl || '').trim())) {
+      return 'Para comparar un GL indica su numero. Prueba con gl=41700.';
+    }
+  }
+  return null;
+}
 
 async function translate(prompt, tenant) {
   const local = classifyLocal(prompt);
@@ -227,4 +255,4 @@ function summarize(key, out) {
   }
 }
 
-module.exports = { translate, classifyLocal, summarize, VALID_KEYS, bump, getStats };
+module.exports = { translate, classifyLocal, summarize, validateRouted, VALID_KEYS, bump, getStats };
