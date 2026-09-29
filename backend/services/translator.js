@@ -18,7 +18,7 @@ const AI_MODEL = process.env.AI_MODEL || 'deepseek/deepseek-chat';
 const AI_TIMEOUT = parseInt(process.env.AI_TRANSLATE_TIMEOUT || '20000', 10) || 20000;
 
 const VALID_KEYS = new Set([
-  'account-history', 'outstanding-checks', 'period-diff',
+  'account-history', 'hoa-ar-summary', 'outstanding-checks', 'period-diff',
   'gl-transactions', 'vendor-invoices', 'violations', 'anomalies'
 ]);
 
@@ -118,9 +118,13 @@ function classifyLocal(prompt) {
     };
   }
   // Q1+Q2: deuda/saldo/pagos + residente identificado.
-  if (/debe|deuda|saldo|balance|adeuda|pagos|historial|cuenta/.test(lower)) {
+  // Sin residente pero con alcance total (all/todos/total/how much) -> agregado HOA.
+  if (/debe|deuda|saldo|balance|adeuda|pagos|historial|cuenta|owe|owes|owed|debt/.test(lower)) {
     const resident = extractResident(prompt);
     if (resident) return { key: 'account-history', params: { resident }, source: 'local' };
+    if (/all\b|todos|todas|total|how much|cuanto deben|cuantos deben/.test(lower)) {
+      return { key: 'hoa-ar-summary', params: {}, source: 'local' };
+    }
     return null;
   }
   return null;
@@ -131,6 +135,7 @@ function classifyLocal(prompt) {
 function catalogText() {
   return [
     '{"function":"account-history","params":{"resident":"ID (requerido)"}} = cuanto debe un residente + que pagos lo produjeron',
+    '{"function":"hoa-ar-summary","params":{}} = cuanto deben TODOS los residentes (total HOA + deudores)',
     '{"function":"outstanding-checks","params":{}} = cheques pendientes',
     '{"function":"period-diff","params":{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","compare_from":"...","compare_to":"..."}} = que cambio entre periodos',
     '{"function":"gl-transactions","params":{"gl":"numero (requerido)"}} = transacciones de un GL#',
@@ -232,6 +237,8 @@ function summarize(key, out) {
       const name = b.display_name || b.account_id || '';
       return `Saldo ${name}: ${s.balance_due != null ? s.balance_due : 'sin registro'} (${s.payments_count || 0} pagos)`;
     }
+    case 'hoa-ar-summary':
+      return `HOA: ${s.debtors || 0} deudores, total ${s.total_ar || 0}`;
     case 'outstanding-checks':
       return `Cheques pendientes: ${s.count || 0} (total ${s.total || 0})`;
     case 'gl-transactions':

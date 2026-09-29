@@ -10291,6 +10291,7 @@ app.get('/api/svc/stats', authMid.requireHoaScope, async (req, res) => {
 });
 
 svcRoute('/api/svc/account-history', 'account-history', (req) => ({ resident: req.query.resident || '' }));
+svcRoute('/api/svc/hoa-ar-summary', 'hoa-ar-summary', () => ({}));
 svcRoute('/api/svc/outstanding-checks', 'outstanding-checks', () => ({}));
 svcRoute('/api/svc/period-diff', 'period-diff', (req) => ({
   fy: req.query.fy || null, from: req.query.from || null, to: req.query.to || null,

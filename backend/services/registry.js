@@ -24,6 +24,38 @@ function lineage(table, filter, count) {
   return [{ table, filter, rows: count }];
 }
 
+/* Q1 a nivel HOA — total adeudado + deudores (misma base que ar-summary).
+   Sin residente: agregado de la HOA, no ranking individual. */
+async function hoaArSummary(ctx) {
+  const { licenseNumber } = ctx;
+  const [rows] = await ro().query(
+    `SELECT ar.ResidentAccountID AS account_id,
+            rm.FirstName AS first_name, rm.LastName AS last_name,
+            ar.TotalCurrentAR AS total_ar
+       FROM AssessmentRegister ar
+       LEFT JOIN ResidentMaster rm
+         ON rm.ResidentAccountID = ar.ResidentAccountID
+        AND rm.HOALicenseNumber = ar.HOALicenseNumber
+      WHERE (ar.ActiveFlag IS NULL OR ar.ActiveFlag != 'N')
+        AND ar.HOALicenseNumber = ?
+        AND ar.TotalCurrentAR > 0
+      ORDER BY ar.TotalCurrentAR DESC
+      LIMIT 200`,
+    [licenseNumber]
+  );
+  const total = rows.reduce((s, r) => s + Number(r.total_ar || 0), 0);
+  return {
+    success: true,
+    function: 'getHoaArSummary',
+    tenant: tenantOf(ctx),
+    params_resolved: {},
+    summary: { debtors: rows.length, total_ar: total },
+    result: rows,
+    lineage: lineage('AssessmentRegister', 'total_ar>0', rows.length),
+    filters_applied: { license_number: licenseNumber }
+  };
+}
+
 /* Q1+Q2 — una sola funcion autoritativa: saldo + pagos que lo produjeron. */
 async function accountHistory(ctx, deps) {
   const { resident, asOf, licenseNumber, clientId } = ctx;
@@ -377,6 +409,7 @@ async function anomalies(ctx, deps) {
 
 const FUNCTIONS = {
   'account-history': { key: 'account-history', fn: 'getResidentAccountHistory', questions: ['Q1', 'Q2'], status: 'ready', run: accountHistory },
+  'hoa-ar-summary': { key: 'hoa-ar-summary', fn: 'getHoaArSummary', questions: ['Q1'], status: 'ready', run: hoaArSummary },
   'outstanding-checks': { key: 'outstanding-checks', fn: 'getOutstandingChecks', questions: ['Q3'], status: 'ready', run: outstandingChecks },
   'period-diff': { key: 'period-diff', fn: 'getPeriodDiff', questions: ['Q4'], status: 'ready', run: periodDiff },
   'gl-transactions': { key: 'gl-transactions', fn: 'getGLTransactions', questions: ['Q5'], status: 'ready', run: glTransactions },
