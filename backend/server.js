@@ -10328,7 +10328,8 @@ app.post('/api/ai-explore', authMid.requireHoaScope, async (req, res) => {
       return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
     }
     const { question } = req.body || {};
-    if (!question || !String(question).trim()) {
+    const questionText = (question || req.body.prompt || '').trim();
+    if (!questionText) {
       return res.status(400).json({ error: 'Pregunta requerida' });
     }
     const filters = {
@@ -10341,10 +10342,10 @@ app.post('/api/ai-explore', authMid.requireHoaScope, async (req, res) => {
     const kept = truncated ? rows.slice(0, explorer.MAX_ROWS) : rows;
     const { anon, lexicon } = explorer.anonymize(kept);
     const translator = require('./services/translator');
-    const narrative = await explorer.askLlm(String(question).trim(), anon, licenseNumber, {
+    const narrative = await explorer.askLlm(questionText, anon, licenseNumber, {
       getKey: translator.getKey, aiModel: translator.aiModel, aiTimeout: translator.aiTimeout
     });
-    console.log(`[AI Explore] user=${req.authUser.login_name} hoa=${licenseNumber} rows=${kept.length}${truncated ? '+' : ''} q=${JSON.stringify(String(question).slice(0, 120))}`);
+    console.log(`[AI Explore] user=${req.authUser.login_name} hoa=${licenseNumber} rows=${kept.length}${truncated ? '+' : ''} q=${JSON.stringify(questionText.slice(0, 120))}`);
     res.json({
       success: true,
       mode: 'explore',
