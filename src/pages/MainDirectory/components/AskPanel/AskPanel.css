@@ -14,3 +14,7 @@
 .ask-evidence th, .ask-evidence td { border: 1px solid #ccc; padding: 3px 6px; text-align: left; }
 .ask-evidence th { background: #f0f4f8; }
 .ask-lineage { color: #666; font-size: 12px; margin-top: 4px; }
+.ask-mode { margin-right: 8px; padding: 4px 10px; cursor: pointer; }
+.ask-mode.on { background: #2b579a; color: #fff; }
+.ask-notice { background: #fff8e1; border: 1px solid #e0c36a; padding: 6px 8px; font-size: 12px; margin-bottom: 8px; }
+.ask-apply { margin: 6px 0; }

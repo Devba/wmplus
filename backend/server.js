@@ -10311,6 +10311,56 @@ svcRoute('/api/svc/anomalies', 'anomalies', (req) => ({
   from: req.query.from || null, to: req.query.to || null
 }));
 
+/* ===========================================================
+   AI EXPLORE (/api/ai-explore): preguntas abiertas sobre filas del
+   Main Directory. SOLO is_admin. PII anonimizada server-side
+   (explorer.js); mapa R->cuenta en memoria del request; auditoria
+   en log. El LLM narra y cita pseudos, no calcula.
+   =========================================================== */
+const explorer = require('./services/explorer');
+
+app.post('/api/ai-explore', authMid.requireHoaScope, async (req, res) => {
+  try {
+    if (!req.authUser || !req.authUser.is_admin) {
+      return res.status(403).json({ error: 'Solo administradores.' });
+    }
+    if (req.hoaId === 'all' || !req.hoa) {
+      return res.status(400).json({ error: 'Selecciona una HOA concreta (no "Todas")' });
+    }
+    const { question } = req.body || {};
+    if (!question || !String(question).trim()) {
+      return res.status(400).json({ error: 'Pregunta requerida' });
+    }
+    const filters = {
+      active_only: req.body.active_only !== false,
+      debtors_only: req.body.debtors_only === true
+    };
+    const licenseNumber = req.hoa.license_number;
+    const rows = await explorer.fetchRows(licenseNumber, filters);
+    const truncated = rows.length > explorer.MAX_ROWS;
+    const kept = truncated ? rows.slice(0, explorer.MAX_ROWS) : rows;
+    const { anon, lexicon } = explorer.anonymize(kept);
+    const translator = require('./services/translator');
+    const narrative = await explorer.askLlm(String(question).trim(), anon, licenseNumber, {
+      getKey: translator.getKey, aiModel: translator.aiModel, aiTimeout: translator.aiTimeout
+    });
+    console.log(`[AI Explore] user=${req.authUser.login_name} hoa=${licenseNumber} rows=${kept.length}${truncated ? '+' : ''} q=${JSON.stringify(String(question).slice(0, 120))}`);
+    res.json({
+      success: true,
+      mode: 'explore',
+      narrative,
+      lexicon,
+      rows_sent: kept.length,
+      truncated,
+      tenant: { client_id: req.hoa.client_id || null, license_number: licenseNumber },
+      scoped: true,
+      source: 'explore-llm'
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Explore fallo' });
+  }
+});
+
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 W M+ Express Backend API running on port ${PORT}`);

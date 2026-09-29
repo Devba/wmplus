@@ -15,7 +15,7 @@ const path = require('path');
 const KEY_FILE = process.env.OPENROUTER_KEY_FILE ||
   path.join(os.homedir(), '.config', 'opencode', 'secrets', 'openrouter-api-key');
 const AI_MODEL = process.env.AI_MODEL || 'deepseek/deepseek-chat';
-const AI_TIMEOUT = parseInt(process.env.AI_TRANSLATE_TIMEOUT || '20000', 10) || 20000;
+const AI_TIMEOUT = parseInt(process.env.AI_TRANSLATE_TIMEOUT || '60000', 10) || 60000;
 
 const VALID_KEYS = new Set([
   'account-history', 'hoa-ar-summary', 'outstanding-checks', 'period-diff',
@@ -262,4 +262,7 @@ function summarize(key, out) {
   }
 }
 
-module.exports = { translate, classifyLocal, summarize, validateRouted, VALID_KEYS, bump, getStats };
+module.exports = {
+  translate, classifyLocal, summarize, validateRouted, VALID_KEYS, bump, getStats,
+  getKey, aiModel: AI_MODEL, aiTimeout: AI_TIMEOUT
+};
