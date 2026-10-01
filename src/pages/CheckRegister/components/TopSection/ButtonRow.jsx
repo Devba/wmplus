@@ -157,6 +157,7 @@ function ButtonRow({
           id="btnCROpenChecksReport"
           type="button"
           className="checkreg-yellowbtn"
+          onClick={() => onSelectPage('open-check-register-report')}
         >
           OPEN CHECKS REPORT
         </button>

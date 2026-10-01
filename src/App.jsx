@@ -181,7 +181,7 @@ useEffect(() => {
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [activeOverlay]);
-
+  
   function handleSelectPage(pageName) {
   const guard = navigationGuardRef.current;
 
@@ -190,7 +190,7 @@ useEffect(() => {
     setShowNavigationPrompt(true);
     return;
   }
-
+  requestCloseOverlay();
   setCurrentPage(pageName);
 }
 
@@ -319,6 +319,8 @@ function handleNavigationDiscard() {
               maxWidth={activeOverlay.maxWidth}
               height={activeOverlay.height}
               bodyHeight={activeOverlay.bodyHeight}
+              bodyOverflow={activeOverlay.bodyOverflow}
+              frameless={activeOverlay.frameless}
               onClose={requestCloseOverlay}
             >
               {activeOverlay.component}

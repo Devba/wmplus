@@ -1,0 +1,389 @@
+
+
+
+
+
+
+.ara-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+  color: #000000;
+  box-sizing: border-box;
+}
+
+.ara-page * {
+  box-sizing: border-box;
+}
+
+.ara-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+/* =========================================================
+   TOP SECTION
+   ========================================================= */
+
+.ara-topsection {
+  position: relative;
+  flex: 0 0 122px;
+  min-width: 1860px;
+  height: 122px;
+  background: #ffffff;
+  border-bottom: 2px solid #7f7f7f;
+  font-size: 13px;
+}
+
+.ara-top-left {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  width: 292px;
+  height: 120px;
+}
+
+.ara-hoa-name {
+  position: absolute;
+  top: 5px;
+  left: 100px;
+  width: 190px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.ara-total-receivable-label {
+  position: absolute;
+  top: 70px;
+  left: 14px;
+  width: 200px;
+  text-align: left;
+  font-weight: 700;
+  line-height: 0px;
+}
+
+.ara-total-receivable-value {
+  position: absolute;
+  top: 58px;
+  left: 155px;
+  width: 70px;
+  text-align: right;
+}
+
+.ara-today-label {
+  position: absolute;
+  top: 84px;
+  left: 8px;
+  font-weight: 700;
+}
+
+.ara-today-value {
+  position: absolute;
+  top: 85px;
+  left: 95px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ara-current-ar {
+  position: absolute;
+  top: 42px;
+  left: 15px;
+  width: 200px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   COMMAND AREA
+   ========================================================= */
+
+.ara-command-area {
+  position: absolute;
+  left: 300px;
+  top: 0px;
+  width: 585px;
+  height: 120px;
+}
+
+.ara-command-row {
+  height: 35px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ara-command-row-two {
+  margin-top: 14px;
+}
+
+.ara-btn {
+  height: 30px;
+  padding: 0 10px;
+  background: #f2f2f2;
+  border: 1px solid #8a8a8a;
+  box-shadow: 4px 4px 5px #888888;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ara-blue {
+  color: #0070c0;
+}
+
+.ara-resident-filter-btn {
+  position: absolute;
+  top: 10px;
+  left: 0px;
+}
+
+.ara-reset-filter-btn {
+  position: absolute;
+  top: 10px;
+  left: 150px;
+}
+
+.ara-red {
+  color: #ff0000;
+}
+
+.ara-wide {
+  min-width: 195px;
+}
+
+.ara-balance-btn {
+  min-width: 220px;
+}
+
+.ara-aged-label {
+  margin-left: 285px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ara-aged-arrow {
+  position: absolute;
+  top: 8px;
+  left: 530px;
+  width: 80px;
+  height: 24px;
+  color: #bdd2e7;
+  font-size: 34px;
+  line-height: 20px;
+  overflow: hidden;
+}
+
+.ara-summary-line {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-left: 5px;
+  font-weight: 700;
+}
+
+.ara-total-invoice-group {
+  position: absolute;
+  top: 93px;
+  left: 0px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.ara-total-balance-group {
+  position: absolute;
+  top: 93px;
+  left: 250px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.ara-summary-money {
+  min-width: 90px;
+  font-weight: 400;
+}
+
+/* =========================================================
+   AGING SUMMARY
+   ========================================================= */
+
+.ara-aging-summary {
+  position: absolute;
+  left: 860px;
+  top: 5px;
+  height: 120px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.ara-aging-box {
+  position: relative;
+  width: 90px;
+  height: 66px;
+
+  border-left: 1px solid #777777;
+  border-right: 1px solid #777777;
+  border-top: 1px solid #777777;
+  border-bottom: 1px solid #777777;
+
+  text-align: center;
+}
+
+.ara-aging-box strong {
+  display: block;
+  height: 30px;
+  padding-top: 6px;
+  font-size: 13px;
+}
+
+.ara-aging-box span {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  width: 100%;
+  font-size: 12px;
+}
+
+.ara-total-due-box {
+  width: 84px;
+  font-size: 16px;
+}
+
+.ara-total-due-box strong {
+  font-size: 16px;
+}
+
+.ara-back-btn {
+  position: absolute;
+  left: 0;
+  top: 74px;
+  width: 210px;
+  height: 34px;
+
+  background: #f2f2f2;
+  border: 1px solid #8a8a8a;
+  box-shadow: 4px 4px 5px #888888;
+
+  color: #0070c0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ara-video-btn {
+  position: absolute;
+  left: 280px;
+  top: 74px;
+  width: 240px;
+  height: 34px;
+
+  background: #f2f2f2;
+  border: 1px solid #8a8a8a;
+  box-shadow: 4px 4px 5px #888888;
+
+  color: #ff0000;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   REGISTER
+   ========================================================= */
+
+.ara-bodybox {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ara-table-scroll {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.ara-table {
+  width: 3195px;
+  min-width: 3195px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.ara-table th,
+.ara-table td {
+  border: 1px solid #333333;
+  font-family: Arial, sans-serif;
+}
+
+.ara-table thead tr {
+  height: 88px;
+}
+
+
+.ara-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 88px;
+  padding: 4px 3px;
+  background: #d9d9d9;
+  color: #000000;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.ara-table tbody tr {
+  height: 21px;
+}
+
+.ara-table tbody td {
+  height: 21px;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #000000;
+}
+
+/* Legacy ARA body colors */
+
+.ara-cell-yellow {
+  background: #ffff00;
+}
+
+.ara-cell-aging {
+  background: #d9e5f1;
+}
+
+.ara-cell-letter {
+  background: #fce4d6;
+}
+
+.ara-cell-plain {
+  background: #ffffff;
+}

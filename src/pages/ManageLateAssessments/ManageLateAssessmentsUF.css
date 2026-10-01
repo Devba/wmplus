@@ -1,0 +1,506 @@
+
+
+
+
+.mla-uf {
+    position: relative;
+    width: 1250px;
+    height: 720px;
+    background: #f2f2f2;
+    border: 1px solid #777;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    color: #000;
+    box-sizing: border-box;
+}
+
+.mla-window-title {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 12px;
+}
+
+.mla-main-title {
+    position: absolute;
+    top: 38px;
+    left: 25px;
+    font-size: 17px;
+    font-weight: bold;
+    color: red;
+}
+
+.mla-frequency {
+    position: absolute;
+    top: 38px;
+    left: 650px;
+    width: 180px;
+    height: 30px;
+    font-size: 18px;
+    font-weight: bold;
+    background: #b8c8d8;
+}
+
+/* LEFT LIST */
+
+.mla-left-instruction {
+    position: absolute;
+    top: 75px;
+    left: 145px;
+    color: #0070c0;
+    font-weight: bold;
+}
+
+.mla-left-headings {
+    position: absolute;
+    top: 96px;
+    left: 38px;
+    width: 590px;
+    display: grid;
+    grid-template-columns: 90px 180px 75px 75px 100px;
+}
+
+.mla-left-list {
+    position: absolute;
+    top: 115px;
+    left: 32px;
+    width: 595px;
+    height: 130px;
+    background: #b8c8d8;
+    border: 1px solid #777;
+}
+
+.mla-left-bottom-instruction {
+    position: absolute;
+    top: 298px;
+    left: 145px;
+    color: #0070c0;
+    font-weight: bold;
+}
+
+.mla-prior-instruction {
+    position: absolute;
+    top: 274px;
+    left: 115px;
+    color: #0070c0;
+    font-weight: bold;
+}
+
+.mla-move-all-left-text {
+    position: absolute;
+    top: 252px;
+    left: 108px;
+    color: #0070c0;
+    font-weight: bold;
+}
+
+.mla-move-all-left,
+.mla-move-all-right {
+    position: absolute;
+    width: 78px;
+    height: 32px;
+    background: #0070c0;
+    color: white;
+    border: 3px outset #ccc;
+    box-shadow: 3px 3px 5px rgba(0, 0, 0, .45);
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.mla-move-all-left {
+    top: 250px;
+    left: 550px;
+}
+
+/* RIGHT LIST */
+
+.mla-selected-title {
+    position: absolute;
+    top: 75px;
+    left: 865px;
+    color: #0070c0;
+}
+
+.mla-right-headings {
+    position: absolute;
+    top: 96px;
+    left: 650px;
+    width: 570px;
+    display: grid;
+    grid-template-columns: 90px 180px 75px 75px 100px;
+}
+
+.mla-right-list {
+    position: absolute;
+    top: 115px;
+    left: 650px;
+    width: 570px;
+    height: 130px;
+    background: white;
+    border: 1px solid #777;
+}
+
+.mla-move-all-right-text {
+    position: absolute;
+    top: 250px;
+    left: 694px;
+    color: #0070c0;
+    font-weight: bold;
+}
+
+.mla-move-all-right {
+    top: 250px;
+    left: 1142px;
+}
+
+/* PRIOR REMINDERS */
+
+.mla-prior-title {
+    position: absolute;
+    top: 355px;
+    left: 240px;
+    color: #0070c0;
+    font-weight: bold;
+    font-size: 14px
+}
+
+.mla-prior-headings {
+    position: absolute;
+    top: 375px;
+    left: 22px;
+    width: 525px;
+    display: grid;
+    grid-template-columns: 65px 90px 330px 55px;
+    text-align: left;
+     font-size: 13px;
+     line-height: 13px;
+}
+
+.mla-prior-grid {
+    position: absolute;
+    top: 409px;
+    left: 20px;
+    width: 525px;
+    height: 120px;
+    background: white;
+    border: 1px solid #777;
+}
+
+.mla-prior-note {
+    position: absolute;
+    top: 527px;
+    left: 20px;
+    font-size: 13px;
+    color: red;
+    font-weight: bold;
+}
+
+/* VIDEO */
+
+.mla-video-text {
+    position: absolute;
+    top: 420px;
+    left: 585px;
+    color: red;
+    font-weight: bold;
+    line-height: 13px;
+}
+
+.mla-video-button,
+.mla-reminder-video-button {
+    position: absolute;
+    top: 435px;
+    left: 585px;
+    width: 40px;
+    height: 48px;
+    font-size: 22px;
+    font-weight: bold;
+    font-style: italic;
+    color: red;
+}
+
+
+/* STEPS */
+
+.mla-step1,
+.mla-step2,
+.mla-step3,
+.mla-step4 {
+    position: absolute;
+    left: 700px;
+    color: red;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.mla-step1 { top: 290px; }
+.mla-step2 { top: 350px; }
+.mla-step3 { top: 440px; }
+.mla-step4 { top: 510px; }
+
+.mla-step1-text,
+.mla-step2-text,
+.mla-step3-text {
+    position: absolute;
+    left: 795px;
+    color: #0070c0;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.mla-step1-text { top: 290px; }
+.mla-step2-text { top: 350px; }
+.mla-step3-text { top: 440px; }
+
+.mla-action-select {
+    position: absolute;
+    top: 315px;
+    left: 715px;
+    width: 360px;
+    height: 23px;
+}
+
+.mla-letter-insert {
+    position: absolute;
+    top: 372px;
+    left: 700px;
+    width: 270px;
+    height: 38px;
+    background: #00cc00;
+    color: white;
+    border: 3px outset #ccc;
+    box-shadow: 3px 3px 5px rgba(0, 0, 0, .45);
+    font-weight: bold;
+}
+
+.mla-email1,
+.mla-email2 {
+    position: absolute;
+    left: 985px;
+    width: 235px;
+    height: 25px;
+    background: #00cc00;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.mla-email1 { top: 372px; }
+.mla-email2 { top: 404px; }
+
+.mla-create-emails {
+    position: absolute;
+    top: 465px;
+    left: 755px;
+}
+
+.mla-create-letters {
+    position: absolute;
+    top: 465px;
+    left: 860px;
+}
+
+.mla-proceed {
+    position: absolute;
+    top: 500px;
+    left: 770px;
+    width: 350px;
+    height: 40px;
+    background: #00cc00;
+    color: white;
+    border: 3px outset #ccc;
+    box-shadow: 3px 3px 5px rgba(0, 0, 0, .45);
+    font-weight: bold;
+
+
+}
+
+/* REMINDER BUTTONS */
+
+.mla-reminder1,
+.mla-reminder2,
+.mla-reminder-test {
+    position: absolute;
+    left: 650px;
+    width: 210px;
+    height: 32px;
+    font-size: 14px;
+    font-weight: bold;
+    border: 3px outset #ccc;
+    box-shadow: 3px 3px 5px rgba(0, 0, 0, .45);
+}
+
+.mla-reminder1 {
+    top: 565px;
+    color: #0070c0;
+}
+
+.mla-reminder2 {
+    top: 620px;
+    color: #0070c0;
+}
+
+.mla-reminder-test {
+    top: 675px;
+    color: red;
+}
+
+.mla-reminder1-text,
+.mla-reminder2-text,
+.mla-reminder-test-text {
+    position: absolute;
+    left: 875px;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 13px;
+}
+
+.mla-reminder1-text { top: 565px; }
+.mla-reminder2-text { top: 620px; }
+.mla-reminder-test-text { top: 675px; }
+
+/* SUPPORT */
+
+.mla-support-title {
+    position: absolute;
+    top: 615px;
+    left: 85px;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.mla-support-button {
+    position: absolute;
+    top: 650px;
+    left: 40px;
+    width: 285px;
+    height: 34px;
+    color: #0070c0;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.mla-reminder-video-text {
+    position: absolute;
+    top: 590px;
+    left: 410px;
+    color: red;
+    font-weight: bold;
+    line-height: 13px;
+}
+
+.mla-video-button {
+    top: 465px;
+    left: 615px;
+}
+
+.mla-reminder-video-button {
+    top: 630px;
+    left: 455px;
+}
+
+/* LEFT RESIDENT LIST COLUMN HEADINGS */
+
+.mla-left-headings {
+  position: relative;
+  height: 22px;
+}
+
+.mla-left-headings span {
+  position: absolute;
+  top: 0;
+  text-align: center;
+}
+
+/* Resident */
+.mla-left-headings span:nth-child(1) {
+  left: 0px;
+  width: 90px;
+}
+
+/* Address */
+.mla-left-headings span:nth-child(2) {
+  left: 75px;
+  width: 210px;
+}
+
+/* Account # */
+.mla-left-headings span:nth-child(3) {
+  left: 275px;
+  width: 100px;
+}
+
+/* Amount $ */
+.mla-left-headings span:nth-child(4) {
+  left: 415px;
+  width: 90px;
+}
+
+/* E-Mail (Y/N) */
+.mla-left-headings span:nth-child(5) {
+  left: 490px;
+  width: 120px;
+}
+
+/* RIGHT SELECTED RESIDENT LIST COLUMN HEADINGS */
+
+.mla-right-headings {
+  position: relative;
+  height: 22px;
+  z-index: 2;
+}
+
+.mla-right-headings {
+  position: relative;
+  height: 22px;
+  top: 73px;
+  z-index: 2;
+}
+
+.mla-right-headings span {
+  position: absolute;
+  top: 0;
+  text-align: center;
+}
+
+/* Resident */
+.mla-right-headings span:nth-child(1) {
+  left: 0px;
+  width: 90px;
+}
+
+/* Address */
+.mla-right-headings span:nth-child(2) {
+  left: 75px;
+  width: 210px;
+}
+
+/* Account # */
+.mla-right-headings span:nth-child(3) {
+  left: 275px;
+  width: 100px;
+}
+
+/* Amount $ */
+.mla-right-headings span:nth-child(4) {
+  left: 400px;
+  width: 90px;
+}
+
+/* E-Mail (Y/N) */
+.mla-right-headings span:nth-child(5) {
+  left: 472px;
+  width: 120px;
+}
+
+/* dues type drop down label */
+.mla-dues-type-label {
+  position: absolute;
+  top: 40px;
+  left: 792px;
+  width: 225px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: bold;
+}

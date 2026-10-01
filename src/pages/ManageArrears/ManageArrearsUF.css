@@ -1,0 +1,465 @@
+
+
+
+
+
+/* =========================================================
+   W M+ MANAGE ARREARS UF
+   FIRST-SHOT VISUAL LAYOUT
+   ========================================================= */
+
+.ma-uf {
+  position: relative;
+  width: 1160px;
+  height: 590px;
+  background: #f2f2f2;
+  border: 1px solid #777;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------
+   WINDOW TITLE
+   --------------------------------------------------------- */
+
+.ma-window-title {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+/* ---------------------------------------------------------
+   TOP LEFT RESIDENT LIST
+   --------------------------------------------------------- */
+
+.ma-left-instruction {
+  position: absolute;
+  top: 38px;
+  left: 350px;
+  color: #0070c0;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.ma-left-headings {
+  position: absolute;
+  top: 76px;
+  left: 15px;
+  width: 530px;
+  height: 18px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.ma-left-headings span {
+  position: absolute;
+}
+
+.ma-lh-name {
+  left: 0px;
+  width: 95px;
+  text-align: center;
+}
+
+.ma-lh-address {
+  left: 95px;
+  width: 150px;
+  text-align: center;
+}
+
+.ma-lh-acct {
+  left: 270px;
+  width: 70px;
+  text-align: center;
+}
+
+.ma-lh-total {
+  left: 365px;
+  width: 75px;
+  text-align: center;
+}
+
+.ma-lh-email {
+  left: 400px;
+  width: 125px;
+  text-align: right;
+}
+
+.ma-left-list {
+  position: absolute;
+  top: 94px;
+  left: 15px;
+  width: 530px;
+  height: 118px;
+  background: white;
+  border: 1px solid #777;
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------
+   TOP RIGHT SELECTED RESIDENT LIST
+   --------------------------------------------------------- */
+
+.ma-selected-title {
+  position: absolute;
+  top: 61px;
+  left: 750px;
+  width: 180px;
+  text-align: center;
+  color: #0070c0;
+  font-size: 13px;
+}
+
+.ma-right-headings {
+  position: absolute;
+  top: 76px;
+  left: 575px;
+  width: 545px;
+  height: 18px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.ma-right-headings span {
+  position: absolute;
+}
+
+.ma-rh-name {
+  left: 0px;
+  width: 95px;
+  text-align: center;
+}
+
+.ma-rh-address {
+  left: 95px;
+  width: 150px;
+  text-align: center;
+}
+
+.ma-rh-acct {
+  left: 270px;
+  width: 70px;
+  text-align: center;
+}
+
+.ma-rh-total {
+  left: 365px;
+  width: 75px;
+  text-align: center;
+}
+
+.ma-rh-email {
+  left: 413px;
+  width: 125px;
+  text-align: right;
+}
+
+.ma-right-list {
+  position: absolute;
+  top: 94px;
+  left: 575px;
+  width: 545px;
+  height: 118px;
+  background: white;
+  border: 1px solid #777;
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------
+   INSTRUCTIONS UNDER RESIDENT LISTS
+   --------------------------------------------------------- */
+
+.ma-move-instruction {
+  position: absolute;
+  top: 222px;
+  left: 410px;
+  color: #0070c0;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.ma-detail-instruction {
+  position: absolute;
+  top: 241px;
+  left: 388px;
+  color: #0070c0;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------
+   DETAILS OF VIOLATIONS
+   --------------------------------------------------------- */
+
+.ma-details-title {
+  position: absolute;
+  top: 282px;
+  left: 165px;
+  width: 220px;
+  text-align: center;
+  color: #0070c0;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.ma-details-headings {
+  position: absolute;
+  top: 309px;
+  left: 15px;
+  width: 500px;
+  height: 30px;
+  font-weight: bold;
+  font-size: 12px;
+  line-height: 14px;
+}
+
+.ma-details-headings span {
+  position: absolute;
+}
+
+.ma-dh-invoice {
+  left: 0px;
+  width: 55px;
+  text-align: left;
+}
+
+.ma-dh-violation {
+  left: 70px;
+  width: 65px;
+  text-align: left;
+}
+
+.ma-dh-description {
+  left: 220px;
+  width: 320px;
+  text-align: left;
+}
+
+.ma-dh-amount {
+  left: 440px;
+  width: 55px;
+  text-align: center;
+}
+
+.ma-details-grid {
+  position: absolute;
+  top: 341px;
+  left: 15px;
+  width: 500px;
+  height: 135px;
+  background: white;
+  border: 1px solid #777;
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------
+   INSTRUCTIONAL VIDEO
+   --------------------------------------------------------- */
+
+.ma-video-text {
+  position: absolute;
+  top: 490px;
+  left: 325px;
+  color: red;
+  font-weight: bold;
+  font-size: 13px;
+  line-height: 13px;
+}
+
+.ma-video-button {
+  position: absolute;
+  top: 485px;
+  left: 440px;
+  width: 40px;
+  height: 42px;
+  font-size: 22px;
+  font-weight: bold;
+  font-style: italic;
+  color: red;
+}
+
+/* ---------------------------------------------------------
+   STEP 1
+   --------------------------------------------------------- */
+
+.ma-step1 {
+  position: absolute;
+  top: 272px;
+  left: 575px;
+  color: red;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.ma-step1-text {
+  position: absolute;
+  top: 272px;
+  left: 663px;
+  color: #0070c0;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.ma-letter-type {
+  position: absolute;
+  top: 294px;
+  left: 663px;
+  width: 330px;
+  height: 23px;
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------
+   STEP 2
+   --------------------------------------------------------- */
+
+.ma-step2 {
+  position: absolute;
+  top: 327px;
+  left: 575px;
+  color: red;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.ma-step2-text {
+  position: absolute;
+  top: 327px;
+  left: 663px;
+  color: #0070c0;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.ma-letter-insert {
+  position: absolute;
+  top: 356px;
+  left: 575px;
+  width: 240px;
+  height: 37px;
+  background: #00cc00;
+  color: white;
+  border: 2px outset #ccc;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 4px 4px 6px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.ma-email1,
+.ma-email2 {
+  position: absolute;
+  left: 825px;
+  width: 260px;
+  height: 35px;
+  background: #00cc00;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  box-sizing: border-box;
+  padding-top: 5px;
+}
+
+.ma-email1 {
+  top: 356px;
+}
+
+.ma-email2 {
+  top: 399px;
+}
+
+/* ---------------------------------------------------------
+   STEP 3
+   --------------------------------------------------------- */
+
+.ma-step3 {
+  position: absolute;
+  top: 433px;
+  left: 575px;
+  color: red;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.ma-step3-text {
+  position: absolute;
+  top: 433px;
+  left: 663px;
+  color: #0070c0;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.ma-create-emails {
+  position: absolute;
+  top: 463px;
+  left: 663px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.ma-create-letters {
+  position: absolute;
+  top: 463px;
+  left: 830px;
+  font-size: 14px;
+  font-weight: bold;
+  }
+
+/* ---------------------------------------------------------
+   STEP 4
+   --------------------------------------------------------- */
+
+.ma-step4 {
+  position: absolute;
+  top: 510px;
+  left: 575px;
+  color: red;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.ma-proceed {
+  position: absolute;
+  top: 500px;
+  left: 663px;
+  width: 210px;
+  height: 45px;
+  background: #00cc00;
+  color: black;
+  border: 3px outset #ccc;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 4px 4px 6px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------
+   SUPPORT
+   --------------------------------------------------------- */
+
+.ma-support-title {
+  position: absolute;
+  top: 555px;
+  left: 15px;
+  font-size: 17px;
+  font-weight: bold;
+}
+
+.ma-support-button {
+  position: absolute;
+  top: 550px;
+  left: 225px;
+  width: 295px;
+  height: 34px;
+  color: #0070c0;
+  background: #f2f2f2;
+  border: 2px outset #ccc;
+  font-size: 17px;
+  font-weight: bold;
+  box-shadow: 4px 4px 6px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}

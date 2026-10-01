@@ -66,3 +66,16 @@
   padding: 14px 14px 18px;
   overflow: auto;
 }
+
+.overlay-host .overlay-dialog.overlay-dialog-frameless {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.overlay-host .overlay-dialog.overlay-dialog-frameless .overlay-body {
+  padding: 0;
+  overflow: visible;
+}

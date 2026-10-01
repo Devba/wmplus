@@ -1,0 +1,436 @@
+
+
+
+
+
+.violation-register-uf {
+  position: relative;
+  width: 1250px;
+  height: 760px;
+  background: #f2f2f2;
+  border: 1px solid #7f7f7f;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: #000;
+  box-sizing: border-box;
+}
+
+.violation-register-title {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 13px;
+}
+
+.violation-register-close {
+  position: absolute;
+  top: 16px;
+  right: 50px;
+  width: 130px;
+  height: 32px;
+  font-weight: bold;
+  color: red;
+  background: #f2f2f2;
+  border: 1px solid #888;
+}
+
+.violation-register-body {
+  position: absolute;
+  top: 34px;
+  left: 0;
+  width: 100%;
+  height: 720px;
+}
+
+/* LEFT SIDE */
+
+.vr-left-section {
+  position: absolute;
+  top: 0;
+  left: 30px;
+  width: 710px;
+}
+
+.vr-field-row {
+  position: relative;
+  height: 42px;
+}
+
+.vr-field-row label {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 140px;
+  text-align: right;
+}
+
+.vr-field-row input,
+.vr-field-row select {
+  position: absolute;
+  left: 150px;
+  top: 3px;
+  width: 300px;
+  height: 23px;
+  box-sizing: border-box;
+  background: white;
+  border: 1px solid #777;
+}
+
+.vr-show-calendar {
+  position: absolute;
+  left: 480px;
+  top: 1px;
+  width: 100px;
+  height: 38px;
+  font-weight: bold;
+  font-size: 13px;
+  color: #0066cc;
+  border: 3px outset #ccc;
+  box-shadow: 5px 5px 7px rgba(0, 0, 0, 0.60);
+  cursor: pointer;
+}
+
+.vr-violation-type-row select {
+  width: 300px;
+}
+
+.vr-letter-insert-button {
+  position: absolute;
+  left: 460px;
+  top: -12px;
+  width: 250px;
+  height: 40px;
+  background: #00cc00;
+  color: white;
+  border: 1px solid #555;
+  font-weight: bold;
+  font-size: 14px;
+  border: 3px outset #e6e6e6;
+  box-shadow: 5px 5px 7px rgba(0, 0, 0, 0.60);
+  cursor: pointer;
+}
+
+.vr-note-row {
+  position: relative;
+  height: 82px;
+}
+
+.vr-note-row label {
+  position: absolute;
+  left: 65px;
+  top: 8px;
+}
+
+.vr-note-row textarea {
+  position: absolute;
+  left: 100px;
+  top: 3px;
+  width: 495px;
+  height: 70px;
+  resize: none;
+  border: 1px solid #777;
+  box-sizing: border-box;
+}
+
+/* VIDEO */
+
+.vr-video-area {
+  position: absolute;
+  top: 48px;
+  left:500px;
+  width: 120px;
+  text-align: left;
+}
+
+.vr-video-text {
+  color: red;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.vr-video-button {
+  margin-top: 8px;
+  margin-left: 35px;
+  width: 45px;
+  height: 40px;
+  color: red;
+  font-size: 24px;
+  font-style: italic;
+  font-weight: bold;
+}
+
+/* 3 WAY SEARCH */
+
+.vr-search-section {
+  position: absolute;
+  top: 20px;
+  left: 645px;
+  width: 475px;
+}
+
+.vr-search-title {
+  color: #0070c0;
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.vr-search-top-row {
+  position: relative;
+  height: 50px;
+}
+
+.vr-search-name {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 300px;
+}
+
+.vr-search-name label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 3px;
+}
+
+.vr-search-account label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 3px;
+}
+
+.vr-search-address label {
+    display: block;
+    position: relative;
+    top: 9px;
+    left: 0px;
+    font-weight: bold;
+    margin-bottom: 3px;
+}
+
+.vr-search-name select {
+  width: 300px;
+  height: 23px;
+}
+
+.vr-search-account {
+  position: absolute;
+  left: 335px;
+  top: 0;
+}
+
+.vr-search-account input {
+  width: 95px;
+  height: 23px;
+  box-sizing: border-box;
+}
+
+.vr-search-address {
+  position: absolute;
+  top: 80px;
+  left: 0;
+}
+
+.vr-search-address select {
+  width: 465px;
+  height: 23px;
+}
+
+/* RENTER */
+
+.vr-renter-section {
+  position: absolute;
+  top: 170px;
+  left: 800px;
+  width: 340px;
+  height: 100px;
+  box-sizing: border-box;
+}
+
+.vr-renter-section input {
+  display: block;
+  width: 225px;
+  height: 23px;
+  margin: 7px auto;
+  box-sizing: border-box;
+}
+
+/* HISTORY */
+
+.vr-history-section {
+  position: absolute;
+  top: 340px;
+  left: 35px;
+  width: 1135px;
+}
+
+.vr-history-caption {
+  color: #0070c0;
+  margin-bottom: 4px;
+}
+
+.vr-history-headings {
+  position: relative;
+  height: 38px;
+  font-size: 10px;
+}
+
+.vr-history-headings > div {
+  position: absolute;
+  top: 0;
+  text-align: center;
+  line-height: 13px;
+}
+
+.vr-h-acct {
+  left: 0;
+  width: 75px;
+}
+
+.vr-h-date {
+  left: 75px;
+  width: 65px;
+}
+
+.vr-h-description {
+  left: 140px;
+  width: 165px;
+}
+
+.vr-h-letter {
+  left: 305px;
+  width: 50px;
+}
+
+.vr-h-warning {
+  left: 355px;
+  width: 60px;
+}
+
+.vr-h-amount {
+  left: 415px;
+  width: 50px;
+}
+
+.vr-h-issued {
+  left: 465px;
+  width: 75px;
+}
+
+.vr-h-notes {
+  left: 600px;
+  width: 150px;
+}
+
+.vr-h-invoice {
+  left: 810px;
+  width: 55px;
+}
+
+.vr-h-status {
+  left: 875px;
+  width: 130px;
+}
+
+.vr-h-due {
+  left: 1050px;
+  width: 75px;
+}
+
+.vr-history-grid {
+  width: 100%;
+  height: 92px;
+  background: white;
+  border: 1px solid #777;
+  box-sizing: border-box;
+}
+
+.vr-history-note {
+  margin-top: 4px;
+}
+
+.vr-history-note label {
+  margin-right: 4px;
+}
+
+.vr-history-note input {
+  width: 320px;
+  height: 23px;
+  box-sizing: border-box;
+}
+
+/* ACTION */
+
+.vr-action-section {
+  position: absolute;
+  top: 550px;
+  left: 40px;
+  width: 500px;
+  height: 120px;
+}
+
+.vr-action-title {
+    margin-bottom: 8px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.vr-action-options {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+}
+
+.vr-action-options label {
+    white-space: nowrap;
+    font-size: 15px;
+}
+
+.vr-action-options input[type="radio"] {
+    width: 17px;
+    height: 17px;
+}
+
+.vr-fine-amount {
+  width: 100px;
+  height: 23px;
+  box-sizing: border-box;
+  margin-left: -20px;
+}
+
+.vr-create-letter {
+    position: absolute;
+    top: 100px;
+    left: 95px;
+    width: 250px;
+    height: 46px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    background: #00cc00;
+    border: 3px outset #ccc;
+    box-shadow: 5px 5px 7px rgba(0, 0, 0, 0.60);
+    cursor: pointer;
+}
+
+.vr-letter-code-label {
+    position: absolute;
+    top: 107px;
+    left: 410px;
+    width: 70px;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 13px;
+}
+
+
+
+.vr-letter-code-box {
+  position: absolute;
+  top: 103px;
+  left: 370px;
+  width: 50px;
+  height: 35px;
+  box-sizing: border-box;
+}
