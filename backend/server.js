@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const PDFDocument = require('pdfkit');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -285,6 +286,1394 @@ app.get('/api/health', async (req, res) => {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
+
+/* ===========================================================
+   PRINT CHECKS - PRODUCTION PDF ENGINE
+
+   DLT109 physical positions proven September 17, 2026.
+
+   System Type 1:
+     W M+ prints MICR check number only.
+     Routing/account are preprinted on check stock.
+
+   System Type 2:
+     W M+ prints MICR check number.
+     W M+ also prints Routing Number + Account Number
+     from Banking Settings.
+   =========================================================== */
+
+function formatCheckDate(value) {
+  if (!value) return '';
+
+  const text = String(value).slice(0, 10);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const [year, month, day] = text.split('-');
+    return `${month}/${day}/${year}`;
+  }
+
+  return text;
+}
+
+
+function checkAmountToWords(value) {
+  const amount = Math.round((Number(value) || 0) * 100);
+
+  const dollars = Math.floor(amount / 100);
+  const cents = amount % 100;
+
+  const ones = [
+    '', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE',
+    'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN',
+    'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN',
+    'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN',
+    'NINETEEN'
+  ];
+
+  const tens = [
+    '', '', 'TWENTY', 'THIRTY', 'FORTY',
+    'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'
+  ];
+
+
+  function underThousand(number) {
+    let n = number;
+    const words = [];
+
+    if (n >= 100) {
+      words.push(
+        `${ones[Math.floor(n / 100)]} HUNDRED`
+      );
+
+      n %= 100;
+    }
+
+    if (n >= 20) {
+      words.push(tens[Math.floor(n / 10)]);
+
+      n %= 10;
+
+      if (n) {
+        words.push(ones[n]);
+      }
+    } else if (n > 0) {
+      words.push(ones[n]);
+    }
+
+    return words.join(' ');
+  }
+
+
+  function wholeNumberWords(number) {
+    if (number === 0) {
+      return 'ZERO';
+    }
+
+    let n = number;
+    const words = [];
+
+    const groups = [
+      [1000000000, 'BILLION'],
+      [1000000, 'MILLION'],
+      [1000, 'THOUSAND']
+    ];
+
+    for (const [size, label] of groups) {
+      if (n >= size) {
+        const groupValue =
+          Math.floor(n / size);
+
+        words.push(
+          `${underThousand(groupValue)} ${label}`
+        );
+
+        n %= size;
+      }
+    }
+
+    if (n > 0) {
+      words.push(underThousand(n));
+    }
+
+    return words.join(' ');
+  }
+
+
+  return (
+    `${wholeNumberWords(dollars)} AND ` +
+    `${String(cents).padStart(2, '0')}/100 DOLLARS`
+  );
+}
+
+
+function formatMicrAccountNumber(accountNumber) {
+  const digits =
+    String(accountNumber || '').replace(/\s+/g, '');
+
+  if (digits.length <= 5) {
+    return digits;
+  }
+
+  return (
+    `${digits.slice(0, 5)} ` +
+    `${digits.slice(5)}`
+  );
+}
+
+
+async function loadCheckPrintData(
+  conn,
+  transactionNumber
+) {
+  const [rows] = await conn.query(`
+    SELECT
+      cr.CheckTransactionNumber,
+      cr.CheckNumber,
+      cr.Amount,
+      cr.VendorResidentID,
+      cr.VendorInvoiceNumber,
+      cr.VendorInvoiceDate,
+      cr.CheckNotation,
+      cr.BankAccountID,
+      cr.Status,
+      cr.DateCheckIssued,
+      cr.DeletedFlag,
+      cr.HOALicenseNumber,
+
+      ba.BankName,
+      ba.BankType,
+      ba.BankID,
+      ba.CheckMode,
+      ba.RoutingNumber,
+      ba.AccountNumber,
+
+      v.VendorName,
+      v.CareOfAddressLine AS VendorCareOf,
+      v.AddressLine1 AS VendorAddress1,
+      v.AddressLine2 AS VendorAddress2,
+      v.City AS VendorCity,
+      v.StateCode AS VendorState,
+      v.ZipCode AS VendorZip,
+
+      r.DisplayName AS ResidentName,
+      r.ResidenceAddress,
+      r.BillingAddress,
+      r.City AS ResidentCity,
+      r.StateCode AS ResidentState,
+      r.ZipCode AS ResidentZip,
+
+      mc.ManagementCompanyName
+
+    FROM CheckRegister cr
+
+    LEFT JOIN BankAccount ba
+      ON ba.BankAccountID =
+         cr.BankAccountID
+
+    LEFT JOIN VendorMaster v
+      ON v.VendorID =
+         cr.VendorResidentID
+
+    LEFT JOIN ResidentMaster r
+      ON r.ResidentAccountID =
+         cr.VendorResidentID
+
+    LEFT JOIN ManagementCompanyClient mc
+      ON mc.MgtCoClientID =
+         cr.VendorResidentID
+
+    WHERE cr.CheckTransactionNumber = ?
+      AND (
+        cr.DeletedFlag IS NULL
+        OR cr.DeletedFlag != 'Y'
+      )
+
+    LIMIT 1
+  `, [transactionNumber]);
+
+
+  if (!rows[0]) {
+    throw Object.assign(
+      new Error(
+        'Check transaction was not found.'
+      ),
+      { status: 404 }
+    );
+  }
+
+
+  const row = rows[0];
+
+  const checkMode =
+    String(row.CheckMode || '').trim();
+
+  const normalizedCheckMode =
+    checkMode.toLowerCase();
+
+
+  if (
+    ![
+      'system type 1',
+      'system type 2'
+    ].includes(normalizedCheckMode)
+  ) {
+    throw Object.assign(
+      new Error(
+        `This bank is set to ` +
+        `${checkMode || 'None'}. ` +
+        `W M+ system check printing requires ` +
+        `System Type 1 or System Type 2.`
+      ),
+      { status: 409 }
+    );
+  }
+
+
+  const checkNumber =
+    String(row.CheckNumber || '').trim();
+
+
+  if (!/^\d+$/.test(checkNumber)) {
+    throw Object.assign(
+      new Error(
+        'The selected check does not have ' +
+        'a valid numeric check number.'
+      ),
+      { status: 409 }
+    );
+  }
+
+
+  if (
+    normalizedCheckMode ===
+    'system type 2'
+  ) {
+    if (
+      !String(
+        row.RoutingNumber || ''
+      ).trim()
+      ||
+      !String(
+        row.AccountNumber || ''
+      ).trim()
+    ) {
+      throw Object.assign(
+        new Error(
+          'System Type 2 requires both ' +
+          'Routing Number and Account # ' +
+          'in Banking Settings.'
+        ),
+        { status: 409 }
+      );
+    }
+  }
+
+
+  const payee =
+    row.VendorName ||
+    row.ResidentName ||
+    row.ManagementCompanyName ||
+    row.VendorResidentID ||
+    '';
+
+
+  const payeeAddress = [];
+
+
+  if (row.VendorName) {
+    if (row.VendorCareOf) {
+      payeeAddress.push(
+        String(row.VendorCareOf).trim()
+      );
+    }
+
+    if (row.VendorAddress1) {
+      payeeAddress.push(
+        String(row.VendorAddress1).trim()
+      );
+    }
+
+    if (row.VendorAddress2) {
+      payeeAddress.push(
+        String(row.VendorAddress2).trim()
+      );
+    }
+
+    const cityStateZip = [
+      row.VendorCity,
+      row.VendorState,
+      row.VendorZip
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    if (cityStateZip) {
+      payeeAddress.push(cityStateZip);
+    }
+  }
+
+
+  else if (row.ResidentName) {
+    const residentStreet =
+      row.BillingAddress ||
+      row.ResidenceAddress ||
+      '';
+
+    if (residentStreet) {
+      payeeAddress.push(
+        String(residentStreet).trim()
+      );
+    }
+
+    const cityStateZip = [
+      row.ResidentCity,
+      row.ResidentState,
+      row.ResidentZip
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    if (cityStateZip) {
+      payeeAddress.push(cityStateZip);
+    }
+  }
+
+
+  return {
+    transactionNumber:
+      row.CheckTransactionNumber,
+
+    checkNumber,
+
+    payee,
+
+    payeeAddress,
+
+    invoiceDate:
+      formatCheckDate(
+        row.VendorInvoiceDate
+      ),
+
+    invoiceNumber:
+      String(
+        row.VendorInvoiceNumber || ''
+      ).trim(),
+
+    notation:
+      String(
+        row.CheckNotation || ''
+      ).trim(),
+
+    amount:
+      Number(row.Amount) || 0,
+
+    bankAccountId:
+      Number(row.BankAccountID),
+
+    bankName:
+      String(
+        row.BankName || ''
+      ).trim(),
+
+    bankType:
+      String(
+        row.BankType || ''
+      ).trim(),
+
+    bankId:
+      String(
+        row.BankID || ''
+      ).trim(),
+
+    checkMode,
+
+    normalizedCheckMode,
+
+    routingNumber:
+      String(
+        row.RoutingNumber || ''
+      ).replace(/\s+/g, ''),
+
+    accountNumber:
+      String(
+        row.AccountNumber || ''
+      ).replace(/\s+/g, ''),
+
+    currentStatus:
+      row.Status,
+
+    currentIssuedDate:
+      row.DateCheckIssued
+  };
+}
+
+
+function writeCheckPdf(
+  doc,
+  check,
+  checkIssuedDate
+) {
+  const checkAmount =
+    Number(
+      check.amount || 0
+    ).toLocaleString(
+      'en-US',
+      {
+        style: 'currency',
+        currency: 'USD'
+      }
+    );
+
+
+  const writtenAmount =
+    checkAmountToWords(
+      check.amount
+    );
+
+
+  // =========================================================
+  // TOP CHECK
+  // PROVEN DLT109 PHYSICAL POSITIONS
+  // =========================================================
+
+
+  // CHECK NUMBER - UPPER RIGHT
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(10.5)
+    .text(
+      check.checkNumber,
+      500,
+      32,
+      {
+        width: 76,
+        align: 'right'
+      }
+    );
+
+
+  // WRITTEN AMOUNT
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(10.5)
+    .text(
+      writtenAmount,
+      72,
+      94.5,
+      {
+        width: 288,
+        align: 'left',
+        lineBreak: false
+      }
+    );
+
+
+  // DATE
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(10.5)
+    .text(
+      checkIssuedDate,
+      360,
+      117,
+      {
+        width: 90,
+        align: 'left',
+        lineBreak: false
+      }
+    );
+
+
+  // NUMERIC AMOUNT
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(10.5)
+    .text(
+      checkAmount,
+      513,
+      117,
+      {
+        width: 90,
+        align: 'left',
+        lineBreak: false
+      }
+    );
+
+
+  // PAYEE
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(10.5)
+    .text(
+      check.payee,
+      72,
+      144,
+      {
+        width: 390,
+        align: 'left',
+        lineBreak: false
+      }
+    );
+
+
+  const micrFontPath = path.join(
+    __dirname,
+    'documents',
+    'system-templates',
+    'fonts',
+    'MICRE13BMatch.ttf'
+  );
+
+
+  // =========================================================
+  // MICR CHECK NUMBER
+  // FINAL PROVEN SETTINGS
+  // Font Size = 12.3
+  // X = 120
+  // Y = 228
+  // =========================================================
+
+  doc
+    .font(micrFontPath)
+    .fontSize(12.3)
+    .text(
+      `%${check.checkNumber}%`,
+      120,
+      228,
+      {
+        lineBreak: false
+      }
+    );
+
+
+  // =========================================================
+  // SYSTEM TYPE 2 ONLY
+  //
+  // ROUTING + ACCOUNT ARE ONE MICR STRING.
+  //
+  // Routing symbol begins:
+  // 17 picas from left
+  // 17 x 12 = 204 PDF points.
+  //
+  // Account number receives internal space
+  // after first 5 account-number digits.
+  // =========================================================
+
+  if (
+    check.normalizedCheckMode ===
+    'system type 2'
+  ) {
+    const formattedAccount =
+      formatMicrAccountNumber(
+        check.accountNumber
+      );
+
+
+    doc
+      .font(micrFontPath)
+      .fontSize(12.3)
+      .text(
+        `#${check.routingNumber}` +
+        `#${formattedAccount}%`,
+        204,
+        228,
+        {
+          lineBreak: false
+        }
+      );
+  }
+
+
+  // =========================================================
+  // CHECK STUBS
+  //
+  // 1 PICA = 12 PDF POINTS
+  // FIRST PERFORATION = 3.5"
+  // SECOND PERFORATION = 7"
+  // =========================================================
+
+  function drawCheckStub(
+    perforationY
+  ) {
+    const PICA = 12;
+
+
+    // GRAY INVOICE / NOTATION BAR
+
+    const barX =
+      3 * PICA;
+
+    const barY =
+      perforationY +
+      (5 * PICA);
+
+    const barWidth =
+      612 -
+      (6 * PICA);
+
+    const barHeight =
+      1.5 * PICA;
+
+
+    doc
+      .save()
+      .fillColor('#D9D9D9')
+      .strokeColor('black')
+      .lineWidth(1)
+      .rect(
+        barX,
+        barY,
+        barWidth,
+        barHeight
+      )
+      .fillAndStroke()
+      .restore();
+
+
+    const invoiceDateWidth =
+      15 * PICA;
+
+    const invoiceNumberWidth =
+      15 * PICA;
+
+
+    doc
+      .moveTo(
+        barX +
+        invoiceDateWidth,
+        barY
+      )
+      .lineTo(
+        barX +
+        invoiceDateWidth,
+        barY +
+        barHeight
+      )
+      .stroke();
+
+
+    doc
+      .moveTo(
+        barX +
+        invoiceDateWidth +
+        invoiceNumberWidth,
+        barY
+      )
+      .lineTo(
+        barX +
+        invoiceDateWidth +
+        invoiceNumberWidth,
+        barY +
+        barHeight
+      )
+      .stroke();
+
+
+    // INVOICE DATE + VALUE
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .fillColor('black')
+      .text(
+        `INVOICE DATE:  ` +
+        `${check.invoiceDate}`,
+        barX + 4,
+        barY + 4,
+        {
+          width:
+            invoiceDateWidth - 8,
+
+          align: 'left',
+          lineBreak: false
+        }
+      );
+
+
+    // INVOICE NUMBER + VALUE
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .text(
+        `INVOICE #:  ` +
+        `${check.invoiceNumber}`,
+        barX +
+        invoiceDateWidth +
+        4,
+        barY + 4,
+        {
+          width:
+            invoiceNumberWidth - 8,
+
+          align: 'left',
+          lineBreak: false
+        }
+      );
+
+
+    // NOTATION HEADING
+
+    const notationColumnX =
+      barX +
+      invoiceDateWidth +
+      invoiceNumberWidth;
+
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .text(
+        'NOTATION',
+        notationColumnX + 4,
+        barY + 4,
+        {
+          width:
+            barWidth -
+            invoiceDateWidth -
+            invoiceNumberWidth -
+            8,
+
+          align: 'center',
+          lineBreak: false
+        }
+      );
+
+
+    // ACTUAL NOTATION
+    // MAX TWO LINES
+
+    const notationX =
+      32 * PICA;
+
+    const notationY =
+      perforationY +
+      (8 * PICA);
+
+    const notationWidth =
+      (46 - 32) * PICA;
+
+
+    doc
+      .font('Helvetica')
+      .fontSize(8)
+      .text(
+        check.notation,
+        notationX,
+        notationY,
+        {
+          width:
+            notationWidth,
+
+          height: 20,
+
+          align: 'left',
+          lineBreak: true
+        }
+      );
+
+
+    // PAYEE ADDRESS
+
+    const addressX =
+      7.5 * PICA;
+
+    const addressY =
+      perforationY +
+      (12.5 * PICA);
+
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .text(
+        check.payee,
+        addressX,
+        addressY,
+        {
+          width: 260,
+          lineBreak: false
+        }
+      );
+
+
+    doc
+      .font('Helvetica')
+      .fontSize(8)
+      .text(
+        check.payeeAddress.join('\n'),
+        addressX,
+        addressY + 11,
+        {
+          width: 260,
+          lineGap: 0
+        }
+      );
+
+
+    // CHECK AMOUNT
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .text(
+        checkAmount,
+        42 * PICA,
+        perforationY +
+        (13 * PICA),
+        {
+          width: 72,
+          align: 'left',
+          lineBreak: false
+        }
+      );
+
+
+    // CHECK ISSUED DATE GRAY BOX
+
+    const issuedBoxX =
+      36 * PICA;
+
+    const issuedBoxY =
+      perforationY +
+      (16 * PICA);
+
+    const issuedBoxWidth =
+      11.5 * PICA;
+
+    const issuedBoxHeight =
+      1.5 * PICA;
+
+
+    doc
+      .save()
+      .fillColor('#D9D9D9')
+      .strokeColor('black')
+      .lineWidth(1)
+      .rect(
+        issuedBoxX,
+        issuedBoxY,
+        issuedBoxWidth,
+        issuedBoxHeight
+      )
+      .fillAndStroke()
+      .restore();
+
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .fillColor('black')
+      .text(
+        'CHECK ISSUED DATE',
+        issuedBoxX,
+        issuedBoxY + 4,
+        {
+          width:
+            issuedBoxWidth,
+
+          align: 'center',
+          lineBreak: false
+        }
+      );
+
+
+    // ACTUAL CHECK ISSUED DATE
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .text(
+        checkIssuedDate,
+        39 * PICA,
+        perforationY +
+        (18.5 * PICA),
+        {
+          width: 100,
+          align: 'left',
+          lineBreak: false
+        }
+      );
+  }
+
+
+  // FIRST STUB
+  drawCheckStub(
+    3.5 * 72
+  );
+
+
+  // SECOND STUB
+  drawCheckStub(
+    7 * 72
+  );
+}
+
+
+function pipeCheckPdf(
+  res,
+  check,
+  checkIssuedDate
+) {
+  const doc =
+    new PDFDocument({
+      size: 'LETTER',
+      margin: 0
+    });
+
+
+  res.setHeader(
+    'Content-Type',
+    'application/pdf'
+  );
+
+
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename=` +
+    `"WMPlus-Check-` +
+    `${check.checkNumber}.pdf"`
+  );
+
+
+  doc.pipe(res);
+
+
+  writeCheckPdf(
+    doc,
+    check,
+    checkIssuedDate
+  );
+
+
+  doc.end();
+}
+
+
+// ===========================================================
+// SERVER PREVIEW
+//
+// Uses an ACTUAL Check Register transaction.
+//
+// DOES NOT issue the check.
+// DOES NOT change Check Register.
+// ===========================================================
+
+app.get(
+  '/api/print-checks/pdf-preview',
+  authMid.requireHoaScope,
+  async (req, res) => {
+    try {
+      const transactionNumber =
+        String(
+          req.query.transactionNumber ||
+          ''
+        ).trim();
+
+
+      if (!transactionNumber) {
+        return res.status(400).json({
+          error:
+            'transactionNumber is required'
+        });
+      }
+
+
+      const check =
+        await loadCheckPrintData(
+          db,
+          transactionNumber
+        );
+
+
+      // HOA scope (service-layer integration): never render another HOA's check.
+      if (
+        !check ||
+        check.HOALicenseNumber !== req.hoa.license_number
+      ) {
+        return res.status(403).json({
+          error: 'Check outside your HOA scope'
+        });
+      }
+
+
+      const hoaNowValue =
+        await hoaNow(db);
+
+
+      const checkIssuedDate =
+        formatCheckDate(
+          hoaNowValue
+            .hoaLocalDateTime
+            .slice(0, 10)
+        );
+
+
+      pipeCheckPdf(
+        res,
+        check,
+        checkIssuedDate
+      );
+    }
+
+
+    catch (err) {
+      console.error(
+        'Check PDF preview error:',
+        err
+      );
+
+
+      if (!res.headersSent) {
+        res
+          .status(
+            err.status || 500
+          )
+          .json({
+            error:
+              err.message ||
+              'Unable to generate check PDF preview.'
+          });
+      }
+    }
+  }
+);
+
+
+// ===========================================================
+// PRODUCTION CHECK PDF
+//
+// Generates the check PDF only.
+// ZERO Check Register writes occur here.
+//
+// Physical submission is handled by the local print bridge.
+// The separate /issue endpoint is called ONLY after successful
+// bridge submission.
+// ===========================================================
+
+app.post(
+  '/api/print-checks/pdf',
+  authMid.requireHoaScope,
+  async (req, res) => {
+    try {
+      const transactionNumber =
+        String(
+          req.body
+            ?.transactionNumber ||
+          ''
+        ).trim();
+
+
+      if (!transactionNumber) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'transactionNumber is required'
+          });
+      }
+
+
+      const check =
+        await loadCheckPrintData(
+          db,
+          transactionNumber
+        );
+
+
+      // HOA scope (service-layer integration): never render another HOA's check.
+      if (
+        !check ||
+        check.HOALicenseNumber !== req.hoa.license_number
+      ) {
+        return res.status(403).json({
+          error: 'Check outside your HOA scope'
+        });
+      }
+
+
+      const hoaNowValue =
+        await hoaNow(db);
+
+
+      const checkIssuedDate =
+        formatCheckDate(
+          hoaNowValue
+            .hoaLocalDateTime
+            .slice(0, 10)
+        );
+
+
+      pipeCheckPdf(
+        res,
+        check,
+        checkIssuedDate
+      );
+    }
+
+
+    catch (err) {
+      console.error(
+        'Check PDF generation error:',
+        err
+      );
+
+
+      if (!res.headersSent) {
+        res
+          .status(
+            err.status || 500
+          )
+          .json({
+            error:
+              err.message ||
+              'Unable to generate check PDF.'
+          });
+      }
+    }
+  }
+);
+
+
+// ===========================================================
+// ISSUE PRINTED CHECK
+//
+// Called ONLY after the local print bridge successfully
+// submits the PDF to the authorized Windows printer.
+//
+// This is the ONLY step in the check-print sequence that
+// changes the Check Register.
+//
+// SCOPE:
+// Wired at integration with feature/auth-roles.
+// Today = legacy defaults.
+// ===========================================================
+
+app.post(
+  '/api/print-checks/issue',
+  authMid.requireHoaScope,
+  async (req, res) => {
+    const connection =
+      await db.getConnection();
+
+
+    // HOA scope (service-layer integration, was TODO scope-merge).
+    const sesLicense = req.hoa.license_number;
+    const sesMgt = req.hoa.mgt_code || 'MGTCO-001';
+    const sesOperator = req.authUser.login_name || 'SYSTEM';
+
+
+    try {
+      await connection
+        .beginTransaction();
+
+
+      const transactionNumber =
+        String(
+          req.body
+            ?.transactionNumber ||
+          ''
+        ).trim();
+
+
+      if (!transactionNumber) {
+        await connection.rollback();
+
+        return res
+          .status(400)
+          .json({
+            error:
+              'transactionNumber is required'
+          });
+      }
+
+
+      const [lockRows] =
+        await connection.query(`
+          SELECT
+            CheckTransactionNumber,
+            DateCheckIssued,
+            Status
+
+          FROM CheckRegister
+
+          WHERE
+            CheckTransactionNumber = ?
+
+            AND MgtCoClientID = ?
+
+            AND HOALicenseNumber = ?
+
+            AND (
+              DeletedFlag IS NULL
+              OR DeletedFlag != 'Y'
+            )
+
+          LIMIT 1
+
+          FOR UPDATE
+        `, [
+          transactionNumber,
+          sesMgt,
+          sesLicense
+        ]);
+
+
+      if (!lockRows[0]) {
+        await connection.rollback();
+
+        return res
+          .status(404)
+          .json({
+            error:
+              'Check transaction was not found.'
+          });
+      }
+
+
+      if (
+        lockRows[0]
+          .DateCheckIssued
+      ) {
+        await connection.rollback();
+
+        return res
+          .status(409)
+          .json({
+            error:
+              'This check has already been issued.'
+          });
+      }
+
+
+      if (lockRows[0].Status) {
+        await connection.rollback();
+
+        return res
+          .status(409)
+          .json({
+            error:
+              `This check cannot be issued ` +
+              `because its status is ` +
+              `${lockRows[0].Status}.`
+          });
+      }
+
+
+      const hoaNowValue =
+        await hoaNow(
+          connection
+        );
+
+
+      const issuedDateDatabase =
+        hoaNowValue
+          .hoaLocalDateTime
+          .slice(0, 10);
+
+
+      const [updateResult] =
+        await connection.query(`
+          UPDATE CheckRegister
+
+          SET
+            DateCheckIssued = ?,
+            Status = 'Pending',
+            OperatorID = ?,
+            TimeStampUpdated = ?
+
+          WHERE
+            CheckTransactionNumber = ?
+
+            AND MgtCoClientID = ?
+
+            AND HOALicenseNumber = ?
+
+            AND DateCheckIssued IS NULL
+
+            AND Status IS NULL
+
+            AND (
+              DeletedFlag IS NULL
+              OR DeletedFlag != 'Y'
+            )
+        `, [
+          issuedDateDatabase,
+          sesOperator,
+          hoaNowValue.utcDateTime,
+          transactionNumber,
+          sesMgt,
+          sesLicense
+        ]);
+
+
+      if (updateResult.affectedRows !== 1) {
+        await connection.rollback();
+
+        return res
+          .status(409)
+          .json({
+            error:
+              'Check was not issued because its register state changed.'
+          });
+      }
+
+
+      await connection.commit();
+
+
+      return res.json({
+        success: true,
+        transactionNumber,
+        dateCheckIssued:
+          issuedDateDatabase,
+        status:
+          'Pending'
+      });
+    }
+
+
+    catch (err) {
+      try {
+        await connection.rollback();
+      }
+
+      catch (rollbackErr) {
+        console.error(
+          'Issue Check rollback error:',
+          rollbackErr
+        );
+      }
+
+
+      console.error(
+        'Issue Check error:',
+        err
+      );
+
+
+      return res
+        .status(
+          err.status || 500
+        )
+        .json({
+          error:
+            err.message ||
+            'Unable to issue check.'
+        });
+    }
+
+
+    finally {
+      connection.release();
+    }
+  }
+);
+
+
+
 
 /* ===========================================================
    1. MAIN DIRECTORY (ResidentMaster)
@@ -1349,7 +2738,11 @@ app.get('/api/check-register/next-check-number', async (req, res) => {
 
     const bank = bankRows[0];
 
-    if (String(bank.CheckMode || '').toLowerCase() !== 'system') {
+    if (
+      !['system type 1', 'system type 2'].includes(
+        String(bank.CheckMode || '').toLowerCase()
+      )
+    ) {
       return res.json({
         checkMode: bank.CheckMode || 'None',
         nextCheckNumber: ''
@@ -1363,7 +2756,7 @@ app.get('/api/check-register/next-check-number', async (req, res) => {
         WHERE BankAccountID = ?
           AND CheckNumber REGEXP '^[0-9]+$'
       `,
-      [bankAccountId]
+      [bank.BankAccountID]
     );
 
     const startCheckNumber =
@@ -2244,25 +3637,23 @@ app.post('/api/check-register', authMid.requireHoaScope, authMid.trackBlocking('
     for (let dupTry = 0; ; dupTry++) {
       try {
         txnNum = await generateCheckTransactionNumber(connection);
-        // date_issued: sin default (regla print NULL/NULL — el merge del
-        // Print Server la impone; ver baseline con Rick).
         createdAt = (await hoaNow(connection)).utcDateTime;
 
+        // Production rule (Print Server baseline):
+        // A newly entered check has NOT yet been issued (NULL/NULL).
+        // PRINT CHECKS sets DateCheckIssued and Status = 'Pending'.
         await connection.query(`
       INSERT INTO CheckRegister (
         CheckTransactionNumber, CheckNumber, GLAccountName, Amount, DateCheckIssued,
         DateCheckCleared, MonthCleared, GLNumber, VendorResidentID, VendorInvoiceNumber,
         VendorInvoiceDate, VendorInvoiceAmount, CheckNotation, BankAccount, BankAccountID, CheckAllowedYN, EscrowFlag, Status,
         DeletedFlag, MgtCoClientID, HOALicenseNumber, OperatorID, TimeStampCreated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, 'Issued', 'N', ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'N', ?, ?, ?, ?)
     `, [
       txnNum,
       c.check_number || '',
       c.gl_name || '',
       amount,
-      c.date_issued || null,
-      c.date_cleared || null,
-      c.month_cleared || null,
       c.gl_number || 5000,
       c.payee_id || '',
       c.invoice_num || '',
@@ -3172,32 +4563,11 @@ app.post('/api/deposit-register', authMid.requireHoaScope, async (req, res) => {
       d.date_deposited ||
       new Date().toISOString().slice(0, 10);
 
-
-
-   
-    
-    // ============================================================
-// TEMPORARY TESTING CODE - REMOVE WHEN PRINT CHECKS IS BUILT
-// For Alex testing, a newly entered check is temporarily treated
-// as though it was immediately printed.
-//
-// TEMP TEST:
-//   DateCheckIssued = HOA-local entry date
-//   Status = 'Pending'
-//
-// FINAL PRODUCTION RULE:
-//   New check -> DateCheckIssued = NULL, Status = NULL
-//   PRINT CHECKS alone sets DateCheckIssued and Status = 'Pending'.
-// ============================================================
-
-// RESTORE WHEN PRINT CHECKS IS BUILT:
-// const createdAt = (await hoaNow(connection)).utcDateTime;
-// DELETE the 3 temporary lines immediately below.
-
-const hoaNowValue = await hoaNow(connection);
-const createdAt = hoaNowValue.utcDateTime;
-const testDateCheckIssued =
-  hoaNowValue.hoaLocalDateTime.slice(0, 10);
+    // NOTE (Print Server baseline): the old TEMPORARY TESTING block lived
+    // here. Removed: its testDateCheckIssued was unused (INSERT uses
+    // depositDate) and Status='Pending' is the standing deposit lifecycle
+    // (distinct from the checks NULL/NULL issuance rule).
+    const createdAt = (await hoaNow(connection)).utcDateTime;
 
 
 
@@ -10412,6 +11782,51 @@ app.post('/api/ai-explore', authMid.requireHoaScope, async (req, res) => {
     res.status(err.status || 500).json({ error: err.message || 'Explore fallo' });
   }
 });
+
+// -------------------------------------------------
+// W M+ PRINT SERVICE CONNECTION TEST
+// -------------------------------------------------
+app.get('/api/print-service/ping', async (req, res) => {
+  try {
+    const response = await fetch('http://127.0.0.1:3012/ping');
+
+    if (!response.ok) {
+      throw new Error(`Print Service returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    res.json(data);
+  } catch (error) {
+    res.status(503).json({
+      service: 'W M+ Print Service',
+      status: 'unavailable',
+      error: error.message
+    });
+  }
+});
+
+
+// -------------------------------------------------
+// W M+ PRINT SERVICE - PRINTER STATUS
+// -------------------------------------------------
+app.get('/api/print-service/printer-status', async (req, res) => {
+  try {
+    const response = await fetch(
+      'http://127.0.0.1:3012/printer-status'
+    );
+
+    const data = await response.json();
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    res.status(503).json({
+      status: 'unavailable',
+      error: error.message
+    });
+  }
+});
+
 
 // START SERVER
 app.listen(PORT, '0.0.0.0', () => {

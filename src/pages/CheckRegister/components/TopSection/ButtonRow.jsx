@@ -12,6 +12,7 @@ import VoidCheckUF from '../VoidCheckUF/VoidCheckUF';
 function ButtonRow({
   onSelectPage,
   onAddCheck,
+  onPrintChecks,
   checkRows
 }) {
   const handleEnterChecks = () => {
@@ -90,6 +91,8 @@ function ButtonRow({
         id="btnPrintChecksCR"
         type="button"
         className="checkreg-btn"
+        onClick={onPrintChecks}
+        // onClick={() => window.alert('PRINT CHECKS CLICKED')}
       >
         PRINT CHECKS
       </button>
