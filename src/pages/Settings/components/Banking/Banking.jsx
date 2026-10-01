@@ -45,7 +45,7 @@ const DEFAULT_BANK_ROWS = [
     bankName: 'Bank of America',
     bankId: '101',
     active: 'Y',
-    checkMode: 'System',
+    checkMode: 'System Type 1',
     startCheck: '1001',
     glCashAccount: '1010',
     accountNumber: '',
@@ -360,6 +360,19 @@ function Banking({
 }
 
   async function saveCurrentBankingSettings() {
+    if (
+  !isFiscalSetup &&
+  selectedBank?.checkMode === 'System Type 2' &&
+  (!selectedBank.routingNumber || !selectedBank.accountNumber)
+) {
+  setBankRows(savedBankingRef.current.bankRows);
+
+  setSaveError(
+    'System Type 2 requires both Routing Number and Account #.'
+  );
+
+  return false;
+}
     if (
       selectedBank?.routingNumber &&
       selectedBank.routingNumber.length !== 9
@@ -1015,9 +1028,10 @@ function Banking({
             name="checkMode"
             value={selectedBank.checkMode}
             onChange={changeBankField}
-            style={{ width: '100px' }}
+            style={{ width: '120px' }}
           >
-            <option value="System">System</option>
+            <option value="System Type 1">System Type 1</option>
+            <option value="System Type 2">System Type 2</option>
             <option value="Manual">Manual</option>
             <option value="None">None</option>
           </select>

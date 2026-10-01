@@ -594,10 +594,13 @@ const visibleGLChildren = useMemo(
     const data = await response.json();
 
     if (
-      String(data.checkMode || '').toLowerCase() === 'system'
-    ) {
-      setCheckNumber(data.nextCheckNumber || '');
-    }
+    ['system type 1', 'system type 2'].includes(
+      String(data.checkMode || '').toLowerCase()
+    )
+  ) {
+    setCheckNumber(data.nextCheckNumber || '');
+}
+
   } catch (error) {
     console.error(
       'Error loading next check number:',

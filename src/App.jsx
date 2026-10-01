@@ -14,6 +14,7 @@ import {
 
 import { pageMap } from './pages/pageMap';
 import { API_BASE_URL, subscribeToConnectionStatus, setConnectionStatus } from './config/api.js';
+import { initializePrintEngine } from './engines/PrintEngine.js';
 
 import UnsavedChangesPrompt
   from './pages/Settings/components/UnsavedChangesPrompt/UnsavedChangesPrompt';
@@ -36,9 +37,13 @@ function App() {
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = subscribeToConnectionStatus(setIsOffline);
-    return unsubscribe;
+    initializePrintEngine();
   }, []);
+
+useEffect(() => {
+  const unsubscribe = subscribeToConnectionStatus(setIsOffline);
+  return unsubscribe;
+}, []);
 
   useEffect(() => {
     async function checkHealth() {
