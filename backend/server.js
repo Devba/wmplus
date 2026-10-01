@@ -705,7 +705,11 @@ async function loadCheckPrintData(
       row.Status,
 
     currentIssuedDate:
-      row.DateCheckIssued
+      row.DateCheckIssued,
+
+    // Tenant for HOA-scope verification by print routes (service-layer).
+    hoaLicenseNumber:
+      String(row.HOALicenseNumber || '')
   };
 }
 
@@ -1291,7 +1295,7 @@ app.get(
       // HOA scope (service-layer integration): never render another HOA's check.
       if (
         !check ||
-        check.HOALicenseNumber !== req.hoa.license_number
+        check.hoaLicenseNumber !== req.hoa.license_number
       ) {
         return res.status(403).json({
           error: 'Check outside your HOA scope'
@@ -1386,7 +1390,7 @@ app.post(
       // HOA scope (service-layer integration): never render another HOA's check.
       if (
         !check ||
-        check.HOALicenseNumber !== req.hoa.license_number
+        check.hoaLicenseNumber !== req.hoa.license_number
       ) {
         return res.status(403).json({
           error: 'Check outside your HOA scope'
