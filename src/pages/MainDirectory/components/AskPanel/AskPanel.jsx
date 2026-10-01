@@ -38,7 +38,7 @@ function lineageText(d) {
   if (f.as_of) bits.push(`as_of ${f.as_of}`);
   if (f.license_number) bits.push(`HOA ${f.license_number}`);
   if (d.tenant && d.tenant.license_number) bits.push(`tenant ${d.tenant.license_number}`);
-  return `Fuentes: ${tables} · ${bits.join(' · ') || 'sin filtros'} · vía ${d.source || '?'}`;
+  return `Sources: ${tables} · ${bits.join(' · ') || 'no filters'} · via ${d.source || '?'}`;
 }
 
 function EvidenceTable({ data }) {
@@ -68,17 +68,90 @@ function resolvePseudos(text, lexicon) {
   return String(text).replace(/R-\d{3}/g, (m) => (map[m] ? `${map[m]} (${m})` : m));
 }
 
+/* Mini-render markdown seguro (solo ##, **, bullets "- ").
+   Sin dangerouslySetInnerHTML: React escapa el texto por defecto,
+   asi que el HTML del LLM nunca se ejecuta. */
+function inlineStrong(text, keyPrefix) {
+  const parts = String(text).split(/\*\*(.+?)\*\*/g);
+  if (parts.length === 1) return text;
+  return parts.map((p, i) =>
+    i % 2 === 1 ? <strong key={`${keyPrefix}-b${i}`}>{p}</strong> : p
+  );
+}
+
+function renderMdLite(text) {
+  const lines = String(text || '').split('\n');
+  const out = [];
+  let bullets = [];
+  const flushBullets = () => {
+    if (bullets.length) {
+      out.push(
+        <ul key={`ul-${out.length}`} className="ask-md-ul">
+          {bullets.map((b, i) => <li key={i}>{inlineStrong(b, `li${out.length}-${i}`)}</li>)}
+        </ul>
+      );
+      bullets = [];
+    }
+  };
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (/^##\s+/.test(line)) {
+      flushBullets();
+      out.push(
+        <div key={`h-${i}`} className="ask-md-title">
+          {inlineStrong(line.replace(/^##\s+/, ''), `h${i}`)}
+        </div>
+      );
+    } else if (/^[-*]\s+/.test(line)) {
+      bullets.push(line.replace(/^[-*]\s+/, ''));
+    } else if (line === '') {
+      flushBullets();
+    } else {
+      flushBullets();
+      out.push(
+        <p key={`p-${i}`} className="ask-md-p">{inlineStrong(line, `p${i}`)}</p>
+      );
+    }
+  });
+  flushBullets();
+  return out.length ? out : text;
+}
+
 export default function AskPanel({ onApplyResidents }) {
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [explore, setExplore] = useState(false);
+  const [usage, setUsage] = useState(null);
+  const [collapsed, setCollapsed] = useState({});
+
+  const toggleItem = (i) => {
+    setCollapsed((c) => ({ ...c, [i]: !c[i] }));
+  };
 
   useEffect(() => {
     apiFetch('/auth/me').then(
-      (d) => setIsAdmin(!!(d && d.user && d.user.is_admin)),
-      () => setIsAdmin(false)
+      (d) => {
+        const admin = !!(d && d.user && d.user.is_admin);
+        setIsAdmin(admin);
+        // Explore auto-activado al abrir (sin boton): solo donde el backend
+        // lo permite (admins). No-admins usan el modo router.
+        setExplore(admin);
+      },
+      () => { setIsAdmin(false); setExplore(false); }
+    );
+    // OpenRouter spend meter (aggregate only, key never leaves server).
+    apiFetch('/ai-usage').then(
+      (d) => {
+        if (d && d.configured && d.usage != null) {
+          const win = d.window && d.window !== 'total' ? ` (${d.window})` : '';
+          setUsage(d.limit != null
+            ? `OpenRouter${win}: $${Number(d.usage).toFixed(3)} / $${Number(d.limit).toFixed(2)} (${d.pct != null ? Math.round(d.pct) : '?'}%)`
+            : `OpenRouter${win}: $${Number(d.usage).toFixed(3)} used`);
+        }
+      },
+      () => {}
     );
   }, []);
 
@@ -104,7 +177,7 @@ export default function AskPanel({ onApplyResidents }) {
       explore: true,
       answer: data.narrative,
       lexicon: data.lexicon || [],
-      lineageText: `Filas anonimizadas: ${data.rows_sent}${data.truncated ? '+' : ''} · tenant ${data.tenant && data.tenant.license_number} · vía ${data.source}`
+      lineageText: `Anonymized rows: ${data.rows_sent}${data.truncated ? '+' : ''} · tenant ${data.tenant && data.tenant.license_number} · via ${data.source}`
     };
   };
   const ask = async (q) => {
@@ -130,48 +203,49 @@ export default function AskPanel({ onApplyResidents }) {
   return (
     <div className="ask-panel">
       <div className="ask-header">
-        <strong>Consulta en lenguaje natural</strong>
+        <strong>Natural language query</strong>
         <span>
-          {isAdmin && (
-            <button
-              type="button"
-              className={explore ? 'ask-mode on' : 'ask-mode'}
-              onClick={() => setExplore((v) => !v)}
-              title="Preguntas abiertas sobre filas anonimizadas (solo admins)"
-            >
-              Explorar filas{explore ? ' ✓' : ''}
-            </button>
-          )}
           <button type="button" className="ask-close" onClick={closeOverlay}>✕</button>
         </span>
       </div>
       {explore && isAdmin && (
-        <div className="ask-notice">Modo explorar: las filas viajan anonimizadas (R-###) al modelo; los nombres se resuelven aquí.</div>
+        <div className="ask-notice">Explore mode: rows travel anonymized (R-###) to the model; names are resolved here.</div>
       )}
+      {usage && <div className="ask-usage">{usage}</div>}
       <div className="ask-input-row">
         <input
           type="text"
           value={prompt}
-          placeholder="Ej: cuanto debe el residente 010003 · cheques pendientes · GL 41700"
+          placeholder="E.g.: how much does resident 010003 owe · outstanding checks · GL 41700"
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
           disabled={busy}
         />
         <button type="button" onClick={() => ask()} disabled={busy || !prompt.trim()}>
-          {busy ? '…' : 'Preguntar'}
+          {busy ? '…' : 'Ask'}
         </button>
       </div>
       <div className="ask-history">
         {history.length === 0 && (
-          <div className="ask-empty">Pregunta algo para empezar. El historial vive solo en esta sesión.</div>
+          <div className="ask-empty">Ask something to start. History lives only in this session.</div>
         )}
-        {history.map((h, i) => (
+        {history.map((h, i) => {
+          const isCollapsed = !!collapsed[i];
+          return (
           <div className="ask-item" key={i}>
-            <div className="ask-q">❯ {h.q}</div>
-            {h.ok ? (
+            <div
+              className="ask-q"
+              onClick={() => toggleItem(i)}
+              title={isCollapsed ? 'Expand' : 'Collapse'}
+              style={{ cursor: 'pointer' }}
+            >
+              <span className="ask-chevron">{isCollapsed ? '▸' : '▾'}</span> {h.q}
+            </div>
+            {!isCollapsed && (
+            h.ok ? (
               h.data.explore ? (
                 <>
-                  <div className="ask-a">{resolvePseudos(h.data.answer, h.data.lexicon)}</div>
+                  <div className="ask-card">{renderMdLite(resolvePseudos(h.data.answer, h.data.lexicon))}</div>
                   <div className="ask-lineage">{h.data.lineageText}</div>
                 </>
               ) : (
@@ -183,7 +257,7 @@ export default function AskPanel({ onApplyResidents }) {
                       type="button"
                       onClick={() => { if (onApplyResidents) onApplyResidents(h.data.residents, h.q); closeOverlay(); }}
                     >
-                      Aplicar {h.data.residents.length} a la tabla
+                      Apply {h.data.residents.length} to the table
                     </button>
                   </div>
                 )}
@@ -195,12 +269,13 @@ export default function AskPanel({ onApplyResidents }) {
               <>
                 <div className="ask-error">{h.error}</div>
                 {h.data && h.data.tenant && (
-                  <div className="ask-lineage">tenant {h.data.tenant.license_number} · vía {h.data.source || '?'}</div>
+                  <div className="ask-lineage">tenant {h.data.tenant.license_number} · via {h.data.source || '?'}</div>
                 )}
               </>
-            )}
+            ))}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

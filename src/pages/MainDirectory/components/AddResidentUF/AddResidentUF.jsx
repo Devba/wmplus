@@ -13,6 +13,20 @@ function AddResidentUF({
   const formRef = useRef(null);
   const isEditMode = mode === 'edit';
 
+  /* Master-detail: selector izquierda, tarjeta derecha. Las tarjetas ocultas
+     usan display:none (NO se desmontan) porque readValue()/validaciones leen
+     del DOM via formRef. */
+  const CARD_SECTIONS = [
+    { key: 'owner', label: 'Primary Owner' },
+    { key: 'residence', label: 'Residence Address' },
+    { key: 'billing', label: 'Billing Address' },
+    { key: 'contact', label: 'Primary Contact' },
+    { key: 'addlowner', label: 'Additional Owner' },
+    { key: 'property', label: 'Property & Dues' },
+    { key: 'notes', label: 'Directory Notes' }
+  ];
+  const [activeCard, setActiveCard] = useState('owner');
+
   const [duesProgramming, setDuesProgramming] =
   useState(null);
 
@@ -232,6 +246,9 @@ const currentSpecialDues =
       );
 
     if (result?.duplicate) {
+  // Auto-salto a la tarjeta del error antes del alert (el focus va con
+  // setTimeout tras el re-render).
+  setActiveCard('residence');
   window.alert(
     'That residence address is already assigned to another resident.'
   );
@@ -294,14 +311,18 @@ const currentSpecialDues =
      readValue('mdAddPropertyType');
 
       if (!propertyType) {
+        // Auto-salto a la tarjeta del error; el focus va tras el re-render.
+        setActiveCard('property');
         window.alert(
           'Property Type is required. Please select Lot, House, or Rental.'
         );
 
-        const propertyTypeSelect =
-          formRef.current?.querySelector('#mdAddPropertyType');
+        setTimeout(() => {
+          const propertyTypeSelect =
+            formRef.current?.querySelector('#mdAddPropertyType');
 
-        propertyTypeSelect?.focus();
+          propertyTypeSelect?.focus();
+        }, 0);
 
         return;
       }
@@ -462,9 +483,22 @@ const currentSpecialDues =
         </div>
       </div>
 
+      <div className="md-body-row">
+        <nav className="md-card-nav" aria-label="Resident form sections">
+          {CARD_SECTIONS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              className={activeCard === s.key ? 'md-card-nav-btn active' : 'md-card-nav-btn'}
+              onClick={() => setActiveCard(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
       <div className="md-cards-container">
         {/* Card 1: Primary Owner */}
-        <div className="md-card">
+        <div className="md-card" style={{ display: activeCard === 'owner' ? '' : 'none' }}>
           <div className="md-card-title">Primary Owner Information</div>
           <div className="md-card-grid">
             <div className="md-form-group">
@@ -526,7 +560,7 @@ const currentSpecialDues =
         </div>
 
         {/* Card 2: Property & Residence */}
-        <div className="md-card">
+        <div className="md-card" style={{ display: activeCard === 'residence' ? '' : 'none' }}>
           <div className="md-card-title">Residence Address</div>
           <div className="md-card-grid">
             <div className="md-form-group">
@@ -586,7 +620,7 @@ const currentSpecialDues =
         </div>
 
         {/* Card 3: Billing Address */}
-        <div className="md-card">
+        <div className="md-card" style={{ display: activeCard === 'billing' ? '' : 'none' }}>
           <div className="md-card-title">Billing Address</div>
           <div className="md-card-grid">
             <div className="md-form-group span-2">
@@ -654,7 +688,7 @@ const currentSpecialDues =
         />
 
         {/* Card 4: Contact Information */}
-        <div className="md-card">
+        <div className="md-card" style={{ display: activeCard === 'contact' ? '' : 'none' }}>
           <div className="md-card-title">Primary Contact</div>
           <div className="md-card-grid">
             <div className="md-form-group">
@@ -690,7 +724,7 @@ const currentSpecialDues =
         </div>
 
         {/* Card 5: Co-Owner Information */}
-        <div className="md-card">
+        <div className="md-card" style={{ display: activeCard === 'addlowner' ? '' : 'none' }}>
           <div className="md-card-title">Additional Owner Information</div>
           <div className="md-card-grid">
             <div className="md-form-group">
@@ -746,7 +780,7 @@ const currentSpecialDues =
         </div>
 
         {/* Card 6: Property & Rates */}
-        <div className="md-card">
+        <div className="md-card" style={{ display: activeCard === 'property' ? '' : 'none' }}>
           <div className="md-card-title">Property Details & Dues</div>
           <div className="md-card-grid">
             <div className="md-form-group">
@@ -872,10 +906,8 @@ const currentSpecialDues =
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Notes Section */}
-      <div className="md-notes-section">
+        {/* Notes as 7th selectable card */}
+        <div className="md-notes-section" style={{ display: activeCard === 'notes' ? '' : 'none' }}>
         <div className="md-form-group">
           <label htmlFor="mdAddNotes" className="md-card-title-inline">Resident Directory Notes</label>
           <textarea
@@ -885,6 +917,8 @@ const currentSpecialDues =
             placeholder="Add directory notes here..."
           />
         </div>
+        </div>
+      </div>
       </div>
 
       {/* Footer */}

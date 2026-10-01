@@ -2244,6 +2244,8 @@ app.post('/api/check-register', authMid.requireHoaScope, authMid.trackBlocking('
     for (let dupTry = 0; ; dupTry++) {
       try {
         txnNum = await generateCheckTransactionNumber(connection);
+        // date_issued: sin default (regla print NULL/NULL — el merge del
+        // Print Server la impone; ver baseline con Rick).
         createdAt = (await hoaNow(connection)).utcDateTime;
 
         await connection.query(`
@@ -4005,7 +4007,7 @@ app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
     const sesLicense = (!allowAll && req.hoa && req.hoa.license_number)
       ? String(req.hoa.license_number) : null;
     if (!allowAll && !sesLicense) {
-      return res.status(403).json({ error: 'HOA fuera de tu alcance' });
+      return res.status(403).json({ error: 'HOA out of your scope' });
     }
     const sesClientId = (req.hoa && req.hoa.client_id) || null;
 
@@ -4032,7 +4034,7 @@ app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
           if (def.status === 'disabled') {
             translator.bump('blocked');
             return res.status(403).json({
-              error: 'FL-dependiente: espera definiciones de Manage Violations (Rick/Hal).',
+              error: 'FL-dependent: waiting on Manage Violations definitions (Rick/Hal).',
               tenant: { client_id: sesClientId, license_number: sesLicense },
               source: `router-${routed.source}`
             });
@@ -4068,7 +4070,7 @@ app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
     /* CORTE LEGACY (Track A): sin SQL libre. Lo no ruteado -> 422 honesto. */
     require('./services/translator').bump('legacy');
     return res.status(422).json({
-      error: 'No entendi la consulta. Prueba con: cuanto debe el residente [ID], cheques pendientes, transacciones del GL [numero], facturas del vendor [nombre], que cambio entre [fecha] y [fecha].',
+      error: 'Did not understand the query. Try: how much does resident [ID] owe, outstanding checks, GL [number] transactions, vendor [name] invoices, what changed between [date] and [date], how many residents are there.',
       tenant: { client_id: sesClientId, license_number: allowAll ? 'all' : sesLicense },
       source: 'unrouted'
     });
@@ -4076,6 +4078,54 @@ app.post('/api/ai-filter', authMid.requireHoaScope, async (req, res) => {
   } catch (err) {
     console.error('Error in /api/ai-filter:', err);
     return res.status(500).json({ error: 'AI Filter processing failed', details: err.message });
+  }
+});
+
+/* OpenRouter key usage indicator. The key NEVER leaves the server: this
+   endpoint proxies the aggregate numbers (used/limit/%) for the UI meter.
+   Any authenticated user with HOA scope may see it (no PII, no key). */
+app.get('/api/ai-usage', authMid.requireHoaScope, async (req, res) => {
+  try {
+    const translator = require('./services/translator');
+    const key = translator.getKey();
+    if (!key) return res.json({ success: true, configured: false });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        method: 'GET',
+        signal: ctrl.signal,
+        headers: { Authorization: `Bearer ${key}` }
+      });
+      if (!r.ok) {
+        return res.json({ success: true, configured: true, error: `OpenRouter HTTP ${r.status}` });
+      }
+      const j = await r.json();
+      const d = (j && j.data) || {};
+      // El limite puede resetearse (daily/weekly/monthly): comparar contra
+      // la ventana correspondiente, NO contra el uso historico total.
+      const reset = String(d.limit_reset || '').toLowerCase();
+      const winKey = reset === 'daily' ? 'usage_daily'
+        : reset === 'weekly' ? 'usage_weekly'
+        : reset === 'monthly' ? 'usage_monthly' : 'usage';
+      const usage = Number(d[winKey]);
+      const limit = d.limit != null ? Number(d.limit) : null;
+      const okUsage = isFinite(usage);
+      const pct = okUsage && limit ? Math.min(100, Math.max(0, (usage / limit) * 100)) : null;
+      return res.json({
+        success: true,
+        configured: true,
+        usage: okUsage ? usage : null,
+        limit,
+        window: reset || 'total',
+        remaining: okUsage && limit != null ? Math.max(0, limit - usage) : null,
+        pct
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    return res.json({ success: true, configured: true, error: err.message || 'usage lookup failed' });
   }
 });
 
@@ -10292,6 +10342,7 @@ app.get('/api/svc/stats', authMid.requireHoaScope, async (req, res) => {
 
 svcRoute('/api/svc/account-history', 'account-history', (req) => ({ resident: req.query.resident || '' }));
 svcRoute('/api/svc/hoa-ar-summary', 'hoa-ar-summary', () => ({}));
+svcRoute('/api/svc/resident-count', 'resident-count', () => ({}));
 svcRoute('/api/svc/outstanding-checks', 'outstanding-checks', () => ({}));
 svcRoute('/api/svc/period-diff', 'period-diff', (req) => ({
   fy: req.query.fy || null, from: req.query.from || null, to: req.query.to || null,

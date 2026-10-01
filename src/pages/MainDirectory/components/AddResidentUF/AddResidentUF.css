@@ -100,6 +100,48 @@
   gap: 20px;
 }
 
+/* Master-detail layout: selector izquierda, tarjeta derecha.
+   Las tarjetas ocultas usan display:none inline (siguen montadas para
+   readValue()/validaciones que leen del DOM). */
+.md-body-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.md-card-nav {
+  width: 210px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+}
+.md-card-nav-btn {
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+.md-card-nav-btn:hover {
+  background: #eef2f7;
+}
+.md-card-nav-btn.active {
+  background: #2b579a;
+  border-color: #2b579a;
+  color: #fff;
+}
+.md-body-row .md-cards-container {
+  flex: 1;
+  min-width: 0;
+  grid-template-columns: 1fr;
+}
+
 /* Individual Card */
 .md-card {
   background: #ffffff;
@@ -286,6 +328,21 @@
 @media (max-width: 900px) {
   .md-cards-container {
     grid-template-columns: 1fr;
+  }
+
+  .md-body-row {
+    flex-direction: column;
+  }
+
+  .md-card-nav {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    position: static;
+  }
+
+  .md-card-nav-btn {
+    flex: 1 1 auto;
   }
   
   .md-add-footer {

@@ -1,0 +1,28 @@
+.gs-page { padding: 12px 16px; max-width: 980px; }
+.gs-header { display: flex; align-items: center; gap: 12px; }
+.gs-header h2 { margin: 0; font-size: 18px; }
+.gs-header button { padding: 6px 14px; cursor: pointer; }
+.gs-sub { color: #555; font-size: 13px; }
+.gs-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.gs-item { border: 1px solid #ccc; border-left-width: 5px; border-radius: 4px; padding: 8px 10px; }
+.gs-pending { border-left-color: #999; }
+.gs-running { border-left-color: #2b579a; }
+.gs-pass { border-left-color: #2e7d32; background: #f4faf4; }
+.gs-fail { border-left-color: #c62828; background: #fdf4f4; }
+.gs-skipped { border-left-color: #ef9a00; background: #fffdf4; }
+.gs-row { display: flex; align-items: center; gap: 8px; }
+.gs-id { font-weight: bold; min-width: 52px; }
+.gs-section { color: #444; flex: 1; }
+.gs-hoa { background: #eef2f7; border-radius: 3px; padding: 1px 6px; font-size: 12px; }
+.gs-badge { border-radius: 3px; padding: 1px 8px; font-size: 12px; font-weight: bold; }
+.gs-badge-pending { background: #eee; color: #555; }
+.gs-badge-running { background: #dbe7f5; color: #1d3f6e; }
+.gs-badge-pass { background: #dff0df; color: #1b5e20; }
+.gs-badge-fail { background: #f8d7d7; color: #a00; }
+.gs-badge-skipped { background: #fbf0cd; color: #8a5d00; }
+.gs-row button { margin-left: auto; padding: 3px 12px; cursor: pointer; }
+.gs-q { font-weight: bold; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+.gs-qinput { flex: 1; padding: 4px 8px; font-size: 14px; font-weight: bold; border: 1px solid #bbb; border-radius: 3px; }
+.gs-reset { padding: 2px 8px; font-size: 12px; cursor: pointer; }
+.gs-edited { background: #e3ecf7; color: #1d3f6e; border-radius: 3px; padding: 1px 6px; font-size: 12px; }
+.gs-note { font-size: 13px; color: #333; margin-top: 2px; }

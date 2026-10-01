@@ -258,7 +258,7 @@ function hoaFilter(req, alias) {
 async function requireAuth(req, res, next) {
   try {
     const user = await getSessionUser(req);
-    if (!user) return res.status(401).json({ error: 'Sesión requerida' });
+    if (!user) return res.status(401).json({ error: 'Session required' });
     req.authUser = user;
     next();
   } catch (err) {
@@ -273,7 +273,7 @@ async function requireAuth(req, res, next) {
 async function requireReadWrite(req, res, next) {
   try {
     const user = req.authUser;
-    if (!user) return res.status(401).json({ error: 'Sesión requerida' });
+    if (!user) return res.status(401).json({ error: 'Session required' });
     if (user.is_admin) {
       if (isReadOnly(user)) return res.status(403).json({ error: 'Usuario de solo lectura' });
       return next();

@@ -19,7 +19,7 @@ const AI_TIMEOUT = parseInt(process.env.AI_TRANSLATE_TIMEOUT || '60000', 10) || 
 
 const VALID_KEYS = new Set([
   'account-history', 'hoa-ar-summary', 'outstanding-checks', 'period-diff',
-  'gl-transactions', 'vendor-invoices', 'violations', 'anomalies'
+  'gl-transactions', 'vendor-invoices', 'violations', 'anomalies', 'resident-count'
 ]);
 
 /* Cobertura del router (memoria; se pierde al reiniciar). */
@@ -79,11 +79,11 @@ function classifyLocal(prompt) {
   const lower = String(prompt || '').toLowerCase();
 
   // Q6 primero (tambien matchearia "checks"/deuda en otros casos).
-  if (/multa|violaci|fine\b|infracci/.test(lower)) {
+  if (/multa|violaci|\bfines?\b|violation|infracci/.test(lower)) {
     return { key: 'violations', params: {}, source: 'local' };
   }
-  // Q3 cheques pendientes.
-  if (/cheque|outstanding|pendiente/.test(lower)) {
+  // Q3 cheques pendientes / outstanding checks.
+  if (/cheque|check|outstanding|pendiente|pending/.test(lower)) {
     return { key: 'outstanding-checks', params: {}, source: 'local' };
   }
   // Q5 por GL#.
@@ -92,19 +92,19 @@ function classifyLocal(prompt) {
     return { key: 'gl-transactions', params: { gl }, source: 'local' };
   }
   // Q7 vendor/factura + token.
-  if (/vendor|proveedor|factura|invoice/.test(lower)) {
+  if (/vendor|proveedor|factura|invoice|bill/.test(lower)) {
     const vendor = extractVendorToken(prompt);
     if (vendor) return { key: 'vendor-invoices', params: { vendor }, source: 'local' };
     return null;
   }
   // Q8 inusual/atrasado (deuda con residente va a Q1, no aqui).
-  if (/inusual|raro|anomal|atrasad|overdue|vencido|moroso/.test(lower) &&
+  if (/inusual|raro|anomal|atrasad|overdue|vencido|moroso|unusual|weird|late|past due|delinquent/.test(lower) &&
       !/deuda|debe|saldo|balance/.test(lower)) {
     return { key: 'anomalies', params: {}, source: 'local' };
   }
   // Q4 comparativa con 2 fechas.
   const dates = extractDates(prompt);
-  if (dates.length >= 2 && /cambi|diferencia|compar| vs |periodo|trimestre/.test(lower)) {
+  if (dates.length >= 2 && /cambi|diferencia|compar| vs |periodo|trimestre|chang|differ|between|quarter/.test(lower)) {
     const gl4 = extractGL(prompt);
     const vendor4 = /vendor|proveedor|factura|invoice/.test(lower) ? extractVendorToken(prompt) : null;
     return {
@@ -118,12 +118,31 @@ function classifyLocal(prompt) {
     };
   }
   // Q1+Q2: deuda/saldo/pagos + residente identificado.
-  // Sin residente pero con alcance total (all/todos/total/how much) -> agregado HOA.
-  if (/debe|deuda|saldo|balance|adeuda|pagos|historial|cuenta|owe|owes|owed|debt/.test(lower)) {
+  // Sin residente pero con alcance total EXPLICITO (all/todos/total/how many
+  // owe) -> agregado HOA. OJO: "how much" solo NO agrega (una pregunta por
+  // una persona nombrada sin ID, ej. "how much does Sarah owe", debe ir al
+  // LLM y de ahi a 422 honesto, no al total de la HOA).
+  if (/debe|deuda|saldo|balance|adeuda|pagos|historial|cuenta|owe|owes|owed|debt|payments|history|account/.test(lower)) {
     const resident = extractResident(prompt);
     if (resident) return { key: 'account-history', params: { resident }, source: 'local' };
-    if (/all\b|todos|todas|total|how much|cuanto deben|cuantos deben/.test(lower)) {
+    if (/all\b|todos|todas|total|how many owe|cuanto deben|cuantos deben/.test(lower)) {
       return { key: 'hoa-ar-summary', params: {}, source: 'local' };
+    }
+    return null;
+  }
+  // Conteo de residentes (input ES o EN): SOLO total sin filtros.
+  // Si queda cualquier resto sustantivo (estado, ciudad, "in florida"...),
+  // no se reclama: pasa al LLM, que veta (none -> 422 honesto, fuera del
+  // catalogo v1). Asi "how many residents live in Florida" no devuelve 100.
+  if (/how many residents|cu[aá]ntos residentes|total de residentes|n[uú]mero de residentes|resident count|total residents/.test(lower)) {
+    const rest = lower
+      .replace(/how many residents|cu[aá]ntos residentes|total de residentes|n[uú]mero de residentes|resident count|total residents/g, ' ')
+      .replace(/\bin total\b|\ben total\b/g, ' ')
+      .replace(/\b(are|is|there|here|live|hay|el|la|los|las|the|a|an|de|total|please|dime|me|cuantos|cuántos|how|many)\b/g, ' ')
+      .replace(/[?.!,]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+    if (!rest) {
+      return { key: 'resident-count', params: {}, source: 'local' };
     }
     return null;
   }
@@ -134,14 +153,15 @@ function classifyLocal(prompt) {
 
 function catalogText() {
   return [
-    '{"function":"account-history","params":{"resident":"ID (requerido)"}} = cuanto debe un residente + que pagos lo produjeron',
-    '{"function":"hoa-ar-summary","params":{}} = cuanto deben TODOS los residentes (total HOA + deudores)',
-    '{"function":"outstanding-checks","params":{}} = cheques pendientes',
-    '{"function":"period-diff","params":{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","compare_from":"...","compare_to":"..."}} = que cambio entre periodos',
-    '{"function":"gl-transactions","params":{"gl":"numero (requerido)"}} = transacciones de un GL#',
-    '{"function":"vendor-invoices","params":{"vendor":"token (requerido)"}} = facturas de un vendor',
-    '{"function":"violations","params":{}} = PROHIBIDO elegirla: responde {"function":"none"} si preguntan multas/violaciones',
-    '{"function":"anomalies","params":{}} = que es inusual o esta atrasado'
+    '{"function":"account-history","params":{"resident":"ID (required)"}} = how much a resident owes + which payments produced it',
+    '{"function":"hoa-ar-summary","params":{}} = how much ALL residents owe (HOA total + debtors)',
+    '{"function":"outstanding-checks","params":{}} = outstanding / pending checks',
+    '{"function":"period-diff","params":{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","compare_from":"...","compare_to":"..."}} = what changed between periods',
+    '{"function":"gl-transactions","params":{"gl":"number (required)"}} = transactions of one GL#',
+    '{"function":"vendor-invoices","params":{"vendor":"token (required)"}} = invoices of one vendor',
+    '{"function":"violations","params":{}} = FORBIDDEN to choose: answer {"function":"none"} if asked about fines/violations',
+    '{"function":"anomalies","params":{}} = what is unusual or overdue',
+    '{"function":"resident-count","params":{}} = how many residents in total (NO params; only unfiltered totals — if the question filters by state/city/anything, answer {"function":"none"})'
   ].join('\n');
 }
 
@@ -190,7 +210,7 @@ async function translateOpenRouter(prompt, tenant) {
 }
 
 /* Valida params del LLM antes de ejecutar: formato, no existencia.
-   Devuelve mensaje de error o null. Lo inexistente lo dice la funcion. */
+   Lo inexistente lo dice la funcion. Mensajes SIEMPRE en ingles. */
 const ACCT_RE = /^(RES-?\d+|\d{5,6})$/i;
 const GL_RE = /^\d{4,5}$/;
 function validateRouted(key, params) {
@@ -198,22 +218,22 @@ function validateRouted(key, params) {
   if (key === 'account-history') {
     const r = String(p.resident || '').trim();
     if (!ACCT_RE.test(r)) {
-      return 'Falta el ID del residente (p. ej. 071010). Prueba: cuanto debe el residente 071010.';
+      return 'Missing resident ID (e.g. 071010). Try: how much does resident 071010 owe.';
     }
   }
   if (key === 'gl-transactions') {
     if (!GL_RE.test(String(p.gl || '').trim())) {
-      return 'Falta el numero de GL (4-5 digitos). Prueba: transacciones del GL 41700.';
+      return 'Missing GL number (4-5 digits). Try: GL 41700 transactions.';
     }
   }
   if (key === 'vendor-invoices') {
     if (!String(p.vendor || '').trim()) {
-      return 'Falta el vendor. Prueba: facturas del vendor VEND-001.';
+      return 'Missing vendor. Try: invoices of vendor VEND-001.';
     }
   }
   if (key === 'period-diff') {
     if (p.subject === 'gl' && !GL_RE.test(String(p.gl || '').trim())) {
-      return 'Para comparar un GL indica su numero. Prueba con gl=41700.';
+      return 'To compare a GL, provide its number. Try with gl=41700.';
     }
   }
   return null;
@@ -227,7 +247,7 @@ async function translate(prompt, tenant) {
   return null;
 }
 
-/* ---------- resumen humano por funcion (modo answer del frontend) ---------- */
+/* ---------- resumen humano por funcion (modo answer del frontend, SIEMPRE en ingles) ---------- */
 
 function summarize(key, out) {
   const s = (out && out.summary) || {};
@@ -235,28 +255,30 @@ function summarize(key, out) {
     case 'account-history': {
       const b = (out.result && out.result.balance) || {};
       const name = b.display_name || b.account_id || '';
-      return `Saldo ${name}: ${s.balance_due != null ? s.balance_due : 'sin registro'} (${s.payments_count || 0} pagos)`;
+      return `Balance ${name}: ${s.balance_due != null ? s.balance_due : 'no record'} (${s.payments_count || 0} payments)`;
     }
     case 'hoa-ar-summary':
-      return `HOA: ${s.debtors || 0} deudores, total ${s.total_ar || 0}`;
+      return `HOA: ${s.debtors || 0} debtors, total ${s.total_ar || 0}`;
+    case 'resident-count':
+      return `HOA: ${s.total || 0} residents`;
     case 'outstanding-checks':
-      return `Cheques pendientes: ${s.count || 0} (total ${s.total || 0})`;
+      return `Outstanding checks: ${s.count || 0} (total ${s.total || 0})`;
     case 'gl-transactions':
-      return `GL ${out.params_resolved && out.params_resolved.gl}: ${s.count || 0} movs, neto ${s.net || 0}`;
+      return `GL ${out.params_resolved && out.params_resolved.gl}: ${s.count || 0} moves, net ${s.net || 0}`;
     case 'vendor-invoices':
-      return `Facturas vendor: ${s.count || 0} (total ${s.invoices_total || 0})`;
+      return `Vendor invoices: ${s.count || 0} (total ${s.invoices_total || 0})`;
     case 'period-diff': {
       const d = out.summary || {};
       return d.metric != null
         ? `Diff ${d.subject}: ${d.period_value} vs ${d.compare_value} (delta ${d.delta})`
-        : (out.message || 'Period-diff en construccion');
+        : (out.message || 'Period-diff under construction');
     }
     case 'anomalies': {
       const n = out.summary ? out.summary.findings_count : null;
-      return n != null ? `Anomalias: ${n} hallazgos` : (out.message || 'Anomalias en construccion');
+      return n != null ? `Anomalies: ${n} findings` : (out.message || 'Anomalies under construction');
     }
     case 'violations':
-      return out.message || 'FL-dependiente';
+      return out.message || 'FL-dependent';
     default:
       return 'OK';
   }

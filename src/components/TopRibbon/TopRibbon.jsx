@@ -25,6 +25,7 @@ function openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout) {
   const base = import.meta.env.BASE_URL || '/';
   const actions = [
     { action: 'my-account', label: 'Mi cuenta', icon: 'AddressBook.png', title: 'Mi cuenta y cambio de clave' },
+    { action: 'golden-set', label: 'Golden Set', icon: 'SUMMARIZE.png', title: 'AI router checks (golden set)' },
     { action: 'logout', label: 'Cerrar sesión', icon: 'FileManageMenu.png', title: 'Cerrar sesión' },
   ];
   const buttonsHtml = actions.map(
@@ -46,6 +47,7 @@ function openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout) {
           const action = btn.getAttribute('data-action');
           Swal.close();
           if (action === 'logout') onLogout();
+          else if (action === 'golden-set') onSelectPage('golden-set');
           else onSelectPage('my-account');
         });
       });

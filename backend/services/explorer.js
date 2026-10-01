@@ -87,14 +87,14 @@ async function askLlm(question, anonRows, tenant, deps) {
         'HTTP-Referer': 'https://dev.hoa-e-solutions.com/qa/',
         'X-Title': 'wmplus-ai-explore'
       },
-      body: JSON.stringify({
+  body: JSON.stringify({
         model: aiModel,
         temperature: 0.2,
-        max_tokens: 600,
+        max_tokens: 800,
         messages: [
           {
             role: 'system',
-            content: `Eres un analista de una HOA. Te dan filas ANONIMIZADAS de residentes (ref R-001... sin nombres ni direcciones ni telefonos ni emails). Reglas: 1) Responde en español, de forma narrativa. 2) Cita filas por su ref (R-012), jamas inventes refs. 3) NO calcules totales/promedios exactos: describe patrones ("la mayoria", "unos pocos con saldo alto"); si piden un numero exacto di que use la funcion de reportes. 4) No reveles ni pidas datos personales. 5) Si la pregunta no se responde con estas columnas, dilo. HOA: ${tenant}.`
+            content: `You are an HOA analyst. You get ANONYMIZED resident rows (ref R-001... no names, addresses, phones or emails). Rules: 1) Answer in English, with simple markdown FORMAT: first line "## " + short headline with the key figure in **bold**; then 2-5 bullets with "- " for patterns and standout figures (numbers always in **bold**); close with one recommendation line if applicable. Only use "## ", "**", "- " and line breaks; no tables, HTML or code. 2) Cite rows by ref (R-012), never invent refs. 3) Do NOT compute exact totals/averages: describe patterns ("most", "a few with high balance"); if asked for an exact number say to use the reports function. 4) Never reveal or ask for personal data. 5) If the question cannot be answered with these columns, say so in one line. HOA: ${tenant}.`
           },
           { role: 'user', content: `Pregunta: ${String(question).slice(0, 500)}\n\nFilas (${anonRows.length}):\n${JSON.stringify(anonRows).slice(0, 60000)}` }
         ]

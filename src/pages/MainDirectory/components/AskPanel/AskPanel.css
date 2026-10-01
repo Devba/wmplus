@@ -8,6 +8,8 @@
 .ask-empty { color: #666; font-style: italic; }
 .ask-item { border-top: 1px solid #ddd; padding-top: 8px; }
 .ask-q { font-weight: bold; margin-bottom: 4px; }
+.ask-q:hover { color: #1d3f6e; }
+.ask-chevron { display: inline-block; min-width: 16px; color: #2b579a; }
 .ask-a { font-size: 1.1rem; margin: 4px 0; }
 .ask-error { color: #a00; margin: 4px 0; }
 .ask-evidence { border-collapse: collapse; margin: 6px 0; font-size: 12px; max-width: 100%; }
@@ -17,4 +19,13 @@
 .ask-mode { margin-right: 8px; padding: 4px 10px; cursor: pointer; }
 .ask-mode.on { background: #2b579a; color: #fff; }
 .ask-notice { background: #fff8e1; border: 1px solid #e0c36a; padding: 6px 8px; font-size: 12px; margin-bottom: 8px; }
+.ask-usage { color: #666; font-size: 12px; margin-bottom: 8px; }
 .ask-apply { margin: 6px 0; }
+/* Tarjeta de respuesta explore (markdown del LLM). */
+.ask-card { background: #f7fafd; border: 1px solid #c9d8e8; border-left: 4px solid #2b579a; border-radius: 6px; padding: 10px 12px; margin: 6px 0; }
+.ask-md-title { font-size: 15px; font-weight: bold; color: #1d3f6e; margin: 2px 0 8px; }
+.ask-md-title strong { color: #0f2c52; }
+.ask-md-p { margin: 6px 0; line-height: 1.45; }
+.ask-md-ul { margin: 6px 0 6px 18px; padding: 0; line-height: 1.45; }
+.ask-md-ul li { margin: 3px 0; }
+.ask-md-ul strong, .ask-md-p strong, .ask-md-title strong { color: #0f2c52; }

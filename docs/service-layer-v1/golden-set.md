@@ -1,39 +1,49 @@
-# AI Router — golden set (QA, 2026-09-28)
+# AI Router — golden set (QA, 2026-09-28, revised 2026-09-30)
 
-Cada pregunta: ruta esperada + expectativa verificable a mano en QA.
-`source` esperado: `router-local` (clasificador), `router-openrouter` (LLM),
-`fallback`/`opencode` (legacy nivel 3, deprecated).
+Each question: expected route + manually verifiable expectation in QA.
+Expected `source`: `router-local` (classifier), `router-openrouter` (LLM),
+`fallback`/`opencode` (legacy level 3, deprecated).
+
+Input language: English or Spanish. **All output in English.**
 
 ## Q1+Q2 — account-history (ready)
-- `cuanto debe el residente 010003` (HOA 1) → `router-local` → `Saldo Test RL-03: 300 (1 pagos)`.
-- Cross-HOA: mismo prompt con `X-HOA-ID: 4` → saldo null, 0 pagos (aislado).
-- `as_of` histórico vía `/api/svc/account-history?resident=010003&as_of=2026-01-01` → 0 pagos.
+- `how much does resident 010003 owe` (HOA 1) → `router-local` → `Balance Test RL-03: 300 (1 payments)`.
+- Cross-HOA: same prompt with `X-HOA-ID: 4` → null balance, 0 payments (isolated).
+- Historic `as_of` via `/api/svc/account-history?resident=010003&as_of=2026-01-01` → 0 payments.
+
+## Q1 aggregate — hoa-ar-summary (ready)
+- `how much do all residents owe` / HOA total → `HOA: N debtors, total X`.
+
+## Q-residents — resident-count (ready, added 2026-09-30)
+- `how many residents are there` / `cuantos residentes hay en total` (any HOA) → `router-local` → `HOA: N residents`.
+- Direct: `/api/svc/resident-count` → `{ total, active }`.
 
 ## Q3 — outstanding-checks (ready)
-- `cheques pendientes` (HOA 1) → 2 cheques, total 312.50.
+- `outstanding checks` (HOA 1) → 2 checks, total 312.50.
 
-## Q4 — period-diff (stub honesto)
-- `que cambio entre 2026-01-01 y 2026-06-30 comparado con 2025-01-01 y 2025-06-30`
-  → `not_yet_implemented` + ambas ventanas resueltas.
+## Q4 — period-diff (ready since ec54a09; was honest stub)
+- `what changed between 2026-01-01 and 2026-06-30 compared to 2025-01-01 and 2025-06-30`
+  → real diff over primitives (gl/vendor/checks), both windows resolved.
 
 ## Q5 — gl-transactions (ready)
-- `transacciones del GL 41700` (HOA 4) → 4 movs, neto 12500 (= fixture).
+- `GL 41700 transactions` (HOA 4) → 4 moves, net 12500 (= fixture).
 
 ## Q6 — violations (disabled)
-- `residentes con multas` → **403** + mensaje FL-dependiente. Nunca datos.
+- `residents with fines` → **403** + FL-dependent message. Never data.
 
 ## Q7 — vendor-invoices (ready)
-- `facturas del vendor VEND-001` → vendor `VEND-001` (no truncar token).
+- `invoices of vendor VEND-001` → vendor `VEND-001` (do not truncate token).
 
-## Q8 — anomalies (stub honesto)
-- `algo inusual o atrasado` → `not_yet_implemented` + nota overdue→FL.
+## Q8 — anomalies (ready since 5107a7a; was honest stub)
+- `anything unusual or overdue` → real rules (high-balance / stale-check / unusual-gl with thresholds); overdue rule off pending FL.
 
-## Sin clasificar (corte legacy aplicado)
-- `cuantos residentes hay` (sin residente) → **422** honesto con ejemplos.
-  El conteo global legacy se elimino: sin SQL libre en el servidor.
-- `residentes de florida` → **422** (filtro ad-hoc, fuera del catalogo v1).
+## Unclassified (honest legacy cutoff)
+- `residents of florida` → **422** (ad-hoc filter, outside v1 catalog).
+- `how many residents live in Florida` / `how many residents live in Colorado` → **422**: `resident-count` takes no params (unfiltered totals only); filtered counts are outside v1.
+- `how much does Sarah owe?` (name, no ID) → **422**: account-history needs a resident ID; a bare name must not fall back to the HOA aggregate.
+- Free-form out-of-catalog questions → **422** with English examples. No free SQL on the server.
 
-## Reglas del router
-- Local no clasifica → OpenRouter (solo prompt+catalogo) → null → legacy.
-- El LLM jamas ve filas ni genera SQL. Q6 vetada tambien para el LLM.
-- Presupuesto: local absorbe lo repetitivo; nivel 2 a ~$0.001/traduccion.
+## Router rules
+- Local does not classify → OpenRouter (prompt+catalog only) → null → legacy.
+- The LLM never sees rows and never generates SQL. Q6 banned for the LLM too.
+- Budget: local absorbs the repetitive; level 2 at ~$0.001/translation.

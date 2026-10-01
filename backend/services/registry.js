@@ -24,6 +24,31 @@ function lineage(table, filter, count) {
   return [{ table, filter, rows: count }];
 }
 
+/* Resident count — how many residents in total (non-deleted).
+   Summary carries total; answerValue picks summary.total. */
+async function residentCount(ctx) {
+  const { licenseNumber } = ctx;
+  const [rows] = await ro().query(
+    `SELECT COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN ActiveResidentFlag = 'Y' THEN 1 ELSE 0 END), 0) AS active
+       FROM ResidentMaster
+      WHERE HOALicenseNumber = ?
+        AND (DeletedFlag IS NULL OR DeletedFlag != 'Y')`,
+    [licenseNumber]
+  );
+  const total = Number(rows[0]?.total || 0);
+  return {
+    success: true,
+    function: 'getResidentCount',
+    tenant: tenantOf(ctx),
+    params_resolved: {},
+    summary: { total, active: Number(rows[0]?.active || 0) },
+    result: { total },
+    lineage: lineage('ResidentMaster', 'not deleted', total),
+    filters_applied: { license_number: licenseNumber }
+  };
+}
+
 /* Q1 a nivel HOA — total adeudado + deudores (misma base que ar-summary).
    Sin residente: agregado de la HOA, no ranking individual. */
 async function hoaArSummary(ctx) {
@@ -211,7 +236,10 @@ async function glTransactions(ctx, deps) {
     fy: ctx.fy || null, from: ctx.from || null, to: ctx.to || null
   });
   const [banks] = await ro().query(
-    `SELECT BankID FROM BankAccount WHERE ActiveFlag = 'Y' ORDER BY BankID`
+    // DISTINCT: BankAccount tiene una fila por HOA con el mismo BankID
+    // (multi-tenant); sin DISTINCT las tablas CashFlow_BankID_* se
+    // consultarian una vez por HOA y los netos se duplicarian.
+    `SELECT DISTINCT BankID FROM BankAccount WHERE ActiveFlag = 'Y' ORDER BY BankID`
   );
   const rows = [];
   for (const b of banks) {
@@ -293,7 +321,7 @@ async function outstandingViolations(ctx) {
     success: false,
     function: 'getOutstandingViolations',
     status: 'blocked',
-    message: 'FL-dependiente: espera definiciones de Manage Violations (Rick/Hal). Sin implementacion anticipada.',
+    message: 'FL-dependent: waiting on Manage Violations definitions (Rick/Hal). No early implementation.',
     tenant: tenantOf(ctx),
     params_resolved: {},
     summary: null,
@@ -331,7 +359,7 @@ async function anomalies(ctx, deps) {
   for (const d of debtors) {
     findings.push({
       rule: 'high-balance', severity: Number(d.total_ar) >= minBalance * 2 ? 'high' : 'medium',
-      detail: `Residente ${d.account}: AR ${d.total_ar} >= ${minBalance}`,
+      detail: `Resident ${d.account}: AR ${d.total_ar} >= ${minBalance}`,
       ref: { account: d.account, total_ar: Number(d.total_ar) }
     });
   }
@@ -345,7 +373,7 @@ async function anomalies(ctx, deps) {
     if (age != null && age > maxDays) {
       findings.push({
         rule: 'stale-check', severity: 'medium',
-        detail: `Cheque ${c.txn} pendiente hace ${age} dias (> ${maxDays})`,
+        detail: `Check ${c.txn} outstanding for ${age} days (> ${maxDays})`,
         ref: { txn: c.txn, issued: c.issued, age_days: age }
       });
     }
@@ -353,7 +381,8 @@ async function anomalies(ctx, deps) {
 
   // Regla 3: GLs con neto atipico en ventana (reusa patron Q5 agrupado).
   const [banks] = await ro().query(
-    `SELECT BankID FROM BankAccount WHERE ActiveFlag = 'Y' ORDER BY BankID`
+    // DISTINCT: ver nota en gl-transactions (filas por HOA, mismo BankID).
+    `SELECT DISTINCT BankID FROM BankAccount WHERE ActiveFlag = 'Y' ORDER BY BankID`
   );
   const glNets = new Map();
   for (const b of banks) {
@@ -382,14 +411,14 @@ async function anomalies(ctx, deps) {
     if (Math.abs(net) >= minNet) {
       findings.push({
         rule: 'unusual-gl', severity: 'low',
-        detail: `GL ${gl}: neto ${net} en ventana (|net| >= ${minNet})`,
+        detail: `GL ${gl}: net ${net} in window (|net| >= ${minNet})`,
         ref: { gl, net }
       });
     }
   }
 
   // Regla 4: overdue assessments — APAGADA hasta FL (enchufable).
-  const overdueNote = 'Regla overdue-assessments apagada: espera umbrales FL (Late Assessments/Arrears).';
+  const overdueNote = 'Overdue-assessments rule off: waiting on FL thresholds (Late Assessments/Arrears).';
 
   return {
     success: true,
@@ -415,7 +444,8 @@ const FUNCTIONS = {
   'gl-transactions': { key: 'gl-transactions', fn: 'getGLTransactions', questions: ['Q5'], status: 'ready', run: glTransactions },
   'vendor-invoices': { key: 'vendor-invoices', fn: 'getVendorInvoices', questions: ['Q7'], status: 'ready', run: vendorInvoices },
   'violations': { key: 'violations', fn: 'getOutstandingViolations', questions: ['Q6'], status: 'disabled', run: outstandingViolations },
-  'anomalies': { key: 'anomalies', fn: 'getAnomalies', questions: ['Q8'], status: 'ready', run: anomalies }
+  'anomalies': { key: 'anomalies', fn: 'getAnomalies', questions: ['Q8'], status: 'ready', run: anomalies },
+  'resident-count': { key: 'resident-count', fn: 'getResidentCount', questions: ['Q-residents'], status: 'ready', run: residentCount }
 };
 
 module.exports = { FUNCTIONS };
