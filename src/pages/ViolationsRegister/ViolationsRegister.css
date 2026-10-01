@@ -1,0 +1,300 @@
+
+
+
+
+
+
+/* =========================================================
+   VIOLATIONS REGISTER
+   VISUAL SHELL ONLY
+   ========================================================= */
+
+.vr-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+  color: #000000;
+  box-sizing: border-box;
+}
+
+.vr-page * {
+  box-sizing: border-box;
+}
+
+.vr-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+
+/* =========================================================
+   TOP SECTION
+   ========================================================= */
+
+.vr-topsection {
+  position: relative;
+  flex: 0 0 122px;
+  min-width: 1860px;
+  height: 122px;
+  background: #ffffff;
+  border-bottom: 2px solid #7f7f7f;
+  font-size: 13px;
+}
+
+
+/* HOA NAME */
+
+.vr-hoa-name {
+  position: absolute;
+  top: 7px;
+  left: 60px;
+  width: 230px;
+  text-align: left;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+
+/* PAGE TITLE */
+
+.vr-title {
+  position: absolute;
+  top: 34px;
+  left: 60px;
+  width: 330px;
+  text-align: left;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+
+/* DATE */
+
+.vr-date-label {
+  position: absolute;
+  top: 68px;
+  left: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.vr-date-value {
+  position: absolute;
+  top: 68px;
+  left: 90px;
+  width: 90px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+
+/* TOTAL FINES */
+
+.vr-total-fines-label {
+  position: absolute;
+  top: 68px;
+  left: 220px;
+  width: 180px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.vr-total-fines-value {
+  position: absolute;
+  top: 68px;
+  left: 475px;
+  width: 110px;
+  text-align: left;
+  font-size: 13px;
+}
+
+
+/* TOTAL FINES PAID */
+
+.vr-total-paid-label {
+  position: absolute;
+  top: 94px;
+  left: 220px;
+  width: 200px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.vr-total-paid-value {
+  position: absolute;
+  top: 94px;
+  left: 475px;
+  width: 110px;
+  text-align: left;
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   TOP BUTTONS
+   ========================================================= */
+
+.vr-btn {
+  position: absolute;
+  height: 32px;
+  padding: 0 12px;
+  background: #f2f2f2;
+  border: 1px solid #8a8a8a;
+  box-shadow: 4px 4px 5px #888888;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.vr-blue {
+  color: #0070c0;
+}
+
+.vr-red {
+  color: #ff0000;
+}
+
+
+/* MANAGE VIOLATIONS */
+
+.vr-manage-btn {
+  top: 22px;
+  left: 610px;
+  width: 150px;
+  color: #ff0000;
+}
+
+
+/* RESIDENT FILTER */
+
+.vr-resident-filter-btn {
+  top: 22px;
+  left: 810px;
+  width: 148px;
+}
+
+
+/* RESET FILTER */
+
+.vr-reset-filter-btn {
+  top: 22px;
+  left: 970px;
+  width: 125px;
+}
+
+
+/* BACK TO NAV PANEL */
+
+.vr-back-btn {
+  top: 22px;
+  left: 1105px;
+  width: 190px;
+}
+
+
+/* INSTRUCTION VIDEO */
+
+.vr-video-btn {
+  top: 68px;
+  left: 970px;
+  width: 325px;
+}
+
+
+/* =========================================================
+   REGISTER AREA
+   ========================================================= */
+
+.vr-bodybox {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vr-table-scroll {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+}
+
+
+/* =========================================================
+   REGISTER TABLE
+   ========================================================= */
+
+.vr-table {
+  width: 2517px;
+  min-width: 2517px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.vr-table th,
+.vr-table td {
+  border: 1px solid #333333;
+  font-family: Arial, sans-serif;
+}
+
+
+/* HEADER */
+
+.vr-table thead tr {
+  height: 82px;
+}
+
+.vr-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 82px;
+  padding: 4px 3px;
+
+  background: #d9d9d9;
+  color: #000000;
+
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 14px;
+
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+
+/* BODY ROWS */
+
+.vr-table tbody tr {
+  height: 22px;
+}
+
+.vr-table tbody td {
+  height: 22px;
+  padding: 0 4px;
+
+  background: #ffff00;
+  color: #000000;
+
+  font-size: 12px;
+  line-height: 21px;
+}

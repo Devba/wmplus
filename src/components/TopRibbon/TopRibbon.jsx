@@ -1,7 +1,10 @@
 
 import './TopRibbon.css'
-
-
+import { openOverlay, requestCloseOverlay } from '../../engines';
+import InspectionDateCalendarUF from '../../pages/ManageViolations/InspectionDateCalendarUF';
+import ViolationRegisterUF from '../../pages/ManageViolations/ViolationRegisterUF';
+import ManageLateAssessmentsUF from '../../pages/ManageLateAssessments/ManageLateAssessmentsUF';
+import ManageArrearsUF from "../../pages/ManageArrears/ManageArrearsUF";
 function TopRibbon({ onSelectPage }) {
   return (
     <div className="top-ribbon">
@@ -9,13 +12,58 @@ function TopRibbon({ onSelectPage }) {
     <div className="ribbon-group"> 
 
   <div className="ribbon-buttons">
-    <div className="ribbon-btn">
+    <div
+        className="ribbon-btn"
+        onClick={() => {
+        onSelectPage("violation-register");
+
+        openOverlay({
+          frameless: true,
+          title: "Inspection Date",
+          component: (
+          <InspectionDateCalendarUF
+          onClose={requestCloseOverlay}
+          onDateSelected={(selectedDate) => {
+            openOverlay({
+              title: "Manage + Violation Register",
+              component: <ViolationRegisterUF inspectionDate={selectedDate} />,
+              width: "1250px",
+              maxWidth: "96vw",
+              height: "760px",
+              bodyHeight: "720px"
+              });
+          }}
+          />
+        ),
+          width: "410px",
+          maxWidth: "410px"
+        });
+      }}
+      >
       <div className="icon icon-violations"></div>
       <div className="label">Manage Violations</div>
     </div>
 
 
-    <div className="ribbon-btn">
+    <div
+            className="ribbon-btn"
+            onClick={() => {
+            onSelectPage("accounts-receivable-aging");
+
+            openOverlay({
+              title: "Manage+ Delinquent Assessments Manager",
+              component: (
+                <ManageLateAssessmentsUF
+                  onClose={requestCloseOverlay}
+                />
+              ),
+              width: "1280px",
+              maxWidth: "96vw",
+              height: "760px",
+              bodyHeight: "720px"
+            });
+          }}
+          >
       <div className="icon icon-lateassmt"></div>
       <div className="label">Manage<br />Late Assmt</div>
     </div>
@@ -27,7 +75,25 @@ function TopRibbon({ onSelectPage }) {
 
   <div className="ribbon-group">
   <div className="ribbon-buttons">
-    <div className="ribbon-btn">
+    <div
+      className="ribbon-btn"
+      onClick={() => {
+  onSelectPage("accounts-receivable-aging");
+
+  openOverlay({
+    title: "Manage+ Arrears Manager",
+    component: (
+      <ManageArrearsUF
+        onClose={requestCloseOverlay}
+      />
+    ),
+    width: "1160px",
+    maxWidth: "96vw",
+    height: "650px",
+    bodyHeight: "610px"
+  });
+}}
+    >
       <div className="icon icon-arrears"></div>
       <div className="label">Manage Arrears</div>
     </div>
@@ -36,8 +102,7 @@ function TopRibbon({ onSelectPage }) {
   <div className="group-label">
     ARREARS
   </div>
-  {/* End ARREARS ribbon-group  */}
-</div> 
+</div>
 
 <div className="ribbon-group">
   <div className="ribbon-buttons">

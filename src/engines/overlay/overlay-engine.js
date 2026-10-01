@@ -29,6 +29,7 @@ export function openOverlay(options = {}) {
     maxWidth: options.maxWidth,
     height: options.height,
     bodyHeight: options.bodyHeight,
+    frameless: options.frameless === true,
     beforeClose:
       typeof options.beforeClose === 'function'
         ? options.beforeClose

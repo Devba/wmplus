@@ -55,8 +55,13 @@ function MasterNavPanel({ onSelectPage }) {
               >
                 PAYMENTS
             </button>
-            <button className="mnp-btn" type="button">BANKING</button>
-
+            <button
+            className="mnp-btn"
+            type="button"
+            onClick={() => onSelectPage('bank-debits-credits')}
+          >
+            BANKING
+          </button>
 
             <button
                 className="mnp-btn"
@@ -88,7 +93,13 @@ function MasterNavPanel({ onSelectPage }) {
             <button className="mnp-btn" type="button">FINANCIALS</button>
             <button className="mnp-btn" type="button">BUDGETS</button>
 
-            <button className="mnp-btn" type="button">VIOLATIONS</button>
+            <button
+              className="mnp-btn"
+              type="button"
+              onClick={() => onSelectPage('violation-register')}
+            >
+              VIOLATIONS
+            </button>
             <button className="mnp-btn" type="button">ESCROW ACCT SUMMARY</button>
 
 

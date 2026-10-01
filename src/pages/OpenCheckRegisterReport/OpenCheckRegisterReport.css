@@ -1,0 +1,650 @@
+
+
+
+
+
+
+/* =========================================================
+   OPEN CHECK TO EXPENSE ANALYSIS REPORT
+   VISUAL SHELL ONLY
+   ========================================================= */
+
+.ocr-page {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+}
+
+.ocr-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+}
+
+/* =========================================================
+   TOP SECTION
+   ========================================================= */
+
+.ocr-topsection {
+  position: relative;
+  width: 100%;
+  height: 155px;
+  background: #ffffff;
+  border-bottom: 2px solid #555555;
+}
+
+/* HOA NAME */
+
+.ocr-hoa-name {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* REPORT TITLE */
+
+.ocr-report-title {
+  position: absolute;
+  top: 30px;
+  left: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* REPORT DATE */
+
+.ocr-report-date {
+  position: absolute;
+  top: 32px;
+  left: 645px;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* RUN REPORT BUTTON */
+
+.ocr-btn {
+  height: 34px;
+  padding: 0 12px;
+  background: #f2f2f2;
+  border: 1px solid #8a8a8a;
+  box-shadow: 4px 4px 5px #888888;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ocr-run-report-btn {
+  position: absolute;
+  top: 5px;
+  left: 755px;
+  color: #0070c0;
+}
+
+/* REPORT AS OF */
+
+.ocr-report-as-of {
+  position: absolute;
+  top: 55px;
+  left: 80px;
+  color: #0070c0;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   SUMMARY COLUMN HEADINGS
+   ========================================================= */
+
+.ocr-date-heading {
+  position: absolute;
+  top: 76px;
+  left: 48px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0070c0;
+  white-space: nowrap;
+}
+
+.ocr-time-heading {
+  position: absolute;
+  top: 76px;
+  left: 128px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0070c0;
+  white-space: nowrap;
+}
+
+.ocr-bank-balance-heading {
+  position: absolute;
+  top: 55px;
+  left: 585px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ocr-open-checks-heading {
+  position: absolute;
+  top: 55px;
+  left: 713px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ocr-available-balance-heading {
+  position: absolute;
+  top: 55px;
+  left: 865px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ocr-number-open-checks-heading {
+  position: absolute;
+  top: 55px;
+  left: 1067px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   OPERATING ACCOUNT
+   ========================================================= */
+
+.ocr-operating-date {
+  position: absolute;
+  top: 94px;
+  left: 47px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ocr-operating-time {
+  position: absolute;
+  top: 94px;
+  left: 128px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ocr-operating-label {
+  position: absolute;
+  top: 76px;
+  left: 453px;
+  font-size: 13px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.ocr-operating-bank-dollar {
+  position: absolute;
+  top: 76px;
+  left: 552px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-operating-bank-balance {
+  position: absolute;
+  top: 76px;
+  left: 580px;
+  width: 115px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-operating-open-dollar {
+  position: absolute;
+  top: 76px;
+  left: 713px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-operating-open-checks {
+  position: absolute;
+  top: 76px;
+  left: 750px;
+  width: 100px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-operating-available-dollar {
+  position: absolute;
+  top: 76px;
+  left: 865px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-operating-available-balance {
+  position: absolute;
+  top: 76px;
+  left: 890px;
+  width: 145px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-operating-check-count {
+  position: absolute;
+  top: 76px;
+  left: 1135px;
+  width: 45px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   CAPITAL ACCOUNT
+   ========================================================= */
+
+.ocr-capital-date {
+  position: absolute;
+  top: 115px;
+  left: 47px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ocr-capital-time {
+  position: absolute;
+  top: 115px;
+  left: 128px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ocr-capital-label {
+  position: absolute;
+  top: 97px;
+  left: 453px;
+  font-size: 13px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.ocr-capital-bank-dollar {
+  position: absolute;
+  top: 97px;
+  left: 552px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-capital-bank-balance {
+  position: absolute;
+  top: 97px;
+  left: 580px;
+  width: 115px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-capital-open-dollar {
+  position: absolute;
+  top: 97px;
+  left: 713px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-capital-open-checks {
+  position: absolute;
+  top: 97px;
+  left: 750px;
+  width: 100px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-capital-available-dollar {
+  position: absolute;
+  top: 97px;
+  left: 865px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-capital-available-balance {
+  position: absolute;
+  top: 97px;
+  left: 890px;
+  width: 145px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-capital-check-count {
+  position: absolute;
+  top: 97px;
+  left: 1135px;
+  width: 45px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   MONEY MARKET ACCOUNT
+   ========================================================= */
+
+.ocr-money-market-label {
+  position: absolute;
+  top: 118px;
+  left: 419px;
+  font-size: 13px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.ocr-money-market-bank-dollar {
+  position: absolute;
+  top: 118px;
+  left: 552px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-money-market-bank-balance {
+  position: absolute;
+  top: 118px;
+  left: 580px;
+  width: 115px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-money-market-open-dollar {
+  position: absolute;
+  top: 118px;
+  left: 713px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-money-market-open-checks {
+  position: absolute;
+  top: 118px;
+  left: 750px;
+  width: 100px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-money-market-available-dollar {
+  position: absolute;
+  top: 118px;
+  left: 865px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-money-market-available-balance {
+  position: absolute;
+  top: 118px;
+  left: 890px;
+  width: 145px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-money-market-check-count {
+  position: absolute;
+  top: 118px;
+  left: 1135px;
+  width: 45px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* BLUE DIVIDER */
+
+.ocr-blue-divider {
+  position: absolute;
+  top: 147px;
+  left: 0px;
+  width: 1375px;
+  height: 8px;
+  background: #00aeef;
+}
+
+/* =========================================================
+   REPORT BODY
+   ========================================================= */
+
+.ocr-bodybox {
+  position: relative;
+  width: 100%;
+  height: calc(100% - 155px);
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.ocr-table-scroll {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+}
+
+.ocr-table {
+  width: 1275px;
+  min-width: 1275px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.ocr-table th,
+.ocr-table td {
+  border: 1px solid #333333;
+  font-family: Arial, sans-serif;
+}
+
+.ocr-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 58px;
+  padding: 3px 4px;
+  background: #d9d9d9;
+  color: #000000;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.ocr-table tbody td {
+  height: 24px;
+  padding: 2px 4px;
+  background: #ffff00;
+  color: #000000;
+  font-size: 12px;
+}
+
+/* =========================================================
+   W M+ SELECTED BANK SECTION
+   ========================================================= */
+
+/* BANK SELECTOR */
+
+.ocr-bank-label {
+  position: absolute;
+  top: 78px;
+  left: 250px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ocr-bank-select {
+  position: absolute;
+  top: 72px;
+  left: 325px;
+  width: 230px;
+  height: 28px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+
+/* BANK BALANCE SECTION */
+
+.ocr-bank-balance-heading {
+  top: 55px;
+  left: 610px;
+}
+
+.ocr-selected-bank-dollar {
+  position: absolute;
+  top: 82px;
+  left: 590px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-selected-bank-balance {
+  position: absolute;
+  top: 82px;
+  left: 600px;
+  width: 110px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+
+/* OPEN & ISSUED CHECKS SECTION */
+
+.ocr-open-checks-heading {
+  top: 55px;
+  left: 795px;
+}
+
+.ocr-selected-open-dollar {
+  position: absolute;
+  top: 82px;
+  left: 780px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-selected-open-checks {
+  position: absolute;
+  top: 82px;
+  left: 800px;
+  width: 110px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+
+/* BANK BALANCE WITH OPEN CHECKS SECTION */
+
+.ocr-available-balance-heading {
+  top: 55px;
+  left: 1000px;
+}
+
+.ocr-selected-available-dollar {
+  position: absolute;
+  top: 82px;
+  left: 990px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ocr-selected-available-balance {
+  position: absolute;
+  top: 82px;
+  left: 1050px;
+  width: 120px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+
+/* NUMBER OF OPEN CHECKS SECTION */
+
+.ocr-number-open-checks-heading {
+  top: 55px;
+  left: 1250px;
+}
+
+.ocr-selected-check-count {
+  position: absolute;
+  top: 82px;
+  left: 1300px;
+  width: 50px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   UPPER-RIGHT NAVIGATION BUTTONS
+   ========================================================= */
+
+.ocr-nav-button {
+  position: absolute;
+  height: 36px;
+  padding: 0 16px;
+  background: #f2f2f2;
+  border: 1px solid #8a8a8a;
+  box-shadow: 4px 4px 5px #888888;
+  color: #0070c0;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ocr-back-nav-button {
+  top: 5px;
+  left: 950px;
+  width: 190px;
+}
+
+.ocr-back-cr-button {
+  top: 5px;
+  left: 1150px;
+  width: 225px;
+}

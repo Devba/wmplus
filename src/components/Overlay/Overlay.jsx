@@ -11,7 +11,9 @@ function Overlay({
   maxWidth,
   height,
   bodyHeight,
-  onClose
+  bodyOverflow,
+  onClose,
+  frameless = false
 }) {
   const dialogStyle = {
     width,
@@ -20,7 +22,8 @@ function Overlay({
   };
 
   const bodyStyle = {
-    height: bodyHeight
+  height: bodyHeight,
+  overflow: bodyOverflow
   };
 
   return (
@@ -35,12 +38,13 @@ function Overlay({
       />
 
       <div
-        className="overlay-dialog"
+        className={`overlay-dialog${frameless ? ' overlay-dialog-frameless' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         style={dialogStyle}
       >
+      {!frameless && (  
         <div className="overlay-titlebar">
           <div className="overlay-title">
             {title}
@@ -55,7 +59,7 @@ function Overlay({
             X
           </button>
         </div>
-
+    )}
         <div
           className="overlay-body"
           style={bodyStyle}

@@ -1,0 +1,223 @@
+
+
+
+
+
+
+/* =========================================================
+   BANK DEBITS & CREDITS - ENTER UF
+   ========================================================= */
+
+.bankdc-enter-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.18);
+  z-index: 5000;
+}
+
+.bankdc-enter-uf {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 760px;
+  height: 330px;
+  background: #f2f2f2;
+  border: 1px solid #999999;
+  border-radius: 8px;
+  box-shadow: 4px 4px 10px #777777;
+  font-family: Arial, sans-serif;
+  color: #000000;
+}
+
+
+/* =========================================================
+   CLOSE X
+   ========================================================= */
+
+.bankdc-enter-close {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  width: 28px;
+  height: 25px;
+  border: none;
+  background: transparent;
+  color: #000000;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+
+/* =========================================================
+   TITLE
+   ========================================================= */
+
+.bankdc-enter-title {
+  position: absolute;
+  top: 45px;
+  left: 20px;
+  font-family: "Times New Roman", serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0070c0;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   AMOUNT
+   ========================================================= */
+
+.bankdc-enter-amount-label {
+  position: absolute;
+  top: 95px;
+  left: 20px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bankdc-enter-amount {
+  position: absolute;
+  top: 116px;
+  left: 20px;
+  width: 100px;
+  height: 27px;
+  padding: 2px 6px;
+  border: 1px solid #888888;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+
+/* =========================================================
+   BANK ACCOUNT
+   Wider than legacy to accommodate W M+ bank identification
+   ========================================================= */
+
+.bankdc-enter-bank-label {
+  position: absolute;
+  top: 95px;
+  left: 140px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bankdc-enter-bank-select {
+  position: absolute;
+  top: 116px;
+  left: 140px;
+  width: 285px;
+  height: 28px;
+  padding: 2px 6px;
+  border: 1px solid #888888;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   G/L ACCOUNT
+   ========================================================= */
+
+.bankdc-enter-gl-label {
+  position: absolute;
+  top: 95px;
+  left: 445px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bankdc-enter-gl-select {
+  position: absolute;
+  top: 116px;
+  left: 445px;
+  width: 290px;
+  height: 28px;
+  padding: 2px 6px;
+  border: 1px solid #888888;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+
+/* =========================================================
+   DATE
+   ========================================================= */
+
+.bankdc-enter-date-label {
+  position: absolute;
+  top: 165px;
+  left: 20px;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 700;
+}
+
+.bankdc-enter-date {
+  position: absolute;
+  top: 205px;
+  left: 20px;
+  width: 115px;
+  height: 27px;
+  padding: 2px 6px;
+  border: 1px solid #888888;
+  background: #ffffff;
+  font-size: 14px;
+  text-align: center;
+}
+
+
+/* =========================================================
+   ENTRY NOTATION
+   ========================================================= */
+
+.bankdc-enter-notation-label {
+  position: absolute;
+  top: 165px;
+  left: 250px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bankdc-enter-notation {
+  position: absolute;
+  top: 190px;
+  left: 250px;
+  width: 300px;
+  height: 55px;
+  padding: 5px;
+  resize: none;
+  border: 1px solid #888888;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+
+/* =========================================================
+   SUBMIT BUTTON
+   ========================================================= */
+
+.bankdc-enter-submit {
+  position: absolute;
+  top: 270px;
+  left: 20px;
+  width: 215px;
+  height: 34px;
+  border: 1px solid #888888;
+  background: #f2f2f2;
+  box-shadow: 4px 4px 5px #888888;
+  color: #008000;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
