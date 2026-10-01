@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
 import './TopRibbon.css';
 import { apiFetch } from '../../config/api';
+import { openOverlay } from '../../engines';
+import AskPanel from '../../pages/MainDirectory/components/AskPanel/AskPanel';
 
 // Reportes disponibles en el diálogo. `escrow: true` indica que requiere
 // can_view_escrow_flag = 'Y' (si no, se oculta para ese usuario).
@@ -21,60 +23,7 @@ const REPORT_ITEMS = [
   { key: 'historic-escrow', label: 'Historic Escrow', icon: 'ReviewAcceptChange.png', escrow: true },
 ];
 
-function openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout) {
-  const base = import.meta.env.BASE_URL || '/';
-  const actions = [
-    { action: 'my-account', label: 'Mi cuenta', icon: 'AddressBook.png', title: 'Mi cuenta y cambio de clave' },
-    { action: 'golden-set', label: 'Golden Set', icon: 'SUMMARIZE.png', title: 'AI router checks (golden set)' },
-    { action: 'logout', label: 'Cerrar sesión', icon: 'FileManageMenu.png', title: 'Cerrar sesión' },
-  ];
-  const buttonsHtml = actions.map(
-    (a) => `<button type="button" data-action="${a.action}" title="${a.title}" class="swal-reports-btn">` +
-      `<img src="${base}icons/${a.icon}" alt="" class="swal-reports-icon" />` +
-      `<span>${a.label}</span></button>`
-  ).join('');
-  Swal.fire({
-    title: `Sesión: ${user.login_name}`,
-    html: (scopeLabel ? `<p class="swal-usuario-scope">${scopeLabel}</p>` : '') +
-      `<div class="swal-reports-grid">${buttonsHtml}</div>`,
-    showConfirmButton: false,
-    showCloseButton: true,
-    width: 420,
-    didOpen: () => {
-      const container = Swal.getHtmlContainer();
-      container.querySelectorAll('[data-action]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const action = btn.getAttribute('data-action');
-          Swal.close();
-          if (action === 'logout') onLogout();
-          else if (action === 'golden-set') onSelectPage('golden-set');
-          else onSelectPage('my-account');
-        });
-      });
-    },
-  });
-}
-
-function renderReportButtons(items, base) {
-  return items.map(
-    (r) => `<button type="button" data-report="${r.key}" class="swal-reports-btn">` +
-      `<img src="${base}icons/${r.icon}" alt="" class="swal-reports-icon" />` +
-      `<span>${r.label}</span></button>`
-  ).join('');
-}
-
-function renderReportGroup(groupId, label, count, itemsHtml, collapsed) {
-  return `<div class="swal-reports-group${collapsed ? ' is-collapsed' : ''}" data-group="${groupId}">
-    <div class="swal-reports-group-header" data-toggle="${groupId}">
-      <span class="swal-reports-group-chevron">▾</span>
-      <span class="swal-reports-group-label">${label}</span>
-      <span class="swal-reports-group-count">${count}</span>
-    </div>
-    <div class="swal-reports-group-body">${itemsHtml}</div>
-  </div>`;
-}
-
-function openReportsDialog(onSelectPage, user) {
+function openMenuDialog({ onSelectPage, user, scopeLabel, onLogout }) {
   const base = import.meta.env.BASE_URL || '/';
   // Filtra reportes Escrow si el usuario no tiene can_view_escrow_flag = 'Y'
   const canEscrow = !user || user.can_view_escrow_flag !== 'N';
@@ -86,23 +35,53 @@ function openReportsDialog(onSelectPage, user) {
     try { return JSON.parse(localStorage.getItem('swal_reports_collapsed') || '{}'); }
     catch { return {}; }
   })();
-  const generalCollapsed = !!stored.general;
-  const escrowCollapsed = !!stored.escrow;
+
+  const usuarioActions = [
+    { action: 'my-account', label: 'My account', icon: 'AddressBook.png', title: 'My account and password change' },
+    { action: 'logout', label: 'Log out', icon: 'FileManageMenu.png', title: 'Log out' },
+  ];
+  const serviceLayerHtml = renderReportGroup(
+    'svclayer', 'Service Layer', 2,
+    `<button type="button" data-action="golden-set" title="AI router checks (golden set)" class="swal-reports-btn">` +
+      `<img src="${base}icons/SUMMARIZE.png" alt="" class="swal-reports-icon" />` +
+      `<span>Golden Set</span></button>` +
+    `<button type="button" data-action="query-ai" title="Natural language query (AI)" class="swal-reports-btn">` +
+      `<img src="${base}icons/ShowDetailsPage.png" alt="" class="swal-reports-icon" />` +
+      `<span>Query AI</span></button>`,
+    !!stored.svclayer
+  );
+  const usuarioHtml = user ? renderReportGroup(
+    'usuario', 'USER', usuarioActions.length,
+    usuarioActions.map(
+      (a) => `<button type="button" data-action="${a.action}" title="${a.title}" class="swal-reports-btn">` +
+        `<img src="${base}icons/${a.icon}" alt="" class="swal-reports-icon" />` +
+        `<span>${a.label}</span></button>`
+    ).join(''),
+    !!stored.usuario
+  ) : '';
+  const adminHtml = (user && user.is_admin) ? renderReportGroup(
+    'admin', 'ADMIN', 1,
+    `<button type="button" data-action="user-admin" title="User administration" class="swal-reports-btn">` +
+      `<img src="${base}icons/AddressBook.png" alt="" class="swal-reports-icon" />` +
+      `<span>Admin Users</span></button>`,
+    !!stored.admin
+  ) : '';
 
   const generalHtml = renderReportGroup(
-    'general', 'Generales', generalItems.length,
-    renderReportButtons(generalItems, base), generalCollapsed
+    'general', 'REPORTS', generalItems.length,
+    renderReportButtons(generalItems, base), !!stored.general
   );
   const escrowHtml = escrowItems.length
     ? renderReportGroup(
         'escrow', 'Escrow', escrowItems.length,
-        renderReportButtons(escrowItems, base), escrowCollapsed
+        renderReportButtons(escrowItems, base), !!stored.escrow
       )
     : '';
 
   Swal.fire({
-    title: 'Reportes',
-    html: `<div class="swal-reports-list">${generalHtml}${escrowHtml}</div>`,
+    title: 'AI + Auth Dev',
+    html: (scopeLabel && user ? `<p class="swal-usuario-scope">${scopeLabel}</p>` : '') +
+      `<div class="swal-reports-list">${serviceLayerHtml}${adminHtml}${usuarioHtml}${generalHtml}${escrowHtml}</div>`,
     showConfirmButton: false,
     showCloseButton: true,
     width: 420,
@@ -129,8 +108,49 @@ function openReportsDialog(onSelectPage, user) {
           onSelectPage(btn.getAttribute('data-report'));
         });
       });
+      // Click en acciones (usuario/admin)
+      container.querySelectorAll('[data-action]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const action = btn.getAttribute('data-action');
+          Swal.close();
+          if (action === 'logout') onLogout();
+          else if (action === 'query-ai') {
+            // Ir a Main Directory primero para que sus filas queden detrás,
+            // y abrir el panel en el siguiente tick (tras el render).
+            onSelectPage('main-directory');
+            setTimeout(() => {
+              openOverlay({
+                title: '',
+                component: (<AskPanel />),
+                width: '860px',
+                maxWidth: '94vw'
+              });
+            }, 60);
+          }
+          else onSelectPage(action);
+        });
+      });
     },
   });
+}
+
+function renderReportButtons(items, base) {
+  return items.map(
+    (r) => `<button type="button" data-report="${r.key}" class="swal-reports-btn">` +
+      `<img src="${base}icons/${r.icon}" alt="" class="swal-reports-icon" />` +
+      `<span>${r.label}</span></button>`
+  ).join('');
+}
+
+function renderReportGroup(groupId, label, count, itemsHtml, collapsed) {
+  return `<div class="swal-reports-group${collapsed ? ' is-collapsed' : ''}" data-group="${groupId}">
+    <div class="swal-reports-group-header" data-toggle="${groupId}">
+      <span class="swal-reports-group-chevron">▾</span>
+      <span class="swal-reports-group-label">${label}</span>
+      <span class="swal-reports-group-count">${count}</span>
+    </div>
+    <div class="swal-reports-group-body">${itemsHtml}</div>
+  </div>`;
 }
 
 
@@ -157,8 +177,8 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
   const scopeLabel = !user
     ? ''
     : user.is_admin
-      ? 'admin · todas las HOAs'
-      : (user.hoas || []).map((h) => `${h.hoa_code} · ${h.role}`).join(', ') || 'sin HOAs';
+      ? 'admin · all HOAs'
+      : (user.hoas || []).map((h) => `${h.hoa_code} · ${h.role}`).join(', ') || 'no HOAs';
   return (
     <div className="top-ribbon">
     <div className="ribbon-inner">
@@ -354,61 +374,40 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
 
 
 
-{/* Tier 1: grupo REPORTES comprimido a 1 icono (diálogo con los 6 reportes) */}
-<div className="ribbon-group" title="Reportes por HOA activa">
+{/* Menú único: Reportes + Usuario + Admin en un diálogo plano por secciones */}
+<div className="ribbon-group" title="AI + Auth Dev">
   <div className="ribbon-buttons">
-    <div className="ribbon-btn" onClick={() => openReportsDialog(onSelectPage, user)} style={{ cursor: 'pointer' }}>
+    <div className="ribbon-btn" onClick={() => openMenuDialog({ onSelectPage, user, scopeLabel, onLogout })} style={{ cursor: 'pointer' }}>
       <div className="icon icon-report"></div>
-      <div className="label">Reportes</div>
+      <div className="label">AI + Auth Dev</div>
     </div>
   </div>
-  <div className="group-label">REPORTES</div>
+  <div className="group-label">MENU</div>
 </div>
-
-{/* FASE A: grupo USUARIO comprimido a 1 icono (diálogo con Mi cuenta + Cerrar sesión) */}
-{user && (
-  <div className="ribbon-group" title={`Sesión: ${user.login_name}`}>
-    <div className="ribbon-buttons">
-      <div className="ribbon-btn" onClick={() => openUsuarioDialog(user, scopeLabel, onSelectPage, onLogout)} style={{ cursor: 'pointer' }}>
-        <div className="icon icon-addressbook"></div>
-        <div className="label">{user.display_name || user.login_name}</div>
-      </div>
-    </div>
-    <div className="group-label">USUARIO</div>
-  </div>
-)}
-
-{/* FASE A2: acceso a administración (solo admin global) */}
-{user && user.is_admin && (
-  <div className="ribbon-group" title="Administración de usuarios">
-    <div className="ribbon-buttons">
-      <div className="ribbon-btn" onClick={() => onSelectPage('user-admin')} style={{ cursor: 'pointer' }}>
-        <div className="icon icon-addressbook"></div>
-        <div className="label">Admin<br />Usuarios</div>
-      </div>
-    </div>
-    <div className="group-label">ADMIN</div>
-  </div>
-)}
 
 {/* FASE A2: selector de HOA activa */}
 {user && hoas.length > 0 && (
-  <div className="ribbon-group" title="HOA activa (scope de datos)">
+  <div className="ribbon-group" title="Active HOA (data scope)">
     <div className="ribbon-buttons">
       <select
         value={activeHoa || ''}
-        onChange={(e) => onSelectHoa(e.target.value)}
+        onChange={(e) => {
+          if (e.target.value === '__logout__') { onLogout(); return; }
+          onSelectHoa(e.target.value);
+        }}
         style={{ maxWidth: 170, padding: '0.35rem', borderRadius: 6 }}
       >
         <option value="">-- HOA --</option>
         {user && user.is_admin && (
-          <option value="all">Todas las HOAs</option>
+          <option value="all">All HOAs</option>
         )}
         {hoas.map((h) => (
           <option key={h.hoa_id || h.id} value={h.hoa_id || h.id}>
             {h.hoa_code} · {h.legal_name}
           </option>
         ))}
+        <option disabled>──────────</option>
+        <option value="__logout__">Log out</option>
       </select>
     </div>
     <div className="group-label">
@@ -417,9 +416,9 @@ function TopRibbon({ onSelectPage, user, onLogout, activeHoa, onSelectHoa }) {
         background: activeHoa ? '#10b981' : '#64748b', marginRight: 4,
       }} />
       {(() => {
-        if (String(activeHoa).toLowerCase() === 'all') return 'HOA: TODAS';
+        if (String(activeHoa).toLowerCase() === 'all') return 'HOA: ALL';
         const cur = hoas.find((h) => String(h.hoa_id || h.id) === String(activeHoa));
-        return cur ? `HOA: ${cur.hoa_code}` : 'SIN HOA';
+        return cur ? `HOA: ${cur.hoa_code}` : 'NO HOA';
       })()}
     </div>
   </div>
